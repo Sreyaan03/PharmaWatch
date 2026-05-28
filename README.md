@@ -54,28 +54,36 @@ PharmaWatch/
 
 ## Running the App
 
-### Option 1 — Open Directly (Simplest)
-```
-Double-click src/index.html
-```
-Opens in your default browser. All features work offline — no server needed.
+PharmaWatch now uses a real Python/Flask backend to power its live openFDA data fetching, PRR calculations, and LSTM machine learning model.
 
-### Option 2 — Live-Reload Dev Server (Recommended for Development)
-Requires [Node.js](https://nodejs.org) (v16+):
+### 1. Prerequisites
+- [Python 3.10+](https://www.python.org/downloads/)
+
+### 2. Setup the Environment
+Open a terminal in the project folder and install the required Python packages:
 ```bash
-npx -y live-server src/
+pip install -r backend/requirements.txt
 ```
 
-### Option 3 — Python HTTP Server
+### 3. Add Your API Key
+To fetch live data from openFDA without getting rate-limited, you need an API key.
+1. Create a file named `.env` inside the `backend/` folder.
+2. Add your key like this:
+```ini
+FDA_API_KEY=your_api_key_here
+```
+*(If you don't have one, get a free key at [openFDA](https://open.fda.gov/apis/authentication/))*
+
+### 4. Run the Server
+Start the Flask backend server:
 ```bash
-# Python 3
-cd src
-python -m http.server 8080
-# Then open: http://localhost:8080
+python backend/app.py
 ```
+*(On Mac/Linux, you might need to use `python3 backend/app.py`)*
 
-### Option 4 — VS Code
-Install the **Live Server** extension → right-click `index.html` → "Open with Live Server"
+### 5. Open the Dashboard
+Once the server is running, open your web browser and go to:
+**http://127.0.0.1:5000**
 
 ---
 
