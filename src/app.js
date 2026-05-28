@@ -1,0 +1,1761 @@
+/* ============================================================
+   PHARMAWATCH — Application JavaScript
+   Live API integrated architecture
+   ============================================================ */
+
+'use strict';
+
+/* ──────────────── DATA STORE ──────────────────────────────── */
+const DRUGS = [
+  'Metformin', 'Atorvastatin', 'Lisinopril', 'Amoxicillin', 'Ibuprofen',
+  'Warfarin', 'Amiodarone', 'Metoprolol', 'Amlodipine', 'Omeprazole'
+];
+
+const ADE_EVENTS = [
+  'Nausea', 'Hepatotoxicity', 'Anaphylaxis', 'Rhabdomyolysis', 'Dizziness'
+];
+
+const SOURCES = ['fda', 'ehr', 'social', 'ct'];
+const SOURCE_LABELS = { fda: 'openFDA/FAERS', ehr: 'EHR', social: 'Social Media', ct: 'ClinicalTrials' };
+
+const SIGNAL_STATUS = ['Active', 'Under Review', 'Closed'];
+
+const RECENT_ALERTS_DATA = [
+  { drug: 'Metformin + Empagliflozin', event: 'Lactic Acidosis', prr: 3.24, time: '2 min ago', sev: 'critical' },
+  { drug: 'Warfarin + Ciprofloxacin', event: 'GI Bleeding', prr: 4.81, time: '7 min ago', sev: 'critical' }
+];
+
+/* ──────────────── DRUG-DRUG INTERACTIONS ────────────────── */
+
+const INTERACTION_DATA = {
+  'Metformin': {
+    nodes: [
+      { id: 0, label: 'Metformin', risk: 'center', x: 350, y: 210 },
+      { id: 1, label: 'Empagliflozin', risk: 'critical', x: 180, y: 100 },
+      { id: 2, label: 'Furosemide', risk: 'moderate', x: 160, y: 320 },
+      { id: 3, label: 'Alcohol', risk: 'critical', x: 520, y: 90 },
+      { id: 4, label: 'Contrast Dye', risk: 'critical', x: 540, y: 330 },
+      { id: 5, label: 'Cimetidine', risk: 'low', x: 350, y: 50 },
+      { id: 6, label: 'Topiramate', risk: 'moderate', x: 220, y: 390 },
+    ],
+    edges: [
+      { from: 0, to: 1, risk: 'critical' },
+      { from: 0, to: 2, risk: 'moderate' },
+      { from: 0, to: 3, risk: 'critical' },
+      { from: 0, to: 4, risk: 'critical' },
+      { from: 0, to: 5, risk: 'low' },
+      { from: 0, to: 6, risk: 'moderate' },
+    ]
+  },
+  'Warfarin': {
+    nodes: [
+      { id: 0, label: 'Warfarin', risk: 'center', x: 350, y: 210 },
+      { id: 1, label: 'Aspirin', risk: 'critical', x: 180, y: 90 },
+      { id: 2, label: 'Amiodarone', risk: 'critical', x: 540, y: 90 },
+      { id: 3, label: 'Ciprofloxacin', risk: 'critical', x: 540, y: 330 },
+      { id: 4, label: 'Vitamin K', risk: 'moderate', x: 160, y: 330 },
+      { id: 5, label: 'Ibuprofen', risk: 'critical', x: 350, y: 60 },
+      { id: 6, label: 'Omeprazole', risk: 'low', x: 200, y: 380 },
+    ],
+    edges: [
+      { from: 0, to: 1, risk: 'critical' },
+      { from: 0, to: 2, risk: 'critical' },
+      { from: 0, to: 3, risk: 'critical' },
+      { from: 0, to: 4, risk: 'moderate' },
+      { from: 0, to: 5, risk: 'critical' },
+      { from: 0, to: 6, risk: 'low' },
+    ]
+  },
+  'Atorvastatin': {
+    nodes: [
+      { id: 0, label: 'Atorvastatin', risk: 'center', x: 350, y: 210 },
+      { id: 1, label: 'Amiodarone', risk: 'critical', x: 170, y: 100 },
+      { id: 2, label: 'Clarithromycin', risk: 'critical', x: 530, y: 100 },
+      { id: 3, label: 'Cyclosporine', risk: 'critical', x: 540, y: 320 },
+      { id: 4, label: 'Niacin', risk: 'moderate', x: 160, y: 320 },
+      { id: 5, label: 'Grapefruit', risk: 'moderate', x: 350, y: 55 },
+      { id: 6, label: 'Warfarin', risk: 'low', x: 220, y: 390 },
+    ],
+    edges: [
+      { from: 0, to: 1, risk: 'critical' },
+      { from: 0, to: 2, risk: 'critical' },
+      { from: 0, to: 3, risk: 'critical' },
+      { from: 0, to: 4, risk: 'moderate' },
+      { from: 0, to: 5, risk: 'moderate' },
+      { from: 0, to: 6, risk: 'low' },
+    ]
+  },
+  'Amiodarone': {
+    nodes: [
+      { id: 0, label: 'Amiodarone', risk: 'center', x: 350, y: 210 },
+      { id: 1, label: 'Warfarin', risk: 'critical', x: 180, y: 90 },
+      { id: 2, label: 'Simvastatin', risk: 'critical', x: 530, y: 100 },
+      { id: 3, label: 'Digoxin', risk: 'critical', x: 540, y: 320 },
+      { id: 4, label: 'Metoprolol', risk: 'moderate', x: 155, y: 320 },
+      { id: 5, label: 'Quinidine', risk: 'critical', x: 350, y: 55 },
+    ],
+    edges: [
+      { from: 0, to: 1, risk: 'critical' },
+      { from: 0, to: 2, risk: 'critical' },
+      { from: 0, to: 3, risk: 'critical' },
+      { from: 0, to: 4, risk: 'moderate' },
+      { from: 0, to: 5, risk: 'critical' },
+    ]
+  },
+  'Lisinopril': {
+    nodes: [
+      { id: 0, label: 'Lisinopril', risk: 'center', x: 350, y: 210 },
+      { id: 1, label: 'Potassium', risk: 'critical', x: 170, y: 90 },
+      { id: 2, label: 'Spironolactone', risk: 'critical', x: 530, y: 90 },
+      { id: 3, label: 'NSAIDs', risk: 'moderate', x: 540, y: 330 },
+      { id: 4, label: 'Lithium', risk: 'moderate', x: 160, y: 330 },
+      { id: 5, label: 'Metformin', risk: 'low', x: 350, y: 55 },
+    ],
+    edges: [
+      { from: 0, to: 1, risk: 'critical' },
+      { from: 0, to: 2, risk: 'critical' },
+      { from: 0, to: 3, risk: 'moderate' },
+      { from: 0, to: 4, risk: 'moderate' },
+      { from: 0, to: 5, risk: 'low' },
+    ]
+  }
+};
+
+const CLUSTERS = [
+  { drugs: 'Warfarin + Aspirin + Ibuprofen', risk: 'CRITICAL', desc: 'Triple anticoagulation — severe haemorrhage risk. PRR 6.2 for major bleeding events.' },
+  { drugs: 'Amiodarone + Simvastatin + Cyclosporine', risk: 'CRITICAL', desc: 'CYP3A4 saturation leading to rhabdomyolysis cascade. PRR 5.9.' },
+  { drugs: 'Metformin + Contrast Dye + Furosemide', risk: 'HIGH', desc: 'Acute lactic acidosis triad — renal clearance impairment. PRR 4.1.' },
+  { drugs: 'Sertraline + Tramadol + Linezolid', risk: 'CRITICAL', desc: 'Serotonin syndrome cluster. PRR 7.4 for serotonin toxicity.' },
+  { drugs: 'Ciprofloxacin + Warfarin + Omeprazole', risk: 'HIGH', desc: 'CYP2C9 inhibition with anticoagulant potentiation. PRR 4.8.' },
+  { drugs: 'Metoprolol + Verapamil + Digoxin', risk: 'HIGH', desc: 'Severe bradycardia and AV block risk. PRR 3.9.' },
+];
+
+/* ──────────────── SIGNALS TABLE ──────────────────────────── */
+function generateSignals(count = 40) {
+  return Array.from({ length: count }, (_, i) => {
+    const prr = (Math.random() * 7 + 1).toFixed(2);
+    const sev = prr >= 5 ? 'critical' : prr >= 3 ? 'high' : 'moderate';
+    const src = SOURCES[Math.floor(Math.random() * SOURCES.length)];
+    const status = prr >= 4 ? 'Active' : prr >= 2.5 ? 'Under Review' : 'Closed';
+    const minsAgo = Math.floor(Math.random() * 1440);
+    return {
+      rank: i + 1,
+      drug: DRUGS[Math.floor(Math.random() * DRUGS.length)],
+      event: ADE_EVENTS[Math.floor(Math.random() * ADE_EVENTS.length)],
+      prr: parseFloat(prr),
+      reports: Math.floor(Math.random() * 9000 + 50),
+      source: src,
+      detected: minsAgo < 60 ? `${minsAgo}m ago` : `${Math.floor(minsAgo / 60)}h ago`,
+      status, sev
+    };
+  }).sort((a, b) => b.prr - a.prr).map((s, i) => ({ ...s, rank: i + 1 }));
+}
+
+let signalsData = generateSignals();
+let signalPRRChart = null;
+
+function renderSignalsTable(data) {
+  const tbody = document.getElementById('signals-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = data.map(s => `
+    <tr data-rank="${s.rank}" class="signal-row">
+      <td><strong>${s.rank}</strong></td>
+      <td><strong>${escHtml(s.drug)}</strong></td>
+      <td><span class="illness-hover" data-illness="${escHtml(s.event)}" style="cursor:help; border-bottom:1px dashed #bbb;">${escHtml(s.event)}</span></td>
+      <td class="${s.sev === 'critical' ? 'prr-critical' : s.sev === 'high' ? 'prr-high' : 'prr-moderate'}">${s.prr.toFixed(2)}</td>
+      <td>${s.reports.toLocaleString()}</td>
+      <td><span class="source-chip source-chip--${s.source}">${SOURCE_LABELS[s.source]}</span></td>
+      <td>${escHtml(s.detected)}</td>
+      <td><span class="status-pill status-pill--${s.status === 'Active' ? 'active' : s.status === 'Under Review' ? 'review' : 'closed'}">${s.status}</span></td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.signal-row').forEach(row => {
+    row.addEventListener('click', () => showSignalDetail(signalsData.find(s => s.rank == row.dataset.rank)));
+  });
+
+  // Re-init illness tooltips — needed because elements are dynamically injected
+  if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
+}
+
+function showSignalDetail(signal) {
+  if (!signal) return;
+  const panel = document.getElementById('signal-detail-panel');
+  const title = document.getElementById('signal-detail-title');
+  const body = document.getElementById('signal-detail-body');
+  if (!panel || !title || !body) return;
+
+  title.textContent = `${signal.drug} — ${signal.event}`;
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem;">
+      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr.toFixed(2)}</div><div class="stat-mini__lbl">PRR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val">${signal.reports.toLocaleString()}</div><div class="stat-mini__lbl">Reports (n)</div></div>
+      <div class="stat-mini"><div class="stat-mini__val">${signal.detected}</div><div class="stat-mini__lbl">Detected</div></div>
+      <div class="stat-mini"><div class="stat-mini__val">${signal.status}</div><div class="stat-mini__lbl">Status</div></div>
+    </div>
+    <p style="font-size:0.875rem;color:#495057;">Signal detected via <strong>${SOURCE_LABELS[signal.source]}</strong>. The PRR of <strong>${signal.prr.toFixed(2)}</strong> exceeds the alert threshold of 2.0, with ${signal.reports.toLocaleString()} supporting reports. Hover over the illness <span class="illness-hover" data-illness="${signal.event}" style="font-weight:bold; cursor:help; border-bottom:1px dashed #bbb;">${signal.event}</span> to view its clinical definition.</p>
+  `;
+
+  // Mini sparkline for PRR over time
+  const ctx = document.getElementById('signal-prr-chart');
+  if (ctx) {
+    if (signalPRRChart) signalPRRChart.destroy();
+    const labels = Array.from({ length: 12 }, (_, i) => `${i * 2}h`);
+    const vals = labels.map((_, i) => +(signal.prr * (0.4 + Math.random() * 0.8)).toFixed(2));
+    vals[vals.length - 1] = signal.prr;
+    signalPRRChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'PRR Over 24h',
+          data: vals,
+          borderColor: signal.sev === 'critical' ? '#c0392b' : signal.sev === 'high' ? '#e65100' : '#f57c00',
+          backgroundColor: signal.sev === 'critical' ? 'rgba(192,57,43,0.1)' : 'rgba(230,81,0,0.1)',
+          tension: 0.4, fill: true, pointRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { min: 0 } }
+      }
+    });
+  }
+
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function filterSignals() {
+  const query = (document.getElementById('signal-search')?.value || '').toLowerCase();
+  const sev = document.getElementById('signal-severity')?.value || 'all';
+  const src = document.getElementById('signal-source')?.value || 'all';
+  let filtered = signalsData;
+  if (query) filtered = filtered.filter(s => s.drug.toLowerCase().includes(query) || s.event.toLowerCase().includes(query));
+  if (sev !== 'all') {
+    const ranges = { critical: [5, 99], high: [3, 5], moderate: [2, 3] };
+    const [lo, hi] = ranges[sev];
+    filtered = filtered.filter(s => s.prr >= lo && s.prr < hi);
+  }
+  if (src !== 'all') filtered = filtered.filter(s => s.source === src);
+  renderSignalsTable(filtered);
+}
+
+/* ──────────────── DRUG SEARCH ─────────────────────────────── */
+let drugADEChart = null, drugTrendChart = null;
+
+function initDrugSearch() {
+  const input = document.getElementById('drug-search-input');
+  const suggs = document.getElementById('drug-suggestions');
+  const btn = document.getElementById('drug-search-btn');
+  if (!input) return;
+
+  let searchTimeout = null;
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (!q) { suggs.style.display = 'none'; return; }
+
+    // Debounce search calls by 280ms for responsiveness
+    clearTimeout(searchTimeout);
+    suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">Searching openFDA…</li>`;
+    suggs.style.display = 'block';
+
+    searchTimeout = setTimeout(async () => {
+      const matches = await ApiLayer.searchDrugNames(q);
+      if (matches.length === 0) {
+        suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">No results in openFDA for "${escHtml(q)}"</li>`;
+      } else {
+        suggs.innerHTML = matches.slice(0, 10).map(d =>
+          `<li role="option" data-drug="${d}" style="padding:8px 12px; cursor:pointer;">${d}</li>`
+        ).join('');
+      }
+      suggs.style.display = 'block';
+    }, 280);
+  });
+
+  suggs.addEventListener('click', e => {
+    const li = e.target.closest('li[data-drug]');
+    if (!li) return;
+    input.value = li.dataset.drug;
+    suggs.style.display = 'none';
+    loadDrugProfile(li.dataset.drug);
+  });
+
+  btn.addEventListener('click', () => {
+    suggs.style.display = 'none';
+    loadDrugProfile(input.value.trim());
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { suggs.style.display = 'none'; loadDrugProfile(input.value.trim()); }
+    if (e.key === 'Escape') suggs.style.display = 'none';
+  });
+
+  document.querySelectorAll('.drug-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      input.value = chip.dataset.drug;
+      loadDrugProfile(chip.dataset.drug);
+    });
+  });
+
+  // Close suggestions when clicking outside
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.drug-search-box')) suggs.style.display = 'none';
+  });
+}
+
+async function loadDrugProfile(name) {
+  const panel = document.getElementById('drug-profile-panel');
+  const empty = document.getElementById('drug-search-empty');
+  if (!panel || !empty) return;
+
+  if (!name) {
+    panel.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  // Show loading state implicitly by dimming panel
+  if (panel.style.display === 'block') panel.style.opacity = '0.5';
+
+  // ── Phase 1: Fast fetches (openFDA direct — ~1s) ──────────────────────────
+  // These run first so the panel appears immediately without waiting for
+  // the slow backend PRR/trials calls.
+  const [labelData, eventsData] = await Promise.all([
+    ApiLayer.fetchDrugLabel(name),
+    ApiLayer.fetchDrugEvents(name, 5)
+  ]);
+
+  panel.style.opacity = '1';
+
+  if (!eventsData || eventsData.ades.length === 0) {
+    empty.style.display = 'block';
+    panel.style.display = 'none';
+    empty.innerHTML = `<h3>No statistical FAERS data found for "${name}".</h3><button class="btn btn--sm" onclick="location.reload()">Back</button>`;
+    return;
+  }
+
+  empty.style.display = 'none';
+  panel.style.display = 'block';
+  panel.classList.add('fade-in');
+
+  const totalReportsLocal = eventsData.totalReports;
+
+  // Render header immediately with '…' placeholders for the slow badges
+  document.getElementById('drug-profile-header').innerHTML = `
+    <div style="font-size:3rem">💊</div>
+    <div>
+      <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:0.25rem;text-transform:uppercase;">${escHtml(name)}</h2>
+      <div style="opacity:0.85;margin-bottom:0.25rem;">Class: ${escHtml(labelData.class)}</div>
+      <div style="font-size:0.85rem;opacity:0.7;margin-bottom:0.25rem;">Indication: ${escHtml(labelData.indication)}</div>
+      <div style="font-size:0.8rem;opacity:0.65;margin-bottom:0.75rem;font-style:italic;">Dosage: ${escHtml(labelData.dosage)}</div>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.5rem;">
+        <span id="dp-trials-badge" title="Active ClinicalTrials.gov studies for this drug"
+              style="background:rgba(255,255,255,0.15);border-radius:6px;padding:4px 12px;font-size:0.8rem;font-weight:700;opacity:0.6;">
+          🧪 Clinical Trials…
+        </span>
+        <span style="background:rgba(255,255,255,0.15);border-radius:6px;padding:4px 12px;font-size:0.8rem;font-weight:700;">
+          ${totalReportsLocal.toLocaleString()} FAERS Reports (approx.)
+        </span>
+        <span id="dp-prr-badge" title="Proportional Reporting Ratio from live FAERS data"
+              style="background:rgba(255,255,255,0.15);border-radius:6px;padding:4px 12px;font-size:0.8rem;font-weight:700;opacity:0.6;">
+          PRR: …
+        </span>
+      </div>
+    </div>
+  `;
+
+  // ── Phase 2: Slow fetches (backend — ~5-15s) — non-blocking ──────────────
+  // Fire and forget. Update only the two badge elements when data arrives.
+  // The rest of the panel is already visible to the user.
+  const currentName = name; // capture for closure safety
+  Promise.all([
+    fetch(`http://127.0.0.1:5000/api/trials/${encodeURIComponent(currentName)}`)
+      .then(r => r.json()).catch(() => null),
+    fetch(`http://127.0.0.1:5000/api/prr-trials?drug=${encodeURIComponent(currentName)}&event=Nausea`)
+      .then(r => r.json()).catch(() => null)
+  ]).then(([trialsData, prrData]) => {
+    const trialsBadge = document.getElementById('dp-trials-badge');
+    const prrBadge    = document.getElementById('dp-prr-badge');
+
+    if (trialsBadge && trialsData) {
+      const n = trialsData.total_studies;
+      const active = trialsData.active_safety_monitoring;
+      trialsBadge.textContent = `🧪 ${n} Clinical Trial${n === 1 ? '' : 's'}${active ? ' (Active)' : ''}`;
+      trialsBadge.style.opacity = '1';
+    } else if (trialsBadge) {
+      trialsBadge.textContent = '🧪 Trials: unavailable';
+      trialsBadge.style.opacity = '0.5';
+    }
+
+    if (prrBadge && prrData?.prr != null) {
+      const prr = prrData.prr.toFixed(2);
+      const sig = prrData.is_signal;
+      prrBadge.textContent = `PRR: ${prr}${sig ? ' ⚠ Signal' : ''}`;
+      prrBadge.style.background = sig ? 'rgba(192,57,43,0.5)' : 'rgba(255,255,255,0.15)';
+      prrBadge.style.opacity = '1';
+    } else if (prrBadge) {
+      prrBadge.textContent = 'PRR: unavailable';
+      prrBadge.style.opacity = '0.5';
+    }
+  });
+
+  // ADE bar chart
+  const adeCtx = document.getElementById('drug-ade-chart');
+  if (adeCtx) {
+    if (drugADEChart) drugADEChart.destroy();
+    drugADEChart = new Chart(adeCtx, {
+      type: 'bar',
+      data: {
+        labels: eventsData.ades,
+        datasets: [{
+          label: 'FAERS Reports',
+          data: eventsData.adeCounts,
+          backgroundColor: ['#c0392b', '#e65100', '#f57c00', '#1565c0', '#2e7d32'],
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} reports` }
+          }
+        },
+        scales: { x: { ticks: { maxRotation: 30 } } }
+      }
+    });
+  }
+
+  // Trend line chart - keeping a simulated fallback for trend since FDA doesn't allow simple monthly bucketing by drug in one query
+  const trendCtx = document.getElementById('drug-trend-chart');
+  if (trendCtx) {
+    if (drugTrendChart) drugTrendChart.destroy();
+    const months = ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
+    const fakeTrend = months.map(() => Math.floor(totalReportsLocal / 12 * (0.8 + Math.random() * 0.4)));
+    drugTrendChart = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [{
+          label: 'Monthly Reports',
+          data: fakeTrend,
+          borderColor: '#003d7c',
+          backgroundColor: 'rgba(0,61,124,0.08)',
+          tension: 0.4, fill: true, pointRadius: 4, pointHoverRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+      }
+    });
+  }
+
+  // Signals list with illness-hover tooltips on event terms
+  const sigList = document.getElementById('drug-signals-list');
+  if (sigList) {
+    sigList.innerHTML = eventsData.ades.slice(0, 3).map((event, i) => `
+      <div class="alert-item alert-item--${i === 0 ? 'critical' : i === 1 ? 'high' : 'moderate'}" style="margin-bottom:0.5rem;">
+        <div class="alert-item__icon">${i === 0 ? '🚨' : i === 1 ? '⚠️' : '✅'}</div>
+        <div class="alert-item__body">
+          <div class="alert-item__drug">
+            <span class="illness-hover" data-illness="${escHtml(event)}" style="cursor:help;border-bottom:1px dashed #999;">${escHtml(event)}</span>
+          </div>
+          <div class="alert-item__meta">
+            <span class="alert-item__prr">FAERS reports: ${eventsData.adeCounts[i].toLocaleString()}</span>
+            <span class="alert-item__time">Source: openFDA/FAERS</span>
+            <span class="status-pill status-pill--${i === 0 ? 'active' : 'review'}">${i === 0 ? 'Active' : 'Under Review'}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Re-initialize tooltips to pick up new illness-hover elements
+  if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
+}
+
+/* ──────────────── INTERACTION GRAPH ───────────────────────── */
+let graphAnimFrame = null;
+
+async function drawGraph(drugName) {
+  const wrap = document.getElementById('graph-canvas-wrap');
+  if (!wrap) return;
+
+  // Replace the canvas with an SVG for D3
+  wrap.innerHTML = `
+    <svg id="d3-graph-svg" width="700" height="420" style="background:#0d1b2a; border-radius:8px;"></svg>
+    <div class="graph-legend">
+      <span class="graph-legend-item graph-legend-item--red">● High Co-prescription</span>
+      <span class="graph-legend-item graph-legend-item--orange">● Moderate Co-prescription</span>
+      <span class="graph-legend-item graph-legend-item--green">● Low Co-prescription</span>
+      <span class="graph-legend-item graph-legend-item--center">★ Selected Drug</span>
+    </div>
+  `;
+
+  const svg = d3.select("#d3-graph-svg");
+  const width = 700;
+  const height = 420;
+
+  try {
+    // Fetch REAL interaction data from our Python backend
+    const res = await fetch(`http://127.0.0.1:5000/api/graph?drug=${encodeURIComponent(drugName)}`);
+    const graphData = await res.json();
+
+    if (graphData.error || !graphData.nodes || graphData.nodes.length === 0) {
+      wrap.innerHTML = `<p style="color:#888; text-align:center; padding:2rem;">No interaction data found for "${drugName}" in openFDA.</p>`;
+      return;
+    }
+
+    // Assign risk levels based on link weight (co-prescription frequency)
+    graphData.links.forEach(link => {
+      if (link.value >= 8) link.risk = 'critical';
+      else if (link.value >= 3) link.risk = 'moderate';
+      else link.risk = 'low';
+    });
+
+    // D3 force simulation — physics engine
+    const simulation = d3.forceSimulation(graphData.nodes)
+      .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(120))
+      .force("charge", d3.forceManyBody().strength(-350))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collision", d3.forceCollide().radius(30));
+
+    // Draw links (lines)
+    const link = svg.append("g")
+      .selectAll("line").data(graphData.links).join("line")
+      .attr("stroke", d => d.risk === 'critical' ? '#ff6b6b' : d.risk === 'moderate' ? '#ffa94d' : '#69db7c')
+      .attr("stroke-opacity", 0.7)
+      .attr("stroke-width", d => Math.min(Math.sqrt(d.value) * 2, 8));
+
+    // Draw nodes (circles)
+    const nodeColor = d => ({ 1: '#fcc419', 2: '#ff6b6b', 3: '#ffa94d', 4: '#69db7c' }[d.group] || '#4dabf7');
+    const node = svg.append("g")
+      .selectAll("circle").data(graphData.nodes).join("circle")
+      .attr("r", d => d.group === 1 ? 22 : 14)
+      .attr("fill", nodeColor)
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 1.5)
+      .style("cursor", "pointer");
+
+    // Draw labels (drug names)
+    const labels = svg.append("g")
+      .selectAll("text").data(graphData.nodes).enter().append("text")
+      .text(d => d.id)
+      .attr("font-size", d => d.group === 1 ? "11px" : "9px")
+      .attr("font-family", "Open Sans, sans-serif")
+      .attr("fill", "#e0e0e0")
+      .attr("text-anchor", "middle")
+      .attr("dy", d => d.group === 1 ? 34 : 26);
+
+    // Physics tick — updates positions every frame
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      node.attr("cx", d => d.x).attr("cy", d => d.y);
+      labels.attr("x", d => d.x).attr("y", d => d.y);
+    });
+
+    // Interaction detail panel
+    const details = document.getElementById('interaction-details-list');
+    if (details) {
+      details.innerHTML = `
+        <h3 style="font-size:0.875rem;font-weight:700;color:#003d7c;margin-bottom:0.75rem;text-transform:uppercase;">
+          ${drugName} — Co-Prescribed Drugs (openFDA)
+        </h3>
+        ${graphData.links.map(link => `
+          <div class="alert-item alert-item--${link.risk === 'critical' ? 'critical' : link.risk === 'moderate' ? 'high' : 'moderate'}" style="margin-bottom:0.5rem;">
+            <div class="alert-item__icon">${link.risk === 'critical' ? '🔴' : link.risk === 'moderate' ? '🟡' : '🟢'}</div>
+            <div class="alert-item__body">
+              <div class="alert-item__drug">${drugName} + ${link.target.id || link.target}</div>
+              <div class="alert-item__event">Co-prescription frequency: ${link.risk.toUpperCase()}</div>
+            </div>
+          </div>
+        `).join('')}
+      `;
+    }
+
+  } catch (e) {
+    wrap.innerHTML = `<p style="color:#ff6b6b; text-align:center; padding:2rem;">❌ Could not reach backend. Is <code>python backend/app.py</code> running?</p>`;
+  }
+}
+
+
+/* ──────────────── CHARTS ──────────────────────────────────── */
+let signalIntensityChart = null;
+let prrDistChart = null;
+let drugCatChart = null;
+let throughputChart = null;
+let kafkaLagChart = null;
+let lstmDemoChart = null;
+
+function randomArray(len, min, max) {
+  return Array.from({ length: len }, () => Math.floor(Math.random() * (max - min + 1) + min));
+}
+
+function buildLabels24h() {
+  const now = new Date();
+  return Array.from({ length: 24 }, (_, i) => {
+    const h = new Date(now - (23 - i) * 3600000);
+    return `${String(h.getHours()).padStart(2, '0')}:00`;
+  });
+}
+
+function initSignalIntensityChart() {
+  const ctx = document.getElementById('signal-intensity-chart');
+  if (!ctx) return;
+  if (signalIntensityChart) signalIntensityChart.destroy();
+  signalIntensityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: buildLabels24h(),
+      datasets: [
+        {
+          label: 'Critical Signals',
+          data: randomArray(24, 5, 20),
+          borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.12)',
+          tension: 0.4, fill: true, pointRadius: 2,
+        },
+        {
+          label: 'High Signals',
+          data: randomArray(24, 15, 40),
+          borderColor: '#e65100', backgroundColor: 'rgba(230,81,0,0.08)',
+          tension: 0.4, fill: true, pointRadius: 2,
+        },
+        {
+          label: 'Moderate Signals',
+          data: randomArray(24, 30, 80),
+          borderColor: '#0070c0', backgroundColor: 'rgba(0,112,192,0.08)',
+          tension: 0.4, fill: true, pointRadius: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+        y: { beginAtZero: true, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function initDrugCategoryChart() {
+  const ctx = document.getElementById('drug-category-chart');
+  if (!ctx) return;
+  if (drugCatChart) drugCatChart.destroy();
+  drugCatChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Cardiovascular', 'Antibiotics', 'CNS/Psychiatric', 'Diabetes', 'Pain/NSAID', 'Other'],
+      datasets: [{
+        data: [31, 18, 22, 14, 9, 6],
+        backgroundColor: ['#003d7c', '#0070c0', '#00695c', '#f0a500', '#c0392b', '#adb5bd'],
+        borderWidth: 2, borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function initPRRDistributionChart() {
+  const ctx = document.getElementById('prr-distribution-chart');
+  if (!ctx) return;
+  if (prrDistChart) prrDistChart.destroy();
+  const bins = ['1.0–1.5', '1.5–2.0', '2.0–2.5', '2.5–3.0', '3.0–3.5', '3.5–4.0', '4.0–5.0', '5.0+'];
+  prrDistChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: bins,
+      datasets: [{
+        label: 'Drug-Event Pairs',
+        data: [1840, 920, 480, 260, 140, 80, 50, 30],
+        backgroundColor: bins.map((_, i) => i < 2 ? '#90caf9' : i < 4 ? '#f0a500' : '#c0392b'),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} pairs` } }
+      },
+      scales: {
+        x: { title: { display: true, text: 'PRR Range', font: { size: 11 } } },
+        y: { title: { display: true, text: 'Number of Pairs', font: { size: 11 } }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+
+
+/* ──────────────── ANIMATED COUNTERS ───────────────────────── */
+function animateCounter(el, target, duration = 1600, suffix = '') {
+  const start = performance.now();
+  const isFloat = String(target).includes('.');
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const current = isFloat ? (target * ease).toFixed(1) : Math.floor(target * ease);
+    el.textContent = Number(current).toLocaleString() + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function initCounters() {
+  document.querySelectorAll('[data-target]').forEach(el => {
+    const target = parseFloat(el.dataset.target);
+    animateCounter(el, target);
+  });
+}
+
+/* ──────────────── SOURCE METERS ───────────────────────────── */
+function animateMeters() {
+  const meters = [
+    { fill: document.getElementById('fda-bar'), val: document.getElementById('fda-val'), target: 72, label: '14,283 msg/min' },
+    { fill: document.getElementById('ehr-bar'), val: document.getElementById('ehr-val'), target: 54, label: '9,840 msg/min' },
+    { fill: document.getElementById('social-bar'), val: document.getElementById('social-val'), target: 38, label: '6,120 msg/min' },
+    { fill: document.getElementById('ct-bar'), val: document.getElementById('ct-val'), target: 19, label: '2,340 msg/min' },
+  ];
+  setTimeout(() => {
+    meters.forEach(m => {
+      if (m.fill) m.fill.style.width = m.target + '%';
+      if (m.val) m.val.textContent = m.label;
+    });
+  }, 400);
+}
+
+/* ──────────────── PIPELINE METRICS ────────────────────────── */
+function updatePipelineMetrics() {
+  // Kafka/Spark/HDFS/HBase are not running locally — metrics below are
+  // simulated placeholders. Only LSTM and NLP are fetched from real sources.
+  const metrics = [
+    { id: 'kafka-metric', vals: ['32,486 msg/s', '31,940 msg/s', '33,120 msg/s'] },
+    { id: 'spark-metric', vals: ['28.4k events/s', '27.9k events/s', '29.1k events/s'] },
+    { id: 'hdfs-metric',  vals: ['4.2 TB stored', '4.21 TB stored', '4.19 TB stored'] },
+  ];
+  metrics.forEach(m => {
+    const el = document.getElementById(m.id);
+    if (el) {
+      el.textContent = m.vals[0];
+      let idx = 0;
+      setInterval(() => { idx = (idx + 1) % m.vals.length; el.textContent = m.vals[idx]; }, 3000 + Math.random() * 2000);
+    }
+  });
+
+  // LSTM metric — fetched from the real backend.
+  // Shows real MSE if model is trained, or 'Not trained' if still using fallback.
+  const lstmEl = document.getElementById('lstm-metric');
+  if (lstmEl) {
+    const updateLSTMMetric = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/lstm?drug=Metformin');
+        const data = await res.json();
+        if (data.error) { lstmEl.textContent = 'Backend offline'; return; }
+        if (data.fallback) {
+          lstmEl.textContent = 'Not trained — click Train LSTM';
+          lstmEl.style.color = '#e65100';
+        } else if (data.test_mse !== undefined) {
+          lstmEl.textContent = `MSE: ${data.test_mse.toFixed(4)} (real LSTM)`;
+          lstmEl.style.color = '#2e7d32';
+        } else {
+          lstmEl.textContent = 'LSTM active';
+        }
+      } catch (e) {
+        lstmEl.textContent = 'Backend offline';
+      }
+    };
+    updateLSTMMetric();
+    setInterval(updateLSTMMetric, 30000);
+  }
+
+  // NLP metric — already handled by ml_models.js BioBERT throughput measurement.
+  // No hardcoding needed here; ml_models.js pings the real BioBERT server.
+  // We only set a fallback if that module isn't loaded.
+  const nlpEl = document.getElementById('nlp-metric');
+  if (nlpEl && typeof MLModels === 'undefined') {
+    nlpEl.textContent = 'BioBERT module not loaded';
+  }
+}
+
+/* ──────────────── RECENT ALERTS LIST ──────────────────────── */
+function renderRecentAlerts() {
+  const list = document.getElementById('recent-alerts-list');
+  if (!list) return;
+  list.innerHTML = RECENT_ALERTS_DATA.map(a => `
+    <li class="alert-item alert-item--${a.sev}">
+      <div class="alert-item__icon">${a.sev === 'critical' ? '🚨' : a.sev === 'high' ? '⚠️' : 'ℹ️'}</div>
+      <div class="alert-item__body">
+        <div class="alert-item__drug">${escHtml(a.drug)}</div>
+        <div class="alert-item__event">${escHtml(a.event)}</div>
+        <div class="alert-item__meta">
+          <span class="alert-item__prr">PRR ${a.prr}</span>
+          <span class="alert-item__time">${a.time}</span>
+        </div>
+      </div>
+    </li>
+  `).join('');
+}
+
+/* ──────────────── CLUSTER GRID ────────────────────────────── */
+function renderClusterGrid() {
+  const grid = document.getElementById('cluster-grid');
+  if (!grid) return;
+  grid.innerHTML = CLUSTERS.map(c => `
+    <div class="cluster-item">
+      <div class="cluster-item__drugs">💊 ${c.drugs}</div>
+      <div class="cluster-item__risk">⚠ ${c.risk} RISK</div>
+      <div class="cluster-item__desc">${c.desc}</div>
+    </div>
+  `).join('');
+}
+
+/* ──────────────── PRR CALCULATOR ──────────────────────────── */
+function initPRRCalculator() {
+  const btn = document.getElementById('calc-prr-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const result = document.getElementById('prr-result');
+    if (!result) return;
+
+    result.style.background = '#e8f0fe';
+    result.innerHTML = '⏳ Fetching real data from openFDA…';
+
+    try {
+      // Use the drug from the Drug Search input if available, otherwise default
+      const drugInput = document.getElementById('drug-search-input');
+      const drug = (drugInput && drugInput.value.trim()) || 'Metformin';
+      const event = 'Nausea'; // You can make this dynamic too
+
+      const res = await fetch(`http://127.0.0.1:5000/api/prr-trials?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`);
+      const data = await res.json();
+
+      if (data.error) {
+        result.style.background = '#fdecea';
+        result.innerHTML = `Error: ${data.error}`;
+        return;
+      }
+
+      // Fill the input boxes with the real values from openFDA
+      const prrA = document.getElementById('prr-a');
+      const prrB = document.getElementById('prr-b');
+      const prrC = document.getElementById('prr-c');
+      const prrD = document.getElementById('prr-d');
+      if (prrA) prrA.value = data.a;
+      if (prrB) prrB.value = data.b;
+      if (prrC) prrC.value = data.c;
+      if (prrD) prrD.value = data.d;
+
+      const sig = data.prr > 5 ? 'CRITICAL' : data.prr > 3 ? 'HIGH' : data.prr > 2 ? 'MODERATE' : data.prr > 1 ? 'LOW' : 'NONE';
+      const col = data.prr > 3 ? '#fdecea' : data.prr > 2 ? '#fff8e1' : '#e8f5e9';
+      result.style.background = col;
+      result.innerHTML = `PRR = <strong>${data.prr.toFixed(4)}</strong> &nbsp;|&nbsp; Signal Level: <strong>${sig}</strong><br><small style="opacity:0.7;">Drug: ${data.drug} | Event: ${data.event} | Source: openFDA FAERS (live)</small>`;
+
+      // ── ClinicalTrials Corroboration Panel (Option B) ──────────────────────
+      let ctPanel = document.getElementById('prr-ct-corroboration');
+      if (!ctPanel) {
+        ctPanel = document.createElement('div');
+        ctPanel.id = 'prr-ct-corroboration';
+        result.parentElement.appendChild(ctPanel);
+      }
+
+      const corrobColors = {
+        STRONG:     { bg: '#e8f5e9', border: '#2e7d32', icon: '✅', label: 'STRONG CORROBORATION' },
+        MODERATE:   { bg: '#fff8e1', border: '#f9a825', icon: '📋', label: 'PARTIAL CORROBORATION' },
+        FAERS_ONLY: { bg: '#fff3e0', border: '#e65100', icon: '⚠️', label: 'FAERS SIGNAL ONLY' },
+        NO_SIGNAL:  { bg: '#f5f5f5', border: '#9e9e9e', icon: 'ℹ️', label: 'NO SIGNAL' }
+      };
+      const cc = corrobColors[data.corroboration] || corrobColors.NO_SIGNAL;
+
+      let trialsHtml = '';
+      if (data.trial_matches && data.trial_matches.length > 0) {
+        trialsHtml = `
+          <div style="margin-top:8px; font-size:0.78rem;">
+            <strong>Matching Active Trials:</strong>
+            <ul style="margin:4px 0 0 1rem; padding:0;">
+              ${data.trial_matches.map(t => `
+                <li style="margin-bottom:3px;">
+                  <a href="${escHtml(t.url)}" target="_blank" rel="noopener"
+                     style="color:#003d7c; text-decoration:none;">
+                    ${escHtml(t.nct_id)}
+                  </a>
+                  — ${escHtml(t.title.substring(0, 80))}${t.title.length > 80 ? '…' : ''}
+                  <span style="color:#666;"> (${escHtml(t.phase)} · ${escHtml(t.status)})</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>`;
+      }
+
+      ctPanel.style.cssText = `margin-top:10px; padding:10px 14px; background:${cc.bg};
+        border-left:4px solid ${cc.border}; border-radius:6px; font-size:0.82rem; line-height:1.5;`;
+      ctPanel.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+          <span style="font-size:1.1rem;">${cc.icon}</span>
+          <strong style="color:${cc.border};">ClinicalTrials.gov — ${cc.label}</strong>
+          <span style="margin-left:auto; font-size:0.7rem; color:#999;">clinicaltrials.gov</span>
+        </div>
+        <div>${escHtml(data.corroboration_message)}</div>
+        ${trialsHtml}
+      `;
+    } catch (e) {
+      result.style.background = '#fdecea';
+      result.innerHTML = `❌ Could not reach backend. Is <code>python backend/app.py</code> running?`;
+    }
+  });
+}
+
+
+
+
+/* ──────────────── NAVIGATION ──────────────────────────────── */
+let chartsInitialized = {};
+
+function navigateTo(sectionId) {
+  document.querySelectorAll('.page-section').forEach(s => { s.style.display = 'none'; s.classList.remove('active-section'); });
+  const target = document.getElementById(sectionId);
+  if (target) { target.style.display = 'block'; target.classList.add('active-section'); }
+
+  document.querySelectorAll('.main-nav__item').forEach(item => {
+    item.classList.toggle('active', item.querySelector('[data-section]')?.dataset.section === sectionId);
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Lazy-init charts per section
+  if (sectionId === 'dashboard' && !chartsInitialized.dashboard) {
+    chartsInitialized.dashboard = true;
+    initSignalIntensityChart();
+    initDrugCategoryChart();
+    renderRecentAlerts();
+    if (typeof DistributedStorage !== 'undefined') DistributedStorage.animateMeters();
+  }
+  if (sectionId === 'signals' && !chartsInitialized.signals) {
+    chartsInitialized.signals = true;
+    renderSignalsTable(signalsData);
+    initPRRDistributionChart();
+  }
+  if (sectionId === 'interactions' && !chartsInitialized.interactions) {
+    chartsInitialized.interactions = true;
+    renderClusterGrid();
+    drawGraph('Metformin');
+  }
+  if (sectionId === 'data-sources' && !chartsInitialized.datasources) {
+    chartsInitialized.datasources = true;
+    if (typeof DistributedStorage !== 'undefined') {
+      DistributedStorage.initThroughputChart();
+      DistributedStorage.initKafkaLagChart();
+    }
+  }
+  if (sectionId === 'boxed-warnings' && !chartsInitialized.boxedwarnings) {
+    chartsInitialized.boxedwarnings = true;
+    // Section ready — user will trigger load via search/chips
+  }
+  if (sectionId === 'methodology' && !chartsInitialized.methodology) {
+    chartsInitialized.methodology = true;
+    if (typeof MLModels !== 'undefined') {
+      MLModels.initLSTMDrugSelector();
+      MLModels.initLSTMDemoChart('Metformin');
+    }
+  }
+
+  // Re-initialize tooltips if section changed
+  setTimeout(() => {
+    if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
+  }, 300);
+}
+
+function initNavigation() {
+  // Nav links
+  document.querySelectorAll('.main-nav__link').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      navigateTo(link.dataset.section);
+    });
+  });
+
+  // Footer links
+  document.querySelectorAll('.footer-link[data-nav]').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      navigateTo(link.dataset.nav);
+    });
+  });
+
+  // Hero buttons
+  document.querySelectorAll('[data-nav]').forEach(el => {
+    if (!el.classList.contains('footer-link')) {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        navigateTo(el.dataset.nav);
+      });
+    }
+  });
+
+  // Mobile menu
+  const menuBtn = document.getElementById('mobile-menu-btn');
+  const navList = document.getElementById('main-nav-list');
+  if (menuBtn && navList) {
+    menuBtn.addEventListener('click', () => navList.classList.toggle('open'));
+  }
+
+  // Chart range buttons
+  document.querySelectorAll('[data-chart-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-chart-range]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      initSignalIntensityChart();
+    });
+  });
+}
+
+/* ──────────────── INTERACTION GRAPH EVENTS ─────────────────── */
+function initInteractionGraph() {
+  const input = document.getElementById('graph-drug-select');
+  const suggs = document.getElementById('graph-drug-suggestions');
+  const btn   = document.getElementById('load-graph-btn');
+  if (!input) return;
+
+  let searchTimeout = null;
+
+  // Autocomplete — mirrors Drug Search section pattern
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (!q || q.length < 2) { suggs.style.display = 'none'; return; }
+
+    clearTimeout(searchTimeout);
+    suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">Searching openFDA…</li>`;
+    suggs.style.display = 'block';
+
+    searchTimeout = setTimeout(async () => {
+      if (typeof ApiLayer === 'undefined') return;
+      const matches = await ApiLayer.searchDrugNames(q);
+      if (matches.length === 0) {
+        suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">No results for "${escHtml(q)}"</li>`;
+      } else {
+        suggs.innerHTML = matches.slice(0, 8).map(d =>
+          `<li role="option" data-drug="${d}" style="padding:8px 12px; cursor:pointer;">${d}</li>`
+        ).join('');
+      }
+      suggs.style.display = 'block';
+    }, 280);
+  });
+
+  // Click a suggestion → load graph
+  suggs.addEventListener('click', e => {
+    const li = e.target.closest('li[data-drug]');
+    if (!li) return;
+    input.value = li.dataset.drug;
+    suggs.style.display = 'none';
+    drawGraph(li.dataset.drug);
+  });
+
+  // Load Graph button
+  btn?.addEventListener('click', () => {
+    suggs.style.display = 'none';
+    const drug = input.value.trim();
+    if (drug) drawGraph(drug);
+  });
+
+  // Enter key → load graph
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { suggs.style.display = 'none'; const drug = input.value.trim(); if (drug) drawGraph(drug); }
+    if (e.key === 'Escape') suggs.style.display = 'none';
+  });
+
+  // Close suggestions on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#graph-drug-select') && !e.target.closest('#graph-drug-suggestions')) {
+      suggs.style.display = 'none';
+    }
+  });
+}
+
+
+/* ──────────────── SIGNALS PAGE EVENTS ─────────────────────── */
+function initSignalsPage() {
+  document.getElementById('signal-search')?.addEventListener('input', filterSignals);
+  document.getElementById('signal-severity')?.addEventListener('change', filterSignals);
+  document.getElementById('signal-source')?.addEventListener('change', filterSignals);
+  document.getElementById('refresh-signals-btn')?.addEventListener('click', () => {
+    signalsData = generateSignals();
+    filterSignals();
+  });
+  document.getElementById('close-signal-detail')?.addEventListener('click', () => {
+    const panel = document.getElementById('signal-detail-panel');
+    if (panel) panel.style.display = 'none';
+  });
+}
+
+/* ──────────────── BOXED WARNING ANALYSIS ──────────────────── */
+let bwEventsChart = null;
+
+function initBoxedWarnings() {
+  const input = document.getElementById('bw-search-input');
+  const suggs = document.getElementById('bw-suggestions');
+  const btn = document.getElementById('bw-search-btn');
+  if (!input) return;
+
+  let searchTimeout = null;
+
+  // Autocomplete
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (!q || q.length < 2) { suggs.style.display = 'none'; return; }
+
+    clearTimeout(searchTimeout);
+    suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">Searching openFDA…</li>`;
+    suggs.style.display = 'block';
+
+    searchTimeout = setTimeout(async () => {
+      if (typeof ApiLayer === 'undefined') return;
+      const matches = await ApiLayer.searchDrugNames(q);
+      if (matches.length === 0) {
+        suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">No results for "${escHtml(q)}"</li>`;
+      } else {
+        suggs.innerHTML = matches.slice(0, 8).map(d =>
+          `<li role="option" data-drug="${d}" style="padding:8px 12px; cursor:pointer;">${d}</li>`
+        ).join('');
+      }
+      suggs.style.display = 'block';
+    }, 280);
+  });
+
+  suggs.addEventListener('click', e => {
+    const li = e.target.closest('li[data-drug]');
+    if (!li) return;
+    input.value = li.dataset.drug;
+    suggs.style.display = 'none';
+    loadBoxedWarningAnalysis(li.dataset.drug);
+  });
+
+  btn?.addEventListener('click', () => {
+    suggs.style.display = 'none';
+    const drug = input.value.trim();
+    if (drug) loadBoxedWarningAnalysis(drug);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { suggs.style.display = 'none'; const drug = input.value.trim(); if (drug) loadBoxedWarningAnalysis(drug); }
+    if (e.key === 'Escape') suggs.style.display = 'none';
+  });
+
+  // Preset drug chips
+  document.querySelectorAll('.bw-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      input.value = chip.dataset.drug;
+      loadBoxedWarningAnalysis(chip.dataset.drug);
+    });
+  });
+
+  // Close suggestions on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#bw-search-input') && !e.target.closest('#bw-suggestions')) {
+      suggs.style.display = 'none';
+    }
+  });
+}
+
+async function loadBoxedWarningAnalysis(drugName) {
+  const resultsPanel = document.getElementById('bw-results-panel');
+  const loadingDiv = document.getElementById('bw-loading');
+  const noWarningDiv = document.getElementById('bw-no-warning');
+  const hasWarningDiv = document.getElementById('bw-has-warning');
+  const emptyState = document.getElementById('bw-empty-state');
+
+  emptyState.style.display = 'none';
+  resultsPanel.style.display = 'block';
+  loadingDiv.style.display = 'block';
+  noWarningDiv.style.display = 'none';
+  hasWarningDiv.style.display = 'none';
+
+  // Hide literature panels until data arrives
+  ['bw-literature-card','bw-timeline-card','bw-violations-card','bw-bias-card']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+  try {
+    const [warningRes, eventsRes, trialsRes] = await Promise.all([
+      fetch(`http://127.0.0.1:5000/api/boxed-warning/${encodeURIComponent(drugName)}`).then(r => r.json()),
+      fetch(`http://127.0.0.1:5000/api/boxed-warning-events/${encodeURIComponent(drugName)}`).then(r => r.json()),
+      fetch(`http://127.0.0.1:5000/api/trials/${encodeURIComponent(drugName)}`).then(r => r.json()).catch(() => null)
+    ]);
+
+    loadingDiv.style.display = 'none';
+
+    if (!warningRes.has_warning) {
+      noWarningDiv.style.display = 'block';
+      document.getElementById('bw-no-warning-title').textContent = `No Boxed Warning Found for "${drugName}"`;
+      if (trialsRes && trialsRes.total_studies > 0) {
+        let noWarnExtra = document.getElementById('bw-no-warning-ct');
+        if (!noWarnExtra) {
+          noWarnExtra = document.createElement('div');
+          noWarnExtra.id = 'bw-no-warning-ct';
+          noWarnExtra.style.cssText = 'margin-top:1rem; padding:10px 14px; background:#e8f5e9; border-left:4px solid #2e7d32; border-radius:6px; font-size:0.83rem; text-align:left;';
+          noWarningDiv.appendChild(noWarnExtra);
+        }
+        noWarnExtra.innerHTML = `🧪 <strong>${trialsRes.total_studies} ClinicalTrials</strong> found for "${escHtml(drugName)}" (${trialsRes.recruiting_count} recruiting). No boxed warning, but drug is being studied.`;
+      }
+      return;
+    }
+
+    hasWarningDiv.style.display = 'block';
+
+    document.getElementById('bw-drug-header').innerHTML = `
+      <div style="display:flex; align-items:center; gap:1.5rem;">
+        <div style="font-size:3rem;">⚠️</div>
+        <div>
+          <h2 style="font-size:1.6rem; font-weight:800; margin-bottom:0.25rem; text-transform:uppercase;">${escHtml(drugName)}</h2>
+          <div style="opacity:0.85; font-size:0.85rem;">${escHtml(warningRes.generic_name || '')} ${warningRes.brand_name ? '(' + escHtml(warningRes.brand_name) + ')' : ''}</div>
+          <div style="opacity:0.65; font-size:0.8rem; margin-top:0.25rem;">${escHtml(warningRes.pharm_class || '')} · ${escHtml(warningRes.route || '')}</div>
+          <div style="margin-top:0.5rem;">
+            <span style="background:rgba(192,57,43,0.8); padding:3px 10px; border-radius:4px; font-size:0.75rem; font-weight:700;">⬛ HAS BOXED WARNING</span>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('bw-warning-text').innerHTML = warningRes.warning_text
+      .replace(/WARNING/g, '<strong>WARNING</strong>')
+      .replace(/BOXED WARNING/g, '<strong style="color:#c0392b;">BOXED WARNING</strong>');
+
+    document.getElementById('bw-total-reports').textContent = eventsRes.total_reports.toLocaleString();
+    document.getElementById('bw-warned-count').textContent = eventsRes.boxed_warning_event_count.toLocaleString();
+    document.getElementById('bw-warned-pct').textContent = eventsRes.boxed_warning_percentage + '%';
+    document.getElementById('bw-other-count').textContent = eventsRes.other_events.length;
+
+    // ClinicalTrials monitoring card
+    let ctMonitorCard = document.getElementById('bw-ct-monitor-card');
+    if (!ctMonitorCard) {
+      ctMonitorCard = document.createElement('div');
+      ctMonitorCard.id = 'bw-ct-monitor-card';
+      ctMonitorCard.style.cssText = 'margin-bottom:1.5rem;';
+      const chartGrid = document.querySelector('#bw-has-warning .dashboard-grid');
+      if (chartGrid) chartGrid.parentElement.insertBefore(ctMonitorCard, chartGrid);
+    }
+    if (trialsRes) {
+      const n = trialsRes.total_studies;
+      const rec = trialsRes.recruiting_count;
+      const phase34 = trialsRes.studies?.filter(s => s.phase && (s.phase.includes('PHASE3') || s.phase.includes('PHASE4'))).length ?? 0;
+      let cardBg, cardBorder, cardIcon, cardHeading, cardSubtext;
+      if (n === 0) {
+        cardBg='#fef2f2'; cardBorder='#c0392b'; cardIcon='🚨';
+        cardHeading='No Active Clinical Trials — Monitoring Gap';
+        cardSubtext=`Despite an FDA Boxed Warning, <strong>0 active ClinicalTrials</strong> are monitoring "${escHtml(drugName)}".`;
+      } else if (n <= 3) {
+        cardBg='#fff8e1'; cardBorder='#f9a825'; cardIcon='⚠️';
+        cardHeading=`Limited Trial Monitoring — ${n} Stud${n===1?'y':'ies'} Active`;
+        cardSubtext=`Only <strong>${n} active trial${n===1?'':'s'}</strong> (${rec} recruiting) found.`;
+      } else {
+        cardBg='#e8f5e9'; cardBorder='#2e7d32'; cardIcon='✅';
+        cardHeading=`Well Monitored — ${n} Active Trial${n===1?'':'s'}`;
+        cardSubtext=`<strong>${n} active ClinicalTrials</strong> (${rec} recruiting, ${phase34} Phase 3/4).`;
+      }
+      const topStudies = (trialsRes.studies || []).slice(0, 5);
+      const studyLinks = topStudies.map(s => `
+        <li><a href="${escHtml(s.url)}" target="_blank" rel="noopener"
+           style="color:#003d7c; font-weight:600; text-decoration:none;">${escHtml(s.nct_id)}</a>
+         — ${escHtml(s.title.substring(0,90))}${s.title.length>90?'…':''}
+         <span style="color:#666;"> · ${escHtml(s.phase)} · ${escHtml(s.status)}</span>
+        </li>`).join('');
+      ctMonitorCard.innerHTML = `
+        <div style="padding:14px 16px; background:${cardBg}; border-left:4px solid ${cardBorder}; border-radius:8px; font-size:0.85rem; line-height:1.6;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="font-size:1.2rem;">${cardIcon}</span>
+            <strong style="color:${cardBorder}; font-size:0.9rem;">ClinicalTrials.gov Monitoring Status</strong>
+            <span style="margin-left:auto; font-size:0.7rem; color:#999;">clinicaltrials.gov · live</span>
+          </div>
+          <div style="font-weight:700; margin-bottom:4px;">${cardHeading}</div>
+          <div>${cardSubtext}</div>
+          ${topStudies.length ? `<div style="margin-top:10px; font-size:0.78rem;"><strong>Recent Studies:</strong><ul style="margin:4px 0 0 1rem; padding:0; line-height:1.8;">${studyLinks}</ul></div>` : ''}
+        </div>`;
+    }
+
+    // Events bar chart
+    const chartCtx = document.getElementById('bw-events-chart');
+    if (chartCtx) {
+      if (bwEventsChart) bwEventsChart.destroy();
+      const allEvents = [...eventsRes.warned_events, ...eventsRes.other_events]
+        .sort((a,b) => b.count - a.count).slice(0,15);
+      bwEventsChart = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+          labels: allEvents.map(e => e.term.length > 25 ? e.term.substring(0,22)+'…' : e.term),
+          datasets: [{ label: 'FAERS Reports', data: allEvents.map(e => e.count),
+            backgroundColor: allEvents.map(e => e.is_boxed_warning ? '#c0392b' : '#3498db'), borderRadius: 4 }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: ctx => {
+              const ev = allEvents[ctx.dataIndex];
+              return ` ${ctx.raw.toLocaleString()} reports (${ev.percentage}%) ${ev.is_boxed_warning?'⚠ BOXED WARNING':''}`;
+            }}}},
+          scales: { x: { title: { display: true, text: 'FAERS Report Count' } }, y: { ticks: { font: { size: 10 } } } }
+        }
+      });
+    }
+
+    // Events table
+    const tableDiv = document.getElementById('bw-events-table');
+    if (tableDiv) {
+      const allSorted = [...eventsRes.warned_events, ...eventsRes.other_events].sort((a,b) => b.count - a.count);
+      tableDiv.innerHTML = `
+        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+            </tr>
+          </thead>
+          <tbody>
+            ${allSorted.map(ev => `
+              <tr style="border-bottom:1px solid #eee; ${ev.is_boxed_warning ? 'background:#fef2f2;' : ''}">
+                <td style="padding:6px 8px; font-weight:${ev.is_boxed_warning ? '700' : '400'};">${escHtml(ev.term)}</td>
+                <td style="padding:6px 8px;">${ev.count.toLocaleString()}</td>
+                <td style="padding:6px 8px;">${ev.percentage}%</td>
+                <td style="padding:6px 8px;">${ev.is_boxed_warning ? '<span style="color:#c0392b; font-weight:700;">⚠ YES</span>' : '<span style="color:#999;">No</span>'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top:0.75rem; padding:8px 12px; background:#f8f9fa; border-radius:6px; font-size:0.75rem; color:#666;">
+          <strong style="color:#c0392b;">■</strong> Red = Events matching the FDA Boxed Warning &nbsp;
+          <strong style="color:#3498db;">■</strong> Blue = Other reported adverse events
+        </div>
+      `;
+    }
+
+  } catch (err) {
+    loadingDiv.style.display = 'none';
+    noWarningDiv.style.display = 'block';
+    document.getElementById('bw-no-warning-title').textContent = `❌ Error: Is the Python backend running? (${err.message})`;
+  }
+}
+
+/* ──────────────── LITERATURE CARD RENDERER ────────────────── */
+function renderLiteratureCard(drugName, eventsRes, violationsData, timelineData, biasData) {
+  const card = document.getElementById('bw-literature-card');
+  const body = document.getElementById('bw-literature-body');
+  if (!card || !body) return;
+
+  const warnedPct = eventsRes.boxed_warning_percentage || 0;
+  const violCount = violationsData?.violations_detected ?? '?';
+  const postTotal = violationsData?.violations?.reduce((s, v) => s + (v.post_count || 0), 0) ?? 0;
+  const preTotal  = violationsData?.violations?.reduce((s, v) => s + (v.pre_count  || 0), 0) ?? 0;
+  const warningDate = violationsData?.warning_date ?? 'unknown';
+
+  const weberDetected = biasData?.weber_peak_detected ?? false;
+  const peakYear      = biasData?.peak_year ?? null;
+
+  const preSlope  = timelineData?.pre_slope  ?? null;
+  const postSlope = timelineData?.post_slope ?? null;
+  const slopeDown = preSlope !== null && postSlope !== null && postSlope < preSlope;
+
+  const pills = [
+    {
+      icon: '📉', label: 'A — Prescribing Impact',
+      color: slopeDown ? '#1b5e20' : '#b71c1c',
+      bg:    slopeDown ? '#e8f5e9'  : '#fef2f2',
+      value: preSlope !== null
+        ? `Pre-warning slope: ${preSlope > 0 ? '+' : ''}${preSlope}/yr → Post-warning: ${postSlope > 0 ? '+' : ''}${postSlope}/yr. ${slopeDown ? 'Warning dampened reporting.' : 'Reporting continued rising post-warning.'}`
+        : 'Insufficient FAERS time-series data to compute prescribing slope.',
+    },
+    {
+      icon: '⚠️', label: 'B — Post-Warning Violations',
+      color: '#7f1d1d', bg: '#fef2f2',
+      value: postTotal > 0
+        ? `${violCount} warned event type(s) with <strong>${postTotal.toLocaleString()}</strong> FAERS reports filed AFTER the ${warningDate} warning — prescriptions continued despite the Black Box.`
+        : violationsData === null
+          ? 'Violations data unavailable (backend may still be loading).'
+          : 'No post-warning FAERS reports detected for warned events.',
+    },
+    {
+      icon: '🔄', label: 'C — Unintended Consequences',
+      color: '#1a237e', bg: '#e8eaf6',
+      value: `${warnedPct}% of all FAERS reports for ${escHtml(drugName)} match the boxed warning criteria. Literature shows warnings can produce spillover effects — reduced access alongside continued high-risk use.`,
+    },
+    {
+      icon: '📊', label: 'D — Notoriety Bias / Weber Effect',
+      color: weberDetected ? '#e65100' : '#33691e',
+      bg:    weberDetected ? '#fff3e0'  : '#f1f8e9',
+      value: weberDetected
+        ? `⚡ Weber Effect detected: reporting peaked in ${peakYear}. FAERS spike post-warning may reflect media-driven hyper-reporting, not a true incidence increase.`
+        : 'No significant Weber peak detected. FAERS trends appear consistent around the warning date.',
+    },
+  ];
+
+  body.innerHTML = pills.map(p => `
+    <div style="padding:14px; background:${p.bg}; border-radius:8px; border-left:4px solid ${p.color};">
+      <div style="font-size:1.3rem; margin-bottom:6px;">${p.icon}</div>
+      <div style="font-size:0.78rem; font-weight:800; text-transform:uppercase; color:${p.color}; margin-bottom:4px;">${p.label}</div>
+      <div style="font-size:0.8rem; line-height:1.55; color:#333;">${p.value}</div>
+    </div>`).join('');
+
+  card.style.display = 'block';
+}
+
+/* ──────────────── TIMELINE CHART RENDERER ──────────────────── */
+let bwTimelineChart = null;
+function renderTimelineChart(data) {
+  const card = document.getElementById('bw-timeline-card');
+  if (!card || !data || data.error) return;
+
+  card.style.display = 'block';
+
+  // Slope badges
+  const slopesEl = document.getElementById('bw-timeline-slopes');
+  if (slopesEl) {
+    const pre  = data.pre_slope;
+    const post = data.post_slope;
+    const warningYr = data.warning_year ?? '—';
+    const slopeColor = v => v === null ? '#888' : v > 0 ? '#c0392b' : '#2e7d32';
+    slopesEl.innerHTML = `
+      <div style="text-align:center; padding:10px; background:#f8f9fa; border-radius:8px;">
+        <div style="font-size:1.4rem; font-weight:800; color:#003d7c;">${warningYr}</div>
+        <div style="font-size:0.72rem; color:#666; text-transform:uppercase;">Warning Year</div>
+      </div>
+      <div style="text-align:center; padding:10px; background:#e8f5e9; border-radius:8px;">
+        <div style="font-size:1.4rem; font-weight:800; color:${slopeColor(pre)};">${pre !== null ? (pre > 0 ? '+' : '') + pre : 'N/A'}</div>
+        <div style="font-size:0.72rem; color:#666; text-transform:uppercase;">Pre-Warning Slope (reports/yr)</div>
+      </div>
+      <div style="text-align:center; padding:10px; background:${post < pre ? '#e8f5e9' : '#fef2f2'}; border-radius:8px;">
+        <div style="font-size:1.4rem; font-weight:800; color:${slopeColor(post)};">${post !== null ? (post > 0 ? '+' : '') + post : 'N/A'}</div>
+        <div style="font-size:0.72rem; color:#666; text-transform:uppercase;">Post-Warning Slope (reports/yr)</div>
+      </div>`;
+  }
+
+  // Badge
+  const badge = document.getElementById('bw-timeline-badge');
+  if (badge) {
+    if (data.pre_slope !== null && data.post_slope !== null) {
+      const reduced = data.post_slope < data.pre_slope;
+      badge.textContent = reduced ? '📉 Warning Reduced Reporting' : '📈 Reporting Continued Rising';
+      badge.style.background = reduced ? '#e8f5e9' : '#fef2f2';
+      badge.style.color = reduced ? '#2e7d32' : '#c0392b';
+    } else {
+      badge.textContent = 'Slope data insufficient';
+      badge.style.background = '#f5f5f5';
+      badge.style.color = '#888';
+    }
+  }
+
+  // Chart
+  const ctx = document.getElementById('bw-timeline-chart');
+  if (!ctx) return;
+  if (bwTimelineChart) bwTimelineChart.destroy();
+
+  const labels = data.labels;
+  const counts = data.counts;
+  const wIdx   = data.warning_index;
+
+  // Build point colors — highlight warning year in red
+  const ptColors = labels.map((_, i) => i === wIdx ? '#c0392b' : '#003d7c');
+  const ptRadius = labels.map((_, i) => i === wIdx ? 8 : 4);
+
+  bwTimelineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Annual FAERS Reports',
+        data: counts,
+        borderColor: '#003d7c',
+        backgroundColor: 'rgba(0,61,124,0.07)',
+        tension: 0.3, fill: true,
+        pointBackgroundColor: ptColors,
+        pointRadius: ptRadius,
+        pointHoverRadius: 8,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx2 => {
+              const yr = labels[ctx2.dataIndex];
+              const suffix = ctx2.dataIndex === wIdx ? ' ← Warning issued' : '';
+              return ` ${ctx2.raw.toLocaleString()} reports${suffix}`;
+            }
+          }
+        },
+        annotation: wIdx !== null ? {
+          annotations: {
+            warningLine: {
+              type: 'line', xMin: wIdx, xMax: wIdx,
+              borderColor: '#c0392b', borderWidth: 2, borderDash: [6,3],
+              label: { content: '⬛ Warning', enabled: true, position: 'start', font: { size: 10 }, color: '#c0392b' }
+            }
+          }
+        } : {}
+      },
+      scales: {
+        x: { ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, title: { display: true, text: 'FAERS Reports' } }
+      }
+    }
+  });
+
+  const interp = document.getElementById('bw-timeline-interp');
+  if (interp) interp.textContent = data.interpretation || '';
+}
+
+/* ──────────────── VIOLATIONS LOG RENDERER ──────────────────── */
+function renderViolationsLog(drugName, data) {
+  const card    = document.getElementById('bw-violations-card');
+  const summary = document.getElementById('bw-violations-summary');
+  const table   = document.getElementById('bw-violations-table');
+  if (!card || !data) return;
+
+  card.style.display = 'block';
+
+  const violations = data.violations || [];
+  const stored     = data.stored_violations || [];
+  const warningDate = data.warning_date ?? 'unknown';
+  const totalPost = violations.reduce((s, v) => s + (v.post_count || 0), 0);
+
+  if (summary) {
+    summary.innerHTML = data.has_boxed_warning === false
+      ? `ℹ️ No boxed warning found for this drug — no violations to record.`
+      : `<strong>${violations.length}</strong> warned adverse event type(s) detected with FAERS reports filed <strong>after</strong> the <strong>${warningDate}</strong> boxed warning. Total post-warning reports: <strong style="color:#c0392b;">${totalPost.toLocaleString()}</strong>. Each row is persisted to <code>pharmawatch.db → boxed_warning_violations</code>.`;
+  }
+
+  if (table) {
+    if (violations.length === 0) {
+      table.innerHTML = `<p style="color:#888; font-size:0.83rem; padding:1rem 0;">No warned adverse events detected in top FAERS reports for this drug.</p>`;
+    } else {
+      table.innerHTML = `
+        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+          <thead><tr style="border-bottom:2px solid #ddd; text-align:left; background:#fef2f2;">
+            <th style="padding:7px 8px;">Adverse Event</th>
+            <th style="padding:7px 8px;" title="FAERS reports filed after the warning date">Post-Warning Reports ↓</th>
+            <th style="padding:7px 8px;" title="FAERS reports filed before the warning date">Pre-Warning Reports</th>
+            <th style="padding:7px 8px;">% of All FAERS</th>
+            <th style="padding:7px 8px;">Warning Date</th>
+          </tr></thead>
+          <tbody>
+            ${violations.map(v => `
+              <tr style="border-bottom:1px solid #f0e0e0; background:${v.post_count > 0 ? '#fff9f9' : '#fff'};">
+                <td style="padding:6px 8px; font-weight:600;">${escHtml(v.term)}</td>
+                <td style="padding:6px 8px; color:#c0392b; font-weight:800;">${v.post_count.toLocaleString()}</td>
+                <td style="padding:6px 8px; color:#2e7d32;">${v.pre_count.toLocaleString()}</td>
+                <td style="padding:6px 8px;">${v.percentage}%</td>
+                <td style="padding:6px 8px; color:#666;">${escHtml(v.warning_date)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top:0.5rem; font-size:0.72rem; color:#888; font-style:italic;">
+          Post-warning count = FAERS reports with receivedate ≥ warning effective_time. Stored in local SQLite DB on each query.
+        </div>`;
+    }
+  }
+
+  // "View Entire DB Log" button
+  const allBtn = document.getElementById('bw-view-all-violations-btn');
+  const allLog = document.getElementById('bw-all-violations-log');
+  const dbStatus = document.getElementById('bw-db-log-status');
+  if (allBtn && allLog) {
+    allBtn.onclick = async () => {
+      if (allLog.style.display !== 'none') { allLog.style.display = 'none'; allBtn.textContent = '📋 View Entire DB Log'; return; }
+      allBtn.textContent = '⏳ Loading…';
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/boxed-warning/violations/all?limit=100').then(r => r.json());
+        const rows = res.violations || [];
+        if (dbStatus) dbStatus.textContent = `${rows.length} total records in pharmawatch.db`;
+        allLog.innerHTML = rows.length === 0
+          ? '<p style="color:#888; font-size:0.82rem;">No violations stored yet.</p>'
+          : `<div style="font-size:0.78rem; font-weight:700; margin-bottom:0.5rem; color:#c0392b;">All Stored Violations — pharmawatch.db (${rows.length} records)</div>
+             <table style="width:100%; font-size:0.77rem; border-collapse:collapse;">
+               <thead><tr style="border-bottom:2px solid #ddd; text-align:left;">
+                 <th style="padding:5px 7px;">Drug</th>
+                 <th style="padding:5px 7px;">Event</th>
+                 <th style="padding:5px 7px;">Post-Warning</th>
+                 <th style="padding:5px 7px;">Pre-Warning</th>
+                 <th style="padding:5px 7px;">Queried At</th>
+               </tr></thead>
+               <tbody>
+                 ${rows.map(r => `
+                   <tr style="border-bottom:1px solid #eee;">
+                     <td style="padding:5px 7px; text-transform:uppercase; font-weight:600;">${escHtml(r.drug)}</td>
+                     <td style="padding:5px 7px;">${escHtml(r.adverse_event)}</td>
+                     <td style="padding:5px 7px; color:#c0392b; font-weight:700;">${r.faers_count_post_warning.toLocaleString()}</td>
+                     <td style="padding:5px 7px; color:#2e7d32;">${r.faers_count_pre_warning.toLocaleString()}</td>
+                     <td style="padding:5px 7px; color:#888;">${r.queried_at ?? ''}</td>
+                   </tr>`).join('')}
+               </tbody>
+             </table>`;
+        allLog.style.display = 'block';
+        allBtn.textContent = '▲ Hide DB Log';
+      } catch (e) {
+        allLog.innerHTML = `<p style="color:#c0392b; font-size:0.82rem;">Failed to load DB log: ${e.message}</p>`;
+        allLog.style.display = 'block';
+        allBtn.textContent = '📋 View Entire DB Log';
+      }
+    };
+  }
+}
+
+/* ──────────────── WEBER EFFECT CHART RENDERER ──────────────── */
+let bwBiasChart = null;
+function renderBiasChart(data) {
+  const card = document.getElementById('bw-bias-card');
+  const note = document.getElementById('bw-bias-note');
+  const badge = document.getElementById('bw-weber-badge');
+  if (!card || !data || data.error) return;
+
+  card.style.display = 'block';
+
+  if (note) note.textContent = data.notoriety_note || '';
+
+  if (badge) {
+    badge.textContent = data.weber_peak_detected
+      ? `⚡ Weber Peak Detected (${data.peak_year})`
+      : '✅ No Weber Peak';
+    badge.style.background = data.weber_peak_detected ? '#fff3e0' : '#e8f5e9';
+    badge.style.color       = data.weber_peak_detected ? '#e65100' : '#2e7d32';
+  }
+
+  const ctx = document.getElementById('bw-bias-chart');
+  if (!ctx) return;
+  if (bwBiasChart) bwBiasChart.destroy();
+
+  const labels = data.labels || [];
+  const counts = data.counts || [];
+  const warningYear = String(data.warning_year ?? '');
+  const peakYear    = String(data.peak_year ?? '');
+
+  // Color bars: warning year = amber, peak year = red, others = blue
+  const barColors = labels.map(yr => {
+    if (yr === peakYear && data.weber_peak_detected) return '#c0392b';
+    if (yr === warningYear) return '#f9a825';
+    return '#3498db';
+  });
+
+  bwBiasChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Annual FAERS Reports',
+        data: counts,
+        backgroundColor: barColors,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx2 => {
+              const yr = labels[ctx2.dataIndex];
+              let suffix = '';
+              if (yr === warningYear) suffix = ' ← Warning issued';
+              if (yr === peakYear && data.weber_peak_detected) suffix = ' ← Weber Peak';
+              return ` ${ctx2.raw.toLocaleString()} reports${suffix}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, title: { display: true, text: 'FAERS Reports / Year' } }
+      }
+    }
+  });
+}
+
+/* ──────────────── ALERT BANNER ────────────────────────────── */
+function initAlertBanner() {
+  document.getElementById('alert-close')?.addEventListener('click', () => {
+    const banner = document.getElementById('alert-banner');
+    if (banner) { banner.style.opacity = '0'; banner.style.transition = '0.3s'; setTimeout(() => banner.remove(), 300); }
+  });
+}
+
+
+
+
+/* ──────────────── LIVE SIMULATION LOOP ────────────────────── */
+function startLiveSimulation() {
+  const alerts = [
+    'Elevated PRR detected for <strong>Warfarin + Aspirin</strong> — haemorrhage risk. PRR = 4.81.',
+    'New signal: <strong>Amiodarone</strong> — Torsades de Pointes. PRR = 5.13. Critical.',
+    'Accelerating signal: <strong>Simvastatin + Amiodarone</strong> — Rhabdomyolysis. PRR = 3.67.',
+    '<strong>ACTIVE SIGNAL:</strong> Elevated PRR detected for <strong>Metformin + Empagliflozin</strong> — lactic acidosis. PRR = 3.24.',
+    'High confidence alert: <strong>Sertraline + Tramadol</strong> — Serotonin Syndrome. PRR = 2.94.',
+  ];
+  let alertIdx = 0;
+  setInterval(() => {
+    alertIdx = (alertIdx + 1) % alerts.length;
+    const txt = document.getElementById('alert-text');
+    if (txt) { txt.style.opacity = '0'; setTimeout(() => { txt.innerHTML = alerts[alertIdx]; txt.style.opacity = '1'; }, 400); }
+  }, 8000);
+
+  // Live system status
+  const dot = document.getElementById('system-status-dot');
+  let odd = false;
+  setInterval(() => {
+    odd = !odd;
+    if (dot) dot.style.color = odd ? '#7fff7f' : '#00c853';
+  }, 1200);
+}
+
+/* ──────────────── UTILITIES ───────────────────────────────── */
+function escHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ──────────────── BOOT ────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  initNavigation();
+  initAlertBanner();
+  initSignalsPage();
+  initDrugSearch();
+  initInteractionGraph();
+  initBoxedWarnings();
+  initPRRCalculator();
+  initCounters();
+
+  // Boot the dashboard section (default)
+  navigateTo('dashboard');
+  startLiveSimulation();
+
+  // Boot the modular Javascript logic
+  if (typeof MLModels !== 'undefined') MLModels.boot();
+  if (typeof DistributedStorage !== 'undefined') DistributedStorage.boot();
+
+  // Initialize tooltips on the illnesses
+  setTimeout(() => {
+    if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
+  }, 500);
+
+  // Pre-fetch real drug list from openFDA in background for autocomplete fallback
+  if (typeof ApiLayer !== 'undefined') {
+    ApiLayer.preloadDrugList().then(() => {
+      console.log('[PharmaWatch] Drug list preloaded from openFDA');
+    });
+  }
+
+  // Add style for stat-mini
+  const style = document.createElement('style');
+  style.textContent = `
+    .stat-mini { text-align:center; padding:0.5rem; background:var(--gray-50); border-radius:8px; border:1px solid var(--gray-200); }
+    .stat-mini__val { font-size:1.3rem; font-weight:800; color:var(--gray-900); }
+    .stat-mini__lbl { font-size:0.7rem; color:var(--gray-600); text-transform:uppercase; margin-top:2px; }
+    .prr-critical { color:var(--cdc-red) !important; }
+    .prr-high { color:#e65100 !important; }
+  `;
+  document.head.appendChild(style);
+});

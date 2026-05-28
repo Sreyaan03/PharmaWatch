@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PharmaWatch | Real-Time Adverse Drug Event Detection</title>
+  <meta name="description"
+    content="PharmaWatch is a real-time, multi-source big data pipeline for detecting adverse drug events using Apache Kafka, Spark, BioBERT, and LSTM models." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Tooltip libraries for Wikipedia definitions -->
+  <script src="https://unpkg.com/@popperjs/core@2"></script>
+  <script src="https://unpkg.com/tippy.js@6"></script>
+  <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/shift-away.css" />
+</head>
+
+<body>
+
+  <!-- ===== TOP UTILITY BAR ===== -->
+  <div class="utility-bar" id="utility-bar">
+    <div class="container utility-bar__inner">
+      <span class="utility-bar__flag">🇺🇸 An official pharmacovigilance research system</span>
+      <div class="utility-bar__actions">
+        <span class="utility-bar__status" id="system-status-dot">● System Online</span>
+        <span class="utility-bar__divider">|</span>
+        <span class="utility-bar__divider">|</span>
+        <a href="#resources" class="utility-bar__link">Resources</a>
+        <span class="utility-bar__divider">|</span>
+        <div
+          style="display:flex; align-items:center; gap:0.5rem; background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px;">
+          <label for="fda-api-key" style="font-size:0.7rem; opacity:0.8;">openFDA API Key:</label>
+          <input type="password" id="fda-api-key" placeholder="Optional..."
+            style="background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,0.4); color:#fff; width:100px; font-size:0.75rem; outline:none;" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header" id="site-header">
+    <div class="container site-header__inner">
+      <div class="site-header__brand" id="brand-logo">
+        <div class="brand-icon" aria-label="PharmaWatch Logo">
+          <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="22" cy="22" r="22" fill="#003d7c" />
+            <path d="M14 22 Q22 10 30 22 Q22 34 14 22Z" fill="#74b3ff" opacity="0.6" />
+            <path d="M22 12 L22 32" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+            <path d="M16 18 L28 18" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+            <path d="M17 26 L27 26" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+            <circle cx="22" cy="22" r="3" fill="#f0c040" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">PharmaWatch</span>
+          <span class="brand-tagline">Real-Time Adverse Drug Event Detection</span>
+        </div>
+      </div>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== MAIN NAVIGATION ===== -->
+  <nav class="main-nav" id="main-nav" role="navigation" aria-label="Main navigation">
+    <div class="container main-nav__inner">
+      <ul class="main-nav__list" id="main-nav-list">
+        <li class="main-nav__item active"><a href="#dashboard" class="main-nav__link"
+            data-section="dashboard">Dashboard</a></li>
+        <li class="main-nav__item"><a href="#signals" class="main-nav__link" data-section="signals">Signal Detection</a>
+        </li>
+        <li class="main-nav__item"><a href="#drug-search" class="main-nav__link" data-section="drug-search">Drug
+            Search</a></li>
+        <li class="main-nav__item"><a href="#interactions" class="main-nav__link"
+            data-section="interactions">Interactions</a></li>
+        <li class="main-nav__item"><a href="#boxed-warnings" class="main-nav__link"
+            data-section="boxed-warnings">Boxed Warnings</a></li>
+        <li class="main-nav__item"><a href="#data-sources" class="main-nav__link" data-section="data-sources">Data
+            Sources</a></li>
+        <li class="main-nav__item"><a href="#methodology" class="main-nav__link"
+            data-section="methodology">Methodology</a></li>
+        <li class="main-nav__item"><a href="#about" class="main-nav__link" data-section="about">About</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ===== ALERT BANNER ===== -->
+  <div class="alert-banner alert-banner--warning" id="alert-banner" role="alert">
+    <div class="container alert-banner__inner">
+      <span class="alert-banner__icon">⚠</span>
+      <span class="alert-banner__text" id="alert-text">
+        <strong>ACTIVE SIGNAL:</strong> Elevated PRR detected for <strong>Metformin + Empagliflozin</strong> combination
+        — lactic acidosis signal. PRR = 3.24. Under review by pharmacovigilance team.
+      </span>
+      <button class="alert-banner__close" id="alert-close" aria-label="Dismiss alert">✕</button>
+    </div>
+  </div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main id="main-content">
+
+    <!-- ============================
+         SECTION 1: DASHBOARD (HOME)
+    ============================= -->
+    <section id="dashboard" class="page-section active-section">
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="container hero__inner">
+          <div class="hero__content">
+            <div class="hero__label">Big Data Pharmacovigilance Platform</div>
+            <h1 class="hero__title">Protecting Public Health<br />Through Real-Time<br />Drug Safety Intelligence</h1>
+            <p class="hero__desc">PharmaWatch ingests heterogeneous data from openFDA, clinical EHR systems, and
+              patient-reported social media — processing millions of signals daily to surface emerging Adverse Drug
+              Events before they reach statistical severity.</p>
+            <div class="hero__buttons">
+              <a href="#signals" class="btn btn--primary" data-nav="signals">View Active Signals</a>
+              <a href="#drug-search" class="btn btn--outline" data-nav="drug-search">Search a Drug</a>
+            </div>
+          </div>
+          <div class="hero__stats">
+            <div class="stat-card stat-card--hero" id="stat-reports">
+              <div class="stat-card__number" data-target="14283740">0</div>
+              <div class="stat-card__label">Reports Processed Today</div>
+              <div class="stat-card__delta delta-up">▲ 2.3% from yesterday</div>
+            </div>
+            <div class="stat-card stat-card--hero" id="stat-signals">
+              <div class="stat-card__number" data-target="47">0</div>
+              <div class="stat-card__label">Active Safety Signals</div>
+              <div class="stat-card__delta delta-up">▲ 3 new since 08:00</div>
+            </div>
+            <div class="stat-card stat-card--hero" id="stat-drugs">
+              <div class="stat-card__number" data-target="12490">0</div>
+              <div class="stat-card__label">Drugs Monitored</div>
+              <div class="stat-card__delta delta-neutral">— No change</div>
+            </div>
+            <div class="stat-card stat-card--hero" id="stat-latency">
+              <div class="stat-card__number" data-target="4">0</div>
+              <div class="stat-card__label">Avg Detection Latency (min)</div>
+              <div class="stat-card__delta delta-down">▼ 12% improvement</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Body -->
+      <div class="container section-body">
+
+        <!-- Live PRR Chart + Recent Alerts -->
+        <div class="dashboard-grid">
+          <div class="dashboard-card dashboard-card--wide">
+            <div class="card-header">
+              <h2 class="card-title">Signal Intensity Over Time</h2>
+              <div class="card-controls">
+                <button class="tab-btn active" data-chart-range="24h" id="chart-range-24h">24H</button>
+                <button class="tab-btn" data-chart-range="7d" id="chart-range-7d">7D</button>
+                <button class="tab-btn" data-chart-range="30d" id="chart-range-30d">30D</button>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="signal-intensity-chart"></canvas>
+            </div>
+          </div>
+
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Recent Alerts</h2>
+              <span class="badge badge--red pulse-dot" id="alert-count-badge">47</span>
+            </div>
+            <ul class="alert-list" id="recent-alerts-list">
+              <!-- Populated by JS -->
+            </ul>
+          </div>
+        </div>
+
+        <!-- Drug Category Distribution + Top Reported Events -->
+        <div class="dashboard-grid dashboard-grid--thirds">
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">ADE by Drug Category</h2>
+            </div>
+            <div class="chart-container chart-container--sm">
+              <canvas id="drug-category-chart"></canvas>
+            </div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Data Source Volume</h2>
+            </div>
+            <div class="source-meter-list" id="source-meter-list">
+              <div class="source-meter">
+                <div class="source-meter__label"><span>openFDA / FAERS</span><span class="source-meter__val"
+                    id="fda-val">0</span></div>
+                <div class="source-meter__bar">
+                  <div class="source-meter__fill" id="fda-bar" style="width:0%" data-target="72"></div>
+                </div>
+              </div>
+              <div class="source-meter">
+                <div class="source-meter__label"><span>EHR Streams</span><span class="source-meter__val"
+                    id="ehr-val">0</span></div>
+                <div class="source-meter__bar">
+                  <div class="source-meter__fill source-meter__fill--green" id="ehr-bar" style="width:0%"
+                    data-target="54"></div>
+                </div>
+              </div>
+              <div class="source-meter">
+                <div class="source-meter__label"><span>Social Media (NLP)</span><span class="source-meter__val"
+                    id="social-val">0</span></div>
+                <div class="source-meter__bar">
+                  <div class="source-meter__fill source-meter__fill--orange" id="social-bar" style="width:0%"
+                    data-target="38"></div>
+                </div>
+              </div>
+              <div class="source-meter">
+                <div class="source-meter__label"><span>ClinicalTrials.gov</span><span class="source-meter__val"
+                    id="ct-val">0</span></div>
+                <div class="source-meter__bar">
+                  <div class="source-meter__fill source-meter__fill--purple" id="ct-bar" style="width:0%"
+                    data-target="19"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Top Reported Events</h2>
+            </div>
+            <ol class="top-events-list" id="top-events-list">
+              <li><span class="event-name">Nausea / Vomiting</span><span class="event-count">284,120</span></li>
+              <li><span class="event-name">Dizziness</span><span class="event-count">198,430</span></li>
+              <li><span class="event-name">Hepatotoxicity</span><span class="event-count">141,280</span></li>
+              <li><span class="event-name">QT Prolongation</span><span class="event-count">112,900</span></li>
+              <li><span class="event-name">Anaphylaxis</span><span class="event-count">98,340</span></li>
+              <li><span class="event-name">Rhabdomyolysis</span><span class="event-count">72,110</span></li>
+              <li><span class="event-name">Lactic Acidosis</span><span class="event-count">63,880</span></li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- Pipeline Health -->
+        <div class="dashboard-card pipeline-card">
+          <div class="card-header">
+            <h2 class="card-title">Pipeline Health — Live</h2>
+          </div>
+          <div class="pipeline-stages">
+            <div class="pipeline-stage pipeline-stage--ok" id="ps-kafka">
+              <div class="pipeline-stage__icon">⚡</div>
+              <div class="pipeline-stage__name">Apache Kafka</div>
+              <div class="pipeline-stage__metric" id="kafka-metric">Loading…</div>
+              <div class="pipeline-stage__status">● Online</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-stage pipeline-stage--ok" id="ps-spark">
+              <div class="pipeline-stage__icon">🔥</div>
+              <div class="pipeline-stage__name">Spark Streaming</div>
+              <div class="pipeline-stage__metric" id="spark-metric">Loading…</div>
+              <div class="pipeline-stage__status">● Online</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-stage pipeline-stage--ok" id="ps-nlp">
+              <div class="pipeline-stage__icon">🤖</div>
+              <div class="pipeline-stage__name">BioBERT NLP</div>
+              <div class="pipeline-stage__metric" id="nlp-metric">Loading…</div>
+              <div class="pipeline-stage__status">● Online</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-stage pipeline-stage--ok" id="ps-lstm">
+              <div class="pipeline-stage__icon">📈</div>
+              <div class="pipeline-stage__name">LSTM Predictor</div>
+              <div class="pipeline-stage__metric" id="lstm-metric">Loading…</div>
+              <div class="pipeline-stage__status">● Online</div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-stage pipeline-stage--ok" id="ps-hdfs">
+              <div class="pipeline-stage__icon">🗄</div>
+              <div class="pipeline-stage__name">HDFS / HBase</div>
+              <div class="pipeline-stage__metric" id="hdfs-metric">Loading…</div>
+              <div class="pipeline-stage__status">● Online</div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /section-body -->
+    </section>
+
+    <!-- ============================
+         SECTION 2: SIGNAL DETECTION
+    ============================= -->
+    <section id="signals" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--blue">
+        <div class="container">
+          <h1 class="section-hero__title">Signal Detection</h1>
+          <p class="section-hero__desc">Real-time Proportional Reporting Ratio (PRR) computation across all monitored
+            drug-event pairs. Signals flagged when PRR &gt; 2.0 with ≥ 3 co-reports.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="filter-bar" role="search">
+          <input type="text" id="signal-search" class="filter-input" placeholder="Filter by drug name or event…"
+            aria-label="Search signals" />
+          <select id="signal-severity" class="filter-select" aria-label="Filter by severity">
+            <option value="all">All Severities</option>
+            <option value="critical">Critical (PRR &gt; 5)</option>
+            <option value="high">High (PRR 3–5)</option>
+            <option value="moderate">Moderate (PRR 2–3)</option>
+          </select>
+          <select id="signal-source" class="filter-select" aria-label="Filter by source">
+            <option value="all">All Sources</option>
+            <option value="fda">openFDA / FAERS</option>
+            <option value="ehr">EHR</option>
+            <option value="social">Social Media</option>
+          </select>
+          <button class="btn btn--primary" id="refresh-signals-btn">↻ Refresh</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table" id="signals-table" role="table" aria-label="Active safety signals">
+            <thead>
+              <tr>
+                <th scope="col" class="sortable" data-col="rank">Rank</th>
+                <th scope="col" class="sortable" data-col="drug">Drug</th>
+                <th scope="col" class="sortable" data-col="event">Adverse Event</th>
+                <th scope="col" class="sortable" data-col="prr">PRR Score</th>
+                <th scope="col" class="sortable" data-col="reports">Reports (n)</th>
+                <th scope="col" class="sortable" data-col="source">Source</th>
+                <th scope="col" class="sortable" data-col="detected">Detected</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody id="signals-tbody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="signal-detail-panel" id="signal-detail-panel" style="display:none;">
+          <div class="card-header">
+            <h2 class="card-title" id="signal-detail-title">Signal Detail</h2>
+            <button class="btn btn--sm" id="close-signal-detail">✕ Close</button>
+          </div>
+          <div class="signal-detail-body" id="signal-detail-body"></div>
+          <div class="chart-container">
+            <canvas id="signal-prr-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="dashboard-card" style="margin-top:2rem;">
+          <div class="card-header">
+            <h2 class="card-title">PRR Distribution — Current Snapshot</h2>
+          </div>
+          <div class="chart-container">
+            <canvas id="prr-distribution-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION 3: DRUG SEARCH
+    ============================= -->
+    <section id="drug-search" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--teal">
+        <div class="container">
+          <h1 class="section-hero__title">Drug Safety Search</h1>
+          <p class="section-hero__desc">Search any drug to view its pharmacovigilance profile, active signals, and
+            MedDRA-mapped adverse event frequencies.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="drug-search-box">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="drug-search-input" class="drug-search-input"
+              placeholder="Enter drug name (e.g. Metformin, Atorvastatin, Ibuprofen…)" autocomplete="off"
+              aria-label="Drug search" aria-autocomplete="list" aria-controls="drug-suggestions" />
+            <button class="btn btn--primary" id="drug-search-btn">Search</button>
+          </div>
+          <ul class="drug-suggestions" id="drug-suggestions" role="listbox" style="display:none;"></ul>
+        </div>
+
+        <div id="drug-profile-panel" style="display:none;">
+          <div class="drug-profile-header" id="drug-profile-header"></div>
+          <div class="dashboard-grid">
+            <div class="dashboard-card">
+              <div class="card-header">
+                <h2 class="card-title">ADE Frequency (MedDRA)</h2>
+              </div>
+              <div class="chart-container"><canvas id="drug-ade-chart"></canvas></div>
+            </div>
+            <div class="dashboard-card">
+              <div class="card-header">
+                <h2 class="card-title">Reporting Trend (12 months)</h2>
+              </div>
+              <div class="chart-container"><canvas id="drug-trend-chart"></canvas></div>
+            </div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Active Signals for this Drug</h2>
+            </div>
+            <div id="drug-signals-list"></div>
+          </div>
+        </div>
+
+        <div id="drug-search-empty" class="empty-state">
+          <div class="empty-state__icon">💊</div>
+          <h3 class="empty-state__title">Search a drug to view its safety profile</h3>
+          <p class="empty-state__desc">Our database covers 12,490 drugs across all major therapeutic categories,
+            cross-referenced with openFDA, FAERS, and EHR data streams.</p>
+          <div class="popular-drugs">
+            <span class="popular-label">Popular searches:</span>
+            <button class="drug-chip" data-drug="Metformin">Metformin</button>
+            <button class="drug-chip" data-drug="Atorvastatin">Atorvastatin</button>
+            <button class="drug-chip" data-drug="Lisinopril">Lisinopril</button>
+            <button class="drug-chip" data-drug="Amoxicillin">Amoxicillin</button>
+            <button class="drug-chip" data-drug="Ibuprofen">Ibuprofen</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION 4: INTERACTIONS (Graph)
+    ============================= -->
+    <section id="interactions" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--purple">
+        <div class="container">
+          <h1 class="section-hero__title">Drug–Drug Interaction Graph</h1>
+          <p class="section-hero__desc">Graph-theoretic polypharmacy risk detection. Nodes = drugs, Edges =
+            co-prescription risk. Community detection surfaces dangerous drug clusters.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="dashboard-grid">
+          <div class="dashboard-card dashboard-card--wide">
+            <div class="card-header">
+              <h2 class="card-title">Interaction Network Visualizer</h2>
+              <div class="card-controls" style="position:relative;">
+                <div style="position:relative; display:inline-block;">
+                  <input type="text" id="graph-drug-select" class="filter-input" 
+                         placeholder="Type any drug name…" value="Metformin" 
+                         autocomplete="off"
+                         style="width:200px;" aria-label="Enter drug for graph" />
+                  <ul id="graph-drug-suggestions" class="drug-suggestions" role="listbox"
+                      style="display:none; position:absolute; top:100%; left:0; width:200px; z-index:100;"></ul>
+                </div>
+                <button class="btn btn--primary btn--sm" id="load-graph-btn">Load Graph</button>
+              </div>
+            </div>
+            <div class="graph-canvas-wrap" id="graph-canvas-wrap">
+              <canvas id="interaction-graph-canvas" width="700" height="420"></canvas>
+              <div class="graph-legend">
+                <span class="graph-legend-item graph-legend-item--red">● Critical Interaction</span>
+                <span class="graph-legend-item graph-legend-item--orange">● Moderate Interaction</span>
+                <span class="graph-legend-item graph-legend-item--green">● Low Risk</span>
+                <span class="graph-legend-item graph-legend-item--center">★ Selected Drug</span>
+              </div>
+            </div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Interaction Details</h2>
+            </div>
+            <div id="interaction-details-list">
+              <p class="info-text">Select a drug and load its interaction graph. Click a node to view details.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="card-header">
+            <h2 class="card-title">High-Risk Polypharmacy Clusters</h2>
+          </div>
+          <div class="cluster-grid" id="cluster-grid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION: BOXED WARNING ANALYSIS
+    ============================= -->
+    <section id="boxed-warnings" class="page-section" style="display:none;">
+      <div class="section-hero" style="background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 50%, #b91c1c 100%);">
+        <div class="container">
+          <h1 class="section-hero__title">⚠ Boxed Warning Analysis</h1>
+          <p class="section-hero__desc">Search any drug to see its FDA Black Box Warning cross-referenced with real
+            FAERS adverse event reports. Discover how often the warned side effects are still being reported.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+
+        <!-- Search Box -->
+        <div class="drug-search-box">
+          <div class="search-input-wrap">
+            <span class="search-icon">⚠</span>
+            <input type="text" id="bw-search-input" class="drug-search-input"
+              placeholder="Search any drug (e.g. Warfarin, Clozapine, Oxycodone, Naproxen…)" autocomplete="off"
+              aria-label="Boxed warning drug search" />
+            <button class="btn btn--primary" id="bw-search-btn">Analyze</button>
+          </div>
+          <ul class="drug-suggestions" id="bw-suggestions" role="listbox" style="display:none;"></ul>
+        </div>
+
+        <!-- Preset Drug Chips -->
+        <div style="text-align:center; margin-top:1rem; margin-bottom:2rem;">
+          <span style="font-size:0.8rem; color:#666; margin-right:0.5rem;">Notable boxed-warning drugs:</span>
+          <button class="drug-chip bw-chip" data-drug="WARFARIN">Warfarin</button>
+          <button class="drug-chip bw-chip" data-drug="CLOZAPINE">Clozapine</button>
+          <button class="drug-chip bw-chip" data-drug="OXYCODONE">Oxycodone</button>
+          <button class="drug-chip bw-chip" data-drug="METHOTREXATE">Methotrexate</button>
+          <button class="drug-chip bw-chip" data-drug="ISOTRETINOIN">Isotretinoin</button>
+          <button class="drug-chip bw-chip" data-drug="CIPROFLOXACIN">Ciprofloxacin</button>
+          <button class="drug-chip bw-chip" data-drug="NAPROXEN">Naproxen</button>
+          <button class="drug-chip bw-chip" data-drug="FLUOXETINE">Fluoxetine</button>
+        </div>
+
+        <!-- Results Panel (hidden until search) -->
+        <div id="bw-results-panel" style="display:none;">
+
+          <!-- Loading state -->
+          <div id="bw-loading" style="text-align:center; padding:2rem; display:none;">
+            <div style="font-size:2rem;">⏳</div>
+            <p style="color:#666;">Querying openFDA Drug Labeling API & FAERS database…</p>
+          </div>
+
+          <!-- No warning found -->
+          <div id="bw-no-warning" class="dashboard-card" style="display:none; text-align:center; padding:2rem;">
+            <div style="font-size:3rem;">✅</div>
+            <h3 id="bw-no-warning-title">No Boxed Warning Found</h3>
+            <p style="color:#666;">This drug does not have an FDA Black Box Warning in the current labeling database.</p>
+          </div>
+
+          <!-- Warning found -->
+          <div id="bw-has-warning" style="display:none;">
+
+            <!-- Drug header -->
+            <div id="bw-drug-header" class="dashboard-card" style="
+              background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+              color: #fff; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;
+            "></div>
+
+            <!-- Boxed Warning Text -->
+            <div class="dashboard-card" style="
+              border: 3px solid #1a1a1a; border-radius: 10px;
+              padding: 0; margin-bottom: 1.5rem; overflow: hidden;
+            ">
+              <div style="background:#1a1a1a; color:#fff; padding:10px 16px; font-weight:700; font-size:0.9rem;">
+                ⬛ FDA BOXED WARNING
+              </div>
+              <div id="bw-warning-text" style="
+                padding: 16px; font-size: 0.85rem; line-height: 1.7;
+                max-height: 300px; overflow-y: auto; background: #fffbeb;
+                border-top: 3px solid #1a1a1a;
+              "></div>
+            </div>
+
+            <!-- Stats Row -->
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1rem; margin-bottom:1.5rem;">
+              <div class="dashboard-card" style="text-align:center; padding:1.2rem;">
+                <div id="bw-total-reports" style="font-size:1.8rem; font-weight:800; color:#003d7c;">—</div>
+                <div style="font-size:0.78rem; color:#666;">Total FAERS Reports</div>
+              </div>
+              <div class="dashboard-card" style="text-align:center; padding:1.2rem;">
+                <div id="bw-warned-count" style="font-size:1.8rem; font-weight:800; color:#c0392b;">—</div>
+                <div style="font-size:0.78rem; color:#666;">Boxed Warning Events</div>
+              </div>
+              <div class="dashboard-card" style="text-align:center; padding:1.2rem;">
+                <div id="bw-warned-pct" style="font-size:1.8rem; font-weight:800; color:#e65100;">—</div>
+                <div style="font-size:0.78rem; color:#666;">Warning Event Rate</div>
+              </div>
+              <div class="dashboard-card" style="text-align:center; padding:1.2rem;">
+                <div id="bw-other-count" style="font-size:1.8rem; font-weight:800; color:#2e7d32;">—</div>
+                <div style="font-size:0.78rem; color:#666;">Other Events in Top 25</div>
+              </div>
+            </div>
+
+            <!-- Charts + Table -->
+            <div class="dashboard-grid">
+              <div class="dashboard-card">
+                <div class="card-header">
+                  <h2 class="card-title">Warning vs Reality — FAERS Report Breakdown</h2>
+                </div>
+                <div class="chart-container" style="height:350px;">
+                  <canvas id="bw-events-chart"></canvas>
+                </div>
+              </div>
+              <div class="dashboard-card">
+                <div class="card-header">
+                  <h2 class="card-title">Adverse Event Details</h2>
+                </div>
+                <div id="bw-events-table" style="max-height:350px; overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <!-- ═══ LITERATURE CONTEXT CARD (Section A: Prescribing Behavior) ═══ -->
+            <div id="bw-literature-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
+              <div class="card-header">
+                <h2 class="card-title">📚 Literature Context — Real-World Impact of This Warning</h2>
+                <span style="font-size:0.72rem; color:#888; align-self:center;">Based on pharmacovigilance literature + live FAERS data</span>
+              </div>
+              <div id="bw-literature-body" style="display:grid; grid-template-columns: repeat(2,1fr); gap:1rem; padding:0.5rem 0;"></div>
+            </div>
+
+            <!-- ═══ BEFORE & AFTER TIMELINE CHART (Section A) ═══ -->
+            <div id="bw-timeline-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
+              <div class="card-header">
+                <h2 class="card-title">📈 Before &amp; After Timeline — Annual FAERS Reports</h2>
+                <span id="bw-timeline-badge"
+                  style="font-size:0.75rem; padding:3px 10px; border-radius:12px; background:#e3f2fd; color:#1565c0; font-weight:700; align-self:center;">
+                  Loading…
+                </span>
+              </div>
+              <div id="bw-timeline-slopes" style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1rem;"></div>
+              <div class="chart-container" style="height:300px;">
+                <canvas id="bw-timeline-chart"></canvas>
+              </div>
+              <div id="bw-timeline-interp" style="margin-top:0.75rem; font-size:0.8rem; color:#555; padding:8px 12px; background:#f8f9fa; border-radius:6px;"></div>
+            </div>
+
+            <!-- ═══ VIOLATIONS LOG (Section B: Post-Warning Prescriptions) ═══ -->
+            <div id="bw-violations-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
+              <div class="card-header">
+                <h2 class="card-title">⚠️ Post-Warning Violation Log — Persistent SQLite Record</h2>
+                <span style="font-size:0.72rem; color:#888; align-self:center;">Stored in local pharmawatch.db</span>
+              </div>
+              <div id="bw-violations-summary" style="margin-bottom:0.75rem; font-size:0.83rem; color:#555;"></div>
+              <div id="bw-violations-table" style="max-height:380px; overflow-y:auto;"></div>
+              <div style="margin-top:0.75rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+                <button id="bw-view-all-violations-btn" class="btn btn--sm btn--outline"
+                  style="font-size:0.78rem;">📋 View Entire DB Log</button>
+                <span id="bw-db-log-status" style="font-size:0.75rem; color:#888;"></span>
+              </div>
+              <div id="bw-all-violations-log" style="display:none; margin-top:1rem;"></div>
+            </div>
+
+            <!-- ═══ WEBER EFFECT / BIAS ANALYSIS CHART (Section D) ═══ -->
+            <div id="bw-bias-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
+              <div class="card-header">
+                <h2 class="card-title">📊 FAERS Bias Analysis — Weber Effect &amp; Notoriety Bias</h2>
+                <span id="bw-weber-badge"
+                  style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:700; align-self:center;">
+                  Analysing…
+                </span>
+              </div>
+              <div class="chart-container" style="height:280px;">
+                <canvas id="bw-bias-chart"></canvas>
+              </div>
+              <div id="bw-bias-note"
+                style="margin-top:0.75rem; font-size:0.8rem; line-height:1.6; padding:10px 14px;
+                       background:#fff8e1; border-left:4px solid #f9a825; border-radius:6px; color:#333;">
+              </div>
+            </div>
+
+          </div><!-- /bw-has-warning -->
+        </div><!-- /bw-results-panel -->
+
+        <!-- Empty state -->
+        <div id="bw-empty-state" class="empty-state">
+          <div class="empty-state__icon">⬛</div>
+          <h3 class="empty-state__title">Search any drug to check its Boxed Warning</h3>
+          <p class="empty-state__desc">The FDA's Boxed Warning ("Black Box") is the most serious safety alert placed
+            on a drug's label. This tool cross-references 32,000+ drug labels with live FAERS adverse event reports
+            to show you how often the warned side effects are still being reported.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION 5: DATA SOURCES
+    ============================= -->
+    <section id="data-sources" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--dark">
+        <div class="container">
+          <h1 class="section-hero__title">Data Sources &amp; Pipeline</h1>
+          <p class="section-hero__desc">PharmaWatch ingests data from four parallel Kafka topics, normalising
+            heterogeneous schemas into unified MedDRA-coded events.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="arch-diagram" id="arch-diagram">
+          <div class="arch-layer" id="arch-ingestion">
+            <div class="arch-layer__title">Ingestion Layer (Kafka)</div>
+            <div class="arch-layer__nodes">
+              <div class="arch-node arch-node--blue" id="node-openfda">
+                <div class="arch-node__icon">🏥</div>
+                <div class="arch-node__name">openFDA / FAERS</div>
+                <div class="arch-node__detail">Structured API polling</div>
+                <div class="arch-node__metric" id="fda-rate">14,283 msg/min</div>
+              </div>
+              <div class="arch-node arch-node--green" id="node-ehr">
+                <div class="arch-node__icon">📋</div>
+                <div class="arch-node__name">EHR Streams</div>
+                <div class="arch-node__detail">De-identified patient records</div>
+                <div class="arch-node__metric" id="ehr-rate">9,840 msg/min</div>
+              </div>
+              <div class="arch-node arch-node--orange" id="node-social">
+                <div class="arch-node__icon">💬</div>
+                <div class="arch-node__name">Social Media NLP</div>
+                <div class="arch-node__detail">Reddit / forums via BioBERT</div>
+                <div class="arch-node__metric" id="social-rate">6,120 msg/min</div>
+              </div>
+              <div class="arch-node arch-node--purple" id="node-ct">
+                <div class="arch-node__icon">🧪</div>
+                <div class="arch-node__name">ClinicalTrials.gov</div>
+                <div class="arch-node__detail">Study results &amp; protocols</div>
+                <div class="arch-node__metric" id="ct-rate">2,340 msg/min</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector">▼ Apache Kafka Topics (partitioned, replicated) ▼</div>
+
+          <div class="arch-layer" id="arch-processing">
+            <div class="arch-layer__title">Processing Layer (Spark Streaming)</div>
+            <div class="arch-layer__nodes">
+              <div class="arch-node arch-node--spark">
+                <div class="arch-node__icon">🔥</div>
+                <div class="arch-node__name">Schema Normalisation</div>
+                <div class="arch-node__detail">MedDRA code mapping</div>
+              </div>
+              <div class="arch-node arch-node--spark">
+                <div class="arch-node__icon">🤖</div>
+                <div class="arch-node__name">BioBERT UDF</div>
+                <div class="arch-node__detail">Entity extraction → {drug, event, severity}</div>
+              </div>
+              <div class="arch-node arch-node--spark">
+                <div class="arch-node__icon">📊</div>
+                <div class="arch-node__name">PRR Computation</div>
+                <div class="arch-node__detail">Rolling 24h window aggregation</div>
+              </div>
+              <div class="arch-node arch-node--spark">
+                <div class="arch-node__icon">📈</div>
+                <div class="arch-node__name">LSTM Prediction</div>
+                <div class="arch-node__detail">Baseline vs. real-time deviation</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector">▼ Processed Events ▼</div>
+
+          <div class="arch-layer" id="arch-storage">
+            <div class="arch-layer__title">Storage Layer</div>
+            <div class="arch-layer__nodes">
+              <div class="arch-node arch-node--storage">
+                <div class="arch-node__icon">🗄</div>
+                <div class="arch-node__name">HDFS Data Lake</div>
+                <div class="arch-node__detail">Parquet format, historical training</div>
+              </div>
+              <div class="arch-node arch-node--storage">
+                <div class="arch-node__icon">⚡</div>
+                <div class="arch-node__name">Apache HBase</div>
+                <div class="arch-node__detail">ms-latency point-of-care lookups</div>
+              </div>
+              <div class="arch-node arch-node--storage">
+                <div class="arch-node__icon">🔍</div>
+                <div class="arch-node__name">Apache Hive</div>
+                <div class="arch-node__detail">SQL analytics &amp; dashboarding</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid" style="margin-top:2rem;">
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Throughput Over Time</h2>
+            </div>
+            <div class="chart-container"><canvas id="throughput-chart"></canvas></div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Kafka Topic Lag</h2>
+            </div>
+            <div class="chart-container"><canvas id="kafka-lag-chart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Spark Live Task Stream Log -->
+        <div class="dashboard-card" style="margin-top:2rem;">
+          <div class="card-header">
+            <h2 class="card-title">🔥 Spark Streaming — Live Micro-Batch Task Log</h2>
+            <span style="font-size:0.75rem; color:#888; align-self:center;">Updates every ~1.2s</span>
+          </div>
+          <div id="spark-task-log" style="
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            background: #0d1b2a;
+            color: #a8d8a8;
+            border-radius: 8px;
+            padding: 12px 16px;
+            max-height: 220px;
+            overflow-y: auto;
+            line-height: 1.8;
+          ">
+            <div style="color:#5e81f4;">Spark Streaming engine initializing... waiting for first batch...</div>
+          </div>
+          <style>
+            .spark-log-entry {
+              border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+              padding: 1px 0;
+            }
+
+            .spark-log-time {
+              color: #637aaa;
+              margin-right: 8px;
+            }
+          </style>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ============================
+         SECTION 6: METHODOLOGY
+    ============================= -->
+    <section id="methodology" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--green">
+        <div class="container">
+          <h1 class="section-hero__title">Analytical Methodology</h1>
+          <p class="section-hero__desc">Multi-tiered analytical approach from statistical baseline to deep learning
+            prediction.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="method-grid">
+
+          <div class="method-card" id="method-nlp">
+            <div class="method-card__num">01</div>
+            <div class="method-card__icon">🤖</div>
+            <h2 class="method-card__title">BioBERT Natural Language Processing</h2>
+            <p class="method-card__desc">Patient-reported outcomes on social media are processed by a BioBERT model
+              deployed as a Spark UDF. It extracts medical entities from colloquial text, converting them into
+              structured <code>{drug, event, severity}</code> tuples mapped to MedDRA codes.</p>
+            <div class="method-card__live">
+              <div class="method-card__live-label">Live NLP Throughput</div>
+              <div class="method-card__live-val" id="nlp-throughput">6,120 entities/min</div>
+            </div>
+
+            <!-- ── Real BioBERT Interactive Panel ── -->
+            <div style="margin-top:1.5rem; border-top:1px solid rgba(0,0,0,0.08); padding-top:1rem;">
+              <h3 style="font-size:0.9rem; font-weight:600; margin-bottom:0.5rem;">
+                🔬 Try BioBERT Live
+              </h3>
+              <textarea id="biobert-input" rows="3" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px;
+                       font-family:inherit; font-size:0.85rem; resize:vertical;"
+                placeholder="Paste a biomedical sentence, e.g. Patient experienced severe nausea after taking Metformin…"></textarea>
+              <button id="biobert-run-btn" style="margin-top:0.5rem; padding:6px 16px; background:#003d7c;
+                       color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:0.85rem;">
+                Run BioBERT
+              </button>
+              <div id="biobert-status" style="font-size:0.78rem; color:#888; margin-top:4px; min-height:1.2em;"></div>
+
+              <!-- Highlighted text with entity spans -->
+              <div id="biobert-highlighted" style="margin-top:0.75rem; background:#f8f9fa; border:1px solid #e0e0e0;
+                       border-radius:8px; padding:14px 16px; font-size:0.88rem; line-height:1.9;
+                       display:none; white-space:pre-wrap; word-wrap:break-word;"></div>
+
+              <!-- Entity summary -->
+              <div id="biobert-summary" style="display:none; margin-top:0.5rem; font-size:0.78rem; color:#555;
+                       padding:6px 10px; background:#eef2f7; border-radius:6px;"></div>
+
+              <!-- Entity cards -->
+              <div id="biobert-entities" style="display:none; margin-top:0.75rem; max-height:280px; overflow-y:auto;"></div>
+
+              <style>
+                .ner-entity-highlight {
+                  padding: 1px 4px; border-radius: 4px; font-weight: 500;
+                  border-bottom: 2px solid; cursor: default;
+                  transition: opacity 0.2s;
+                }
+                .ner-entity-highlight:hover { opacity: 0.8; }
+                .ner-label-Medication, .ner-label-Drug { background: rgba(46,134,222,0.15); border-color: #2e86de; color: #1a5276; }
+                .ner-label-Disease_disorder { background: rgba(231,76,60,0.15); border-color: #e74c3c; color: #922b21; }
+                .ner-label-Sign_symptom { background: rgba(243,156,18,0.15); border-color: #f39c12; color: #7d6608; }
+                .ner-label-Clinical_event { background: rgba(142,68,173,0.15); border-color: #8e44ad; color: #6c3483; }
+                .ner-label-Biological_structure { background: rgba(39,174,96,0.15); border-color: #27ae60; color: #1e8449; }
+                .ner-label-Diagnostic_procedure { background: rgba(52,152,219,0.15); border-color: #3498db; color: #21618c; }
+                .ner-label-Therapeutic_procedure { background: rgba(211,84,0,0.15); border-color: #d35400; color: #a04000; }
+                .ner-label-default { background: rgba(127,140,141,0.15); border-color: #7f8c8d; color: #515a5a; }
+                .ner-card {
+                  display: inline-flex; align-items: center; gap: 8px;
+                  padding: 6px 12px; margin: 3px 4px; border-radius: 6px;
+                  background: #fff; border: 1px solid #e0e0e0;
+                  font-size: 0.8rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                  transition: transform 0.15s, box-shadow 0.15s;
+                }
+                .ner-card:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
+                .ner-card__label {
+                  padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;
+                  font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+                }
+                .ner-card__conf {
+                  width: 50px; height: 6px; background: #e8e8e8; border-radius: 3px;
+                  overflow: hidden; position: relative;
+                }
+                .ner-card__conf-fill {
+                  height: 100%; border-radius: 3px;
+                  transition: width 0.4s ease;
+                }
+                .ner-card__score { font-size: 0.7rem; color: #888; min-width: 35px; text-align: right; }
+              </style>
+            </div>
+
+            <script>
+              document.getElementById('biobert-run-btn').addEventListener('click', async () => {
+                const text = document.getElementById('biobert-input').value.trim();
+                const status = document.getElementById('biobert-status');
+                const highlightedDiv = document.getElementById('biobert-highlighted');
+                const summaryDiv = document.getElementById('biobert-summary');
+                const entitiesDiv = document.getElementById('biobert-entities');
+
+                if (!text) { status.textContent = '⚠ Please enter some text first.'; return; }
+
+                status.textContent = '⏳ Connecting to BioBERT server…';
+                highlightedDiv.style.display = 'none';
+                summaryDiv.style.display = 'none';
+                entitiesDiv.style.display = 'none';
+
+                try {
+                  const entities = await BioBERT.analyzeText(text);
+
+                  if (!entities || entities.length === 0) {
+                    status.textContent = '⚠ No entities detected in this text.';
+                    return;
+                  }
+
+                  // ── 1. Build highlighted text ──
+                  // Sort entities by start position (ascending)
+                  const sorted = [...entities].sort((a, b) => (a.start || 0) - (b.start || 0));
+                  let html = '';
+                  let lastEnd = 0;
+                  for (const ent of sorted) {
+                    const start = ent.start != null ? ent.start : -1;
+                    const end = ent.end != null ? ent.end : -1;
+                    if (start >= 0 && end > start) {
+                      // Add plain text before this entity
+                      if (start > lastEnd) {
+                        html += escapeHtml(text.substring(lastEnd, start));
+                      }
+                      const labelClass = getLabelClass(ent.label);
+                      const pct = Math.round((ent.score || 0) * 100);
+                      html += `<span class="ner-entity-highlight ${labelClass}" title="${ent.label} (${pct}%)">${escapeHtml(text.substring(start, end))}</span>`;
+                      lastEnd = end;
+                    }
+                  }
+                  // Add remaining text
+                  if (lastEnd < text.length) {
+                    html += escapeHtml(text.substring(lastEnd));
+                  }
+                  highlightedDiv.innerHTML = html || escapeHtml(text);
+                  highlightedDiv.style.display = 'block';
+
+                  // ── 2. Build summary ──
+                  const counts = {};
+                  for (const e of entities) {
+                    counts[e.label] = (counts[e.label] || 0) + 1;
+                  }
+                  const parts = Object.entries(counts).map(([label, count]) =>
+                    `<strong>${count}</strong> ${label.replace(/_/g, ' ')}`
+                  );
+                  summaryDiv.innerHTML = `Found <strong>${entities.length}</strong> entities: ${parts.join(' · ')}`;
+                  summaryDiv.style.display = 'block';
+
+                  // ── 3. Build entity cards ──
+                  let cardsHtml = '';
+                  for (const ent of entities) {
+                    const pct = Math.round((ent.score || 0) * 100);
+                    const labelClass = getLabelClass(ent.label);
+                    const confColor = pct >= 80 ? '#27ae60' : pct >= 50 ? '#f39c12' : '#e74c3c';
+                    cardsHtml += `
+                      <div class="ner-card">
+                        <span class="ner-card__label ${labelClass}">${ent.label.replace(/_/g, ' ')}</span>
+                        <strong>${escapeHtml(ent.token)}</strong>
+                        <span class="ner-card__conf">
+                          <span class="ner-card__conf-fill" style="width:${pct}%; background:${confColor};"></span>
+                        </span>
+                        <span class="ner-card__score">${pct}%</span>
+                      </div>`;
+                  }
+                  entitiesDiv.innerHTML = cardsHtml;
+                  entitiesDiv.style.display = 'block';
+
+                  status.textContent = `✅ Done — ${entities.length} entities extracted.`;
+                } catch (err) {
+                  status.textContent = `❌ Error: ${err.message}. Is the Python server running?`;
+                }
+              });
+
+              function escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+              }
+
+              function getLabelClass(label) {
+                const known = ['Medication', 'Drug', 'Disease_disorder', 'Sign_symptom',
+                               'Clinical_event', 'Biological_structure', 'Diagnostic_procedure', 'Therapeutic_procedure'];
+                return known.includes(label) ? `ner-label-${label}` : 'ner-label-default';
+              }
+            </script>
+          </div>
+
+
+          <div class="method-card" id="method-prr">
+            <div class="method-card__num">02</div>
+            <div class="method-card__icon">📐</div>
+            <h2 class="method-card__title">PRR Disproportionality Analysis</h2>
+            <p class="method-card__desc">The Proportional Reporting Ratio (PRR) detects statistical anomalies in
+              drug-event pairings relative to background database frequency across rolling temporal windows.</p>
+            <div class="prr-formula">
+              <div class="formula-box">
+                PRR = <span class="fraction"><span class="numerator">a / (a + b)</span><span class="denominator">c / (c
+                    + d)</span></span>
+              </div>
+              <div class="formula-legend">
+                <div><code>a</code> = target drug + target event</div>
+                <div><code>b</code> = target drug + all other events</div>
+                <div><code>c</code> = all other drugs + target event</div>
+                <div><code>d</code> = all other drugs + all other events</div>
+                <div class="formula-threshold">Signal threshold: PRR &gt; <strong>1.0</strong> with ≥ 3 reports</div>
+              </div>
+            </div>
+            <div class="prr-calculator">
+              <h3>Live PRR Calculator</h3>
+              <div class="prr-inputs">
+                <label>a: <input type="number" id="prr-a" class="prr-input" value="45" min="0" /></label>
+                <label>b: <input type="number" id="prr-b" class="prr-input" value="320" min="0" /></label>
+                <label>c: <input type="number" id="prr-c" class="prr-input" value="180" min="0" /></label>
+                <label>d: <input type="number" id="prr-d" class="prr-input" value="9800" min="0" /></label>
+              </div>
+              <button class="btn btn--primary btn--sm" id="calc-prr-btn">Calculate PRR</button>
+              <div class="prr-result" id="prr-result"></div>
+            </div>
+          </div>
+
+          <div class="method-card" id="method-graph">
+            <div class="method-card__num">03</div>
+            <div class="method-card__icon">🕸</div>
+            <h2 class="method-card__title">Graph-Theoretic Interaction Analysis</h2>
+            <p class="method-card__desc">Drugs are represented as nodes and co-prescriptions as weighted edges in a
+              distributed graph. Community detection algorithms surface polypharmacy sub-clusters that collectively
+              precipitate ADEs — uncovering non-linear risks that pairwise analysis misses.</p>
+            <div class="tech-tags">
+              <span class="tech-tag">Connected Components</span>
+              <span class="tech-tag">Community Detection</span>
+              <span class="tech-tag">Betweenness Centrality</span>
+              <span class="tech-tag">Distributed Graph Mining</span>
+            </div>
+          </div>
+
+          <div class="method-card" id="method-lstm">
+            <div class="method-card__num">04</div>
+            <div class="method-card__icon">📈</div>
+            <h2 class="method-card__title">LSTM Temporal Sequence Modelling</h2>
+            <p class="method-card__desc">Long Short-Term Memory (LSTM) networks trained on historical event frequencies
+              predict the expected baseline reporting rate. Real-time deviations from predicted baselines flag
+              accelerating signals before traditional PRR thresholds are breached.</p>
+
+            <!-- Drug selector for LSTM chart -->
+            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
+              <div style="position:relative; flex:1; min-width:200px;">
+                <input type="text" id="lstm-drug-input" class="drug-search-input"
+                  placeholder="Search drug (e.g. Warfarin, Oxycodone…)"
+                  autocomplete="off" style="width:100%; padding:8px 12px; font-size:0.85rem;" />
+                <ul id="lstm-drug-suggestions" class="drug-suggestions" role="listbox" style="display:none;"></ul>
+              </div>
+              <button id="lstm-load-btn" class="btn btn--primary" style="white-space:nowrap; padding:8px 16px; font-size:0.85rem;">
+                Load Chart
+              </button>
+              <button id="lstm-train-inline-btn" class="btn" style="
+                white-space:nowrap; padding:8px 16px; font-size:0.85rem;
+                background:#fff3e0; color:#e65100; border:1px solid #e65100; border-radius:6px; cursor:pointer;">
+                🧠 Train Model
+              </button>
+            </div>
+            <div id="lstm-status-msg" style="font-size:0.78rem; color:#666; margin-top:6px; min-height:18px;"></div>
+
+            <div class="dashboard-card" style="margin-top:0.75rem; padding:0;">
+              <div class="chart-container chart-container--sm">
+                <canvas id="lstm-demo-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION 7: ABOUT
+    ============================= -->
+    <section id="about" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--navy">
+        <div class="container">
+          <h1 class="section-hero__title">About PharmaWatch</h1>
+          <p class="section-hero__desc">A Big Data Mini-Project by Manipal Academy of Higher Education</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="about-grid">
+          <div class="about-main">
+            <div class="dashboard-card">
+              <h2 class="card-title" style="margin-bottom:1rem;">Abstract</h2>
+              <p>Adverse Drug Events (ADEs) represent a significant public health challenge, responsible for millions of
+                emergency room visits annually. Traditional pharmacovigilance relies on manual, latency-heavy reporting
+                systems, allowing harmful drug patterns to persist undetected for months.</p>
+              <p style="margin-top:1rem;">PharmaWatch proposes a near real-time, multi-source signal detection
+                architecture. By leveraging a robust big data stack including <strong>Apache Kafka</strong>,
+                <strong>Apache Spark</strong>, and distributed Hadoop storage, alongside advanced machine learning
+                models (<strong>BioBERT</strong>, <strong>LSTMs</strong>, and <strong>Graph-theoretic models</strong>),
+                this system ingests heterogeneous data streams to identify and alert stakeholders to emerging ADEs
+                before they reach statistical severity.</p>
+            </div>
+
+            <div class="dashboard-card" style="margin-top:1.5rem;">
+              <h2 class="card-title" style="margin-bottom:1rem;">Tech Stack</h2>
+              <div class="tech-stack-grid" id="tech-stack-grid">
+                <div class="tech-stack-item"><span class="tech-stack-icon">⚡</span><span>Apache
+                    Kafka</span><small>Streaming ingestion</small></div>
+                <div class="tech-stack-item"><span class="tech-stack-icon">🔥</span><span>Apache
+                    Spark</span><small>Stream processing</small></div>
+                <div class="tech-stack-item"><span class="tech-stack-icon">🗄</span><span>HDFS + HBase +
+                    Hive</span><small>Distributed storage</small></div>
+                <div class="tech-stack-item"><span
+                    class="tech-stack-icon">🤖</span><span>BioBERT</span><small>Biomedical NLP</small></div>
+                <div class="tech-stack-item"><span class="tech-stack-icon">📈</span><span>LSTM
+                    Networks</span><small>Temporal prediction</small></div>
+                <div class="tech-stack-item"><span class="tech-stack-icon">🕸</span><span>Graph
+                    Algorithms</span><small>Polypharmacy analysis</small></div>
+                <div class="tech-stack-item"><span class="tech-stack-icon">📊</span><span>Apache
+                    Superset</span><small>Regulatory dashboards</small></div>
+                <div class="tech-stack-item"><span class="tech-stack-icon">📦</span><span>MLflow</span><small>MLOps
+                    registry</small></div>
+              </div>
+            </div>
+
+            <div class="dashboard-card" style="margin-top:1.5rem;">
+              <h2 class="card-title" style="margin-bottom:1rem;">Future Work</h2>
+              <p>Future iterations will focus on integrating <strong>federated learning</strong> to incorporate
+                multi-institutional EHR data without compromising patient privacy, further enhancing the system's
+                generalisability and clinical utility.</p>
+            </div>
+          </div>
+
+          <div class="about-side">
+            <div class="dashboard-card team-card">
+              <h2 class="card-title" style="margin-bottom:1rem;">Research Team</h2>
+              <div class="team-member">
+                <div class="team-avatar team-avatar--a">SR</div>
+                <div class="team-info">
+                  <div class="team-name">Sreyaan Roy</div>
+                  <div class="team-roll">Roll No: 230968184</div>
+                  <div class="team-inst">Manipal Academy of Higher Education</div>
+                </div>
+              </div>
+              <div class="team-member" style="margin-top:1rem;">
+                <div class="team-avatar team-avatar--b">SS</div>
+                <div class="team-info">
+                  <div class="team-name">Sohan Arvind Sanil</div>
+                  <div class="team-roll">Roll No: 2309681</div>
+                  <div class="team-inst">Manipal Academy of Higher Education</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dashboard-card" id="resources" style="margin-top:1.5rem;">
+              <h2 class="card-title" style="margin-bottom:1rem;">Key References</h2>
+              <ul class="ref-list">
+                <li><a href="https://open.fda.gov/" target="_blank" rel="noopener" class="ref-link">openFDA FAERS API
+                    →</a></li>
+                <li><a href="https://clinicaltrials.gov/" target="_blank" rel="noopener"
+                    class="ref-link">ClinicalTrials.gov →</a></li>
+                <li><a href="https://www.meddra.org/" target="_blank" rel="noopener" class="ref-link">MedDRA Terminology
+                    →</a></li>
+                <li><a href="https://huggingface.co/dmis-lab/biobert-base-cased-v1.2" target="_blank" rel="noopener"
+                    class="ref-link">BioBERT Model (HuggingFace) →</a></li>
+                <li><a href="https://kafka.apache.org/" target="_blank" rel="noopener" class="ref-link">Apache Kafka
+                    →</a></li>
+                <li><a href="https://spark.apache.org/streaming/" target="_blank" rel="noopener" class="ref-link">Apache
+                    Spark Streaming →</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="site-footer" id="site-footer">
+    <div class="container site-footer__inner">
+      <div class="site-footer__brand">
+        <span class="brand-name" style="font-size:1.1rem;">PharmaWatch</span>
+        <span style="color:#adb5bd; font-size:0.875rem; margin-top:0.25rem;">Real-Time ADE Detection Platform</span>
+        <span style="color:#6c757d; font-size:0.75rem; margin-top:0.5rem;">Big Data Mini-Project · Manipal Academy of
+          Higher Education · 2025</span>
+      </div>
+      <div class="site-footer__links">
+        <div class="footer-col">
+          <div class="footer-col__title">Platform</div>
+          <a href="#dashboard" class="footer-link" data-nav="dashboard">Dashboard</a>
+          <a href="#signals" class="footer-link" data-nav="signals">Signal Detection</a>
+          <a href="#drug-search" class="footer-link" data-nav="drug-search">Drug Search</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col__title">Science</div>
+          <a href="#methodology" class="footer-link" data-nav="methodology">Methodology</a>
+          <a href="#interactions" class="footer-link" data-nav="interactions">Drug Interactions</a>
+          <a href="#data-sources" class="footer-link" data-nav="data-sources">Data Sources</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col__title">Info</div>
+          <a href="#about" class="footer-link" data-nav="about">About</a>
+          <a href="https://open.fda.gov/" target="_blank" rel="noopener" class="footer-link">openFDA →</a>
+          <a href="https://clinicaltrials.gov/" target="_blank" rel="noopener" class="footer-link">ClinicalTrials.gov
+            →</a>
+        </div>
+      </div>
+    </div>
+    <div class="site-footer__bottom">
+      <div class="container">
+        <span>⚠ This is a research simulation platform. Data is illustrative and not for clinical use.</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modular JS Architecture -->
+  <script src="api_layer.js"></script>
+  <script src="biobert.js"></script>
+  <script src="ml_models.js"></script>
+  <script src="distributed_storage.js"></script>
+  <script src="app.js"></script>
+
+</body>
+
+</html>
