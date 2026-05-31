@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- Tooltip libraries for Wikipedia definitions -->
@@ -427,62 +427,214 @@
     </section>
 
     <!-- ============================
-         SECTION 4: INTERACTIONS (Graph)
+         SECTION 4: INTERACTIONS
     ============================= -->
     <section id="interactions" class="page-section" style="display:none;">
       <div class="section-hero section-hero--purple">
         <div class="container">
-          <h1 class="section-hero__title">Drug–Drug Interaction Graph</h1>
-          <p class="section-hero__desc">Graph-theoretic polypharmacy risk detection. Nodes = drugs, Edges =
-            co-prescription risk. Community detection surfaces dangerous drug clusters.</p>
+          <h1 class="section-hero__title">Drug–Drug Interactions</h1>
+          <p class="section-hero__desc">
+            Explore known interactions from the TWOSIDES big-data pipeline (HBase + FAERS) or
+            run the GNN polypharmacy analyzer on up to 5 drugs simultaneously.
+          </p>
         </div>
       </div>
+
       <div class="container section-body">
-        <div class="dashboard-grid">
-          <div class="dashboard-card dashboard-card--wide">
-            <div class="card-header">
-              <h2 class="card-title">Interaction Network Visualizer</h2>
-              <div class="card-controls" style="position:relative;">
-                <div style="position:relative; display:inline-block;">
-                  <input type="text" id="graph-drug-select" class="filter-input" 
-                         placeholder="Type any drug name…" value="Metformin" 
-                         autocomplete="off"
-                         style="width:200px;" aria-label="Enter drug for graph" />
-                  <ul id="graph-drug-suggestions" class="drug-suggestions" role="listbox"
-                      style="display:none; position:absolute; top:100%; left:0; width:200px; z-index:100;"></ul>
-                </div>
-                <button class="btn btn--primary btn--sm" id="load-graph-btn">Load Graph</button>
-              </div>
-            </div>
-            <div class="graph-canvas-wrap" id="graph-canvas-wrap">
-              <canvas id="interaction-graph-canvas" width="700" height="420"></canvas>
-              <div class="graph-legend">
-                <span class="graph-legend-item graph-legend-item--red">● Critical Interaction</span>
-                <span class="graph-legend-item graph-legend-item--orange">● Moderate Interaction</span>
-                <span class="graph-legend-item graph-legend-item--green">● Low Risk</span>
-                <span class="graph-legend-item graph-legend-item--center">★ Selected Drug</span>
-              </div>
-            </div>
-          </div>
-          <div class="dashboard-card">
-            <div class="card-header">
-              <h2 class="card-title">Interaction Details</h2>
-            </div>
-            <div id="interaction-details-list">
-              <p class="info-text">Select a drug and load its interaction graph. Click a node to view details.</p>
-            </div>
-          </div>
+
+        <!-- ── Big Data Status Bar ── -->
+        <div class="bigdata-status-bar" id="bigdata-status-bar">
+          <div class="bigdata-status-bar__dot bigdata-status-bar__dot--starting" id="bigdata-dot"></div>
+          <span class="bigdata-status-bar__text" id="bigdata-status-text">
+            Checking HBase status…
+            <span class="bigdata-status-bar__sub" id="bigdata-status-sub">Apache HBase · Thrift port 9090</span>
+          </span>
+          <button class="bigdata-status-bar__btn" id="bigdata-retry-btn" style="display:none;">
+            ↻ Retry
+          </button>
         </div>
 
-        <div class="dashboard-card">
-          <div class="card-header">
-            <h2 class="card-title">High-Risk Polypharmacy Clusters</h2>
-          </div>
-          <div class="cluster-grid" id="cluster-grid">
-            <!-- Populated by JS -->
-          </div>
+        <!-- ── Tab Switcher ── -->
+        <div class="interactions-tab-switcher" role="tablist">
+          <button class="interactions-tab-btn active" id="tab-btn-explorer"
+                  role="tab" aria-selected="true" aria-controls="tab-explorer">
+            🔍 Drug Interaction Explorer
+          </button>
+          <button class="interactions-tab-btn" id="tab-btn-poly"
+                  role="tab" aria-selected="false" aria-controls="tab-poly">
+            ⚗️ Polypharmacy Risk Analyzer
+          </button>
         </div>
-      </div>
+
+        <!-- ══════════════════════════════════════════════════
+             TAB 1 — Drug Interaction Explorer
+        ══════════════════════════════════════════════════ -->
+        <div id="tab-explorer" class="interactions-panel" role="tabpanel">
+
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Drug Interaction Explorer - Pair Checker</h2>
+            </div>
+
+            <div class="explorer-pair-form">
+              <div class="explorer-drug-field">
+                <label for="explorer-drug-a">Drug A</label>
+                <div class="explorer-drug-field__input">
+                  <input type="text" id="explorer-drug-a" class="filter-input"
+                         placeholder="Warfarin" autocomplete="off" />
+                  <ul class="drug-suggestions explorer-pair-suggestions" id="explorer-suggestions-a"
+                      role="listbox" style="display:none;"></ul>
+                </div>
+              </div>
+              <div class="explorer-drug-field">
+                <label for="explorer-drug-b">Drug B</label>
+                <div class="explorer-drug-field__input">
+                  <input type="text" id="explorer-drug-b" class="filter-input"
+                         placeholder="Aspirin" autocomplete="off" />
+                  <ul class="drug-suggestions explorer-pair-suggestions" id="explorer-suggestions-b"
+                      role="listbox" style="display:none;"></ul>
+                </div>
+              </div>
+              <button class="btn btn--primary" id="explorer-search-btn">Check Pair</button>
+            </div>
+
+            <!-- Skeleton (shown while loading) -->
+            <div class="graph-skeleton" id="explorer-skeleton" style="display:none;">
+              <div class="graph-skeleton__inner">
+                <div style="display:flex; gap:60px; align-items:center;">
+                  <div class="graph-skeleton__circle graph-skeleton__circle--sm"></div>
+                  <div class="graph-skeleton__circle graph-skeleton__circle--lg"></div>
+                  <div class="graph-skeleton__circle graph-skeleton__circle--sm"></div>
+                </div>
+                <div style="display:flex; gap:20px;">
+                  <div class="graph-skeleton__line" style="width:80px;"></div>
+                  <div class="graph-skeleton__line" style="width:120px;"></div>
+                  <div class="graph-skeleton__line" style="width:60px;"></div>
+                </div>
+                <div class="graph-skeleton__label">Running pair interaction inference</div>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="explorer-empty" class="empty-state" style="padding:var(--space-10) 0;">
+              <div class="empty-state__icon">🔬</div>
+              <h3 class="empty-state__title">Select two drugs to check whether they are safe together</h3>
+              <p class="empty-state__desc">
+                The Explorer answers one focused question at a time: whether Drug A and Drug B have a predicted harmful interaction.
+              </p>
+              <div class="popular-drugs">
+                <span class="popular-label">Try:</span>
+                <button class="drug-chip explorer-chip" data-drug-a="Warfarin" data-drug-b="Aspirin">Warfarin + Aspirin</button>
+                <button class="drug-chip explorer-chip" data-drug-a="Simvastatin" data-drug-b="Amiodarone">Simvastatin + Amiodarone</button>
+                <button class="drug-chip explorer-chip" data-drug-a="Metformin" data-drug-b="Lisinopril">Metformin + Lisinopril</button>
+              </div>
+            </div>
+
+            <!-- Pair result -->
+            <div class="interaction-cards" id="explorer-cards" style="display:none;"></div>
+          </div>
+
+        </div><!-- /tab-explorer -->
+
+        <!-- ══════════════════════════════════════════════════
+             TAB 2 — Polypharmacy Risk Analyzer
+        ══════════════════════════════════════════════════ -->
+        <div id="tab-poly" class="interactions-panel" style="display:none;" role="tabpanel">
+
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Polypharmacy Risk Analyzer — GNN Model</h2>
+            </div>
+
+            <p style="font-size:var(--font-size-sm); color:var(--gray-600); margin-bottom:var(--space-5); line-height:1.7;">
+              Add up to <strong>5 drugs</strong> (generic names or SMILES strings). The trained Graph Neural Network
+              will evaluate every pair combination for harmful interactions and render a live risk graph.
+            </p>
+
+            <!-- Drug Slots -->
+            <div class="drug-slots" id="poly-drug-slots">
+              <!-- Slot 1 (always present) -->
+              <div class="drug-slot" data-slot="0">
+                <div class="drug-slot__num">1</div>
+                <div class="drug-slot__input-wrap">
+                  <input type="text" class="drug-slot__input" placeholder="Drug name or SMILES…" autocomplete="off" />
+                  <ul class="drug-slot__suggestions" style="display:none;"></ul>
+                </div>
+                <span class="drug-slot__resolve drug-slot__resolve--pending">—</span>
+                <button class="drug-slot__remove" title="Remove" style="visibility:hidden;">✕</button>
+              </div>
+              <!-- Slot 2 (always present) -->
+              <div class="drug-slot" data-slot="1">
+                <div class="drug-slot__num">2</div>
+                <div class="drug-slot__input-wrap">
+                  <input type="text" class="drug-slot__input" placeholder="Drug name or SMILES…" autocomplete="off" />
+                  <ul class="drug-slot__suggestions" style="display:none;"></ul>
+                </div>
+                <span class="drug-slot__resolve drug-slot__resolve--pending">—</span>
+                <button class="drug-slot__remove" title="Remove" style="visibility:hidden;">✕</button>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="poly-actions">
+              <button class="btn--add-drug" id="poly-add-btn">+ Add Drug</button>
+              <button class="btn btn--primary" id="poly-analyze-btn" disabled>Analyze Interactions</button>
+              <label class="poly-safe-toggle">
+                <input type="checkbox" id="poly-show-safe-toggle" />
+                <span>Show safe pairs</span>
+              </label>
+              <span id="poly-slot-count" style="font-size:var(--font-size-xs); color:var(--gray-500);">2 / 5 drugs</span>
+            </div>
+
+            <!-- Skeleton (shown while GNN runs) -->
+            <div class="graph-skeleton" id="poly-skeleton" style="display:none;">
+              <div class="graph-skeleton__inner">
+                <div style="display:flex; gap:50px; align-items:center;">
+                  <div class="graph-skeleton__circle graph-skeleton__circle--sm"></div>
+                  <div class="graph-skeleton__circle graph-skeleton__circle--sm"></div>
+                  <div class="graph-skeleton__circle graph-skeleton__circle--sm"></div>
+                </div>
+                <div style="display:flex; gap:30px;">
+                  <div class="graph-skeleton__line" style="width:60px;"></div>
+                  <div class="graph-skeleton__line" style="width:60px;"></div>
+                  <div class="graph-skeleton__line" style="width:60px;"></div>
+                </div>
+                <div class="graph-skeleton__label">Running GNN inference on all pairs…</div>
+              </div>
+            </div>
+
+            <!-- Polypharmacy D3 Graph -->
+            <div class="graph-canvas-wrap--interactions" id="poly-graph-wrap" style="display:none;">
+              <!-- D3 SVG injected here by JS -->
+            </div>
+
+            <!-- Legend -->
+            <div class="graph-legend--interactions" id="poly-legend" style="display:none;">
+              <div class="legend-item">
+                <div class="legend-dot legend-dot--center"></div> Drug Node
+              </div>
+              <div class="legend-item">
+                <div class="legend-line--harmful"></div> Harmful Interaction
+              </div>
+              <div class="legend-item">
+                <div class="legend-line--safe"></div> Safe Combination
+              </div>
+            </div>
+
+            <!-- Pair results -->
+            <div class="poly-pairs" id="poly-pairs" style="display:none;"></div>
+
+            <!-- Recent predictions -->
+            <div class="recent-predictions" id="poly-recent" style="display:none;">
+              <div class="recent-predictions__title">Recent Predictions (cached locally)</div>
+              <div id="poly-recent-list"></div>
+            </div>
+
+          </div><!-- /dashboard-card -->
+
+        </div><!-- /tab-poly -->
+
+      </div><!-- /section-body -->
     </section>
 
     <!-- ============================
@@ -1237,11 +1389,12 @@
   </footer>
 
   <!-- Modular JS Architecture -->
-  <script src="api_layer.js"></script>
-  <script src="biobert.js"></script>
-  <script src="ml_models.js"></script>
-  <script src="distributed_storage.js"></script>
-  <script src="app.js"></script>
+  <script src="/static/api_layer.js"></script>
+  <script src="/static/_interactions_new.js"></script>
+  <script src="/static/biobert.js"></script>
+  <script src="/static/ml_models.js"></script>
+  <script src="/static/distributed_storage.js"></script>
+  <script src="/static/app.js"></script>
 
 </body>
 

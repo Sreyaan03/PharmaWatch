@@ -1060,3 +1060,596 @@ code {
   .about-grid { grid-template-columns: 1fr; }
   .prr-formula { flex-direction: column; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SKELETON LOADING ANIMATION — Boxed Warning secondary panels
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes skeletonShimmer {
+  0%   { background-position: -800px 0; }
+  100% { background-position:  800px 0; }
+}
+
+.skeleton-pulse {
+  background: linear-gradient(90deg, #eef1f6 0%, #dde3ee 40%, #eef1f6 80%);
+  background-size: 1600px 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.skeleton-card {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e9ecef;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.skeleton-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.skeleton-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.skeleton-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+
+/* Fade-in when real content replaces skeleton */
+@keyframes bwFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bw-section-reveal { animation: bwFadeIn 0.45s ease forwards; }
+
+/* ═══════════════════════════════════════════════════════════════
+   INTERACTIONS TAB — Big Data Status Bar, Tab Switcher,
+   Explorer Graph, Polypharmacy Analyzer, Skeleton Screens
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Big Data Status Bar ───────────────────────────────────────── */
+.bigdata-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: #0d1b2a;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-6);
+  border: 1px solid rgba(255,255,255,0.08);
+  animation: fadeIn 0.4s ease;
+}
+.bigdata-status-bar__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background var(--transition-med);
+}
+.bigdata-status-bar__dot--ready   { background: #69db7c; box-shadow: 0 0 6px #69db7c; animation: pulse-green 2s infinite; }
+.bigdata-status-bar__dot--starting { background: #fcc419; box-shadow: 0 0 6px #fcc419; animation: pulse-amber 1s infinite; }
+.bigdata-status-bar__dot--offline  { background: #ff6b6b; box-shadow: 0 0 6px #ff6b6b; }
+@keyframes pulse-green {
+  0%,100% { box-shadow: 0 0 0 0 rgba(105,219,124,0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(105,219,124,0); }
+}
+@keyframes pulse-amber {
+  0%,100% { box-shadow: 0 0 0 0 rgba(252,196,25,0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(252,196,25,0); }
+}
+.bigdata-status-bar__text {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: rgba(255,255,255,0.85);
+  font-weight: 600;
+}
+.bigdata-status-bar__sub {
+  font-size: var(--font-size-xs);
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+  margin-left: var(--space-2);
+}
+.bigdata-status-bar__btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.8);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition-fast);
+}
+.bigdata-status-bar__btn:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+/* ── Interactions Tab Switcher ─────────────────────────────────── */
+.interactions-tab-switcher {
+  display: flex;
+  gap: 0;
+  background: var(--gray-100);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+  margin-bottom: var(--space-6);
+  width: fit-content;
+  border: 1px solid var(--gray-200);
+}
+.interactions-tab-btn {
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.interactions-tab-btn:hover { color: var(--gray-900); background: rgba(0,0,0,0.04); }
+.interactions-tab-btn.active {
+  background: var(--white);
+  color: var(--cdc-blue);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Graph Skeleton ────────────────────────────────────────────── */
+.graph-skeleton {
+  background: #0d1b2a;
+  border-radius: var(--radius-lg);
+  height: 380px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.graph-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.04) 40%,
+    rgba(255,255,255,0) 80%);
+  background-size: 800px 100%;
+  animation: skeletonShimmer 1.8s ease-in-out infinite;
+}
+.graph-skeleton__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  opacity: 0.25;
+}
+.graph-skeleton__circle {
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+}
+.graph-skeleton__circle--lg { width: 56px; height: 56px; }
+.graph-skeleton__circle--sm { width: 32px; height: 32px; }
+.graph-skeleton__line {
+  height: 2px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+.graph-skeleton__label {
+  font-size: var(--font-size-xs);
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Interaction Cards (Explorer tab) ─────────────────────────── */
+.interaction-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.interaction-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+  animation: fadeIn 0.35s ease;
+}
+.interaction-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--gray-300);
+  transform: translateX(2px);
+}
+.interaction-card--harmful { border-left: 4px solid var(--cdc-red); }
+.interaction-card--safe    { border-left: 4px solid var(--cdc-green); }
+.interaction-card__icon { font-size: 1.4rem; flex-shrink: 0; }
+.interaction-card__body { flex: 1; min-width: 0; }
+.interaction-card__drugs {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  color: var(--gray-900);
+  margin-bottom: 2px;
+}
+.interaction-card__effect {
+  font-size: var(--font-size-xs);
+  color: var(--gray-600);
+}
+.interaction-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.interaction-card__badge--harmful { background: #fdecea; color: var(--cdc-red); }
+.interaction-card__badge--safe    { background: #e8f5e9; color: var(--cdc-green); }
+.explorer-pair-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: var(--space-4);
+  align-items: end;
+  margin-bottom: var(--space-5);
+}
+.explorer-drug-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.explorer-drug-field label {
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  color: var(--gray-600);
+  text-transform: uppercase;
+}
+.explorer-drug-field__input {
+  position: relative;
+}
+.explorer-drug-field__input .filter-input {
+  width: 100%;
+}
+.explorer-pair-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 300;
+}
+.interaction-card--detail {
+  align-items: flex-start;
+}
+.interaction-card--detail .interaction-card__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-100);
+  color: var(--gray-800);
+  font-size: var(--font-size-xs);
+  font-weight: 900;
+}
+.interaction-card__details {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--gray-700);
+  line-height: 1.5;
+}
+
+/* ── Drug Slots (Polypharmacy tab) ─────────────────────────────── */
+.drug-slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.drug-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color var(--transition-fast);
+  animation: fadeIn 0.25s ease;
+  position: relative;
+}
+.drug-slot:focus-within {
+  border-color: var(--cdc-blue-light);
+  box-shadow: 0 0 0 3px rgba(0,112,192,0.12);
+}
+.drug-slot__num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cdc-blue);
+  color: var(--white);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.drug-slot__input-wrap {
+  flex: 1;
+  position: relative;
+}
+.drug-slot__input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  color: var(--gray-900);
+  outline: none;
+  padding: 2px 0;
+}
+.drug-slot__input::placeholder { color: var(--gray-400); }
+.drug-slot__suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 300;
+  max-height: 180px;
+  overflow-y: auto;
+  list-style: none;
+}
+.drug-slot__suggestions li {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid var(--gray-100);
+}
+.drug-slot__suggestions li:last-child { border-bottom: none; }
+.drug-slot__suggestions li:hover { background: var(--cdc-blue-pale); }
+.drug-slot__resolve {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+.drug-slot__resolve--pending  { background: var(--gray-100); color: var(--gray-500); }
+.drug-slot__resolve--ok       { background: #e8f5e9; color: var(--cdc-green); }
+.drug-slot__resolve--error    { background: #fdecea; color: var(--cdc-red); }
+.drug-slot__resolve--loading  { background: #fff8e1; color: #e65100; }
+.drug-slot__remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gray-400);
+  font-size: 1rem;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.drug-slot__remove:hover { color: var(--cdc-red); background: #fdecea; }
+
+.poly-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+.btn--add-drug {
+  background: var(--cdc-blue-pale);
+  color: var(--cdc-blue);
+  border: 1px dashed rgba(0,61,124,0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn--add-drug:hover:not(:disabled) {
+  background: var(--cdc-blue);
+  color: var(--white);
+  border-color: var(--cdc-blue);
+}
+.btn--add-drug:disabled { opacity: 0.4; cursor: not-allowed; }
+.poly-safe-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  color: var(--gray-700);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+.poly-safe-toggle input {
+  accent-color: var(--cdc-green);
+}
+.poly-graph-message {
+  min-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: #0d1b2a;
+  color: rgba(255,255,255,0.82);
+  text-align: center;
+}
+.poly-graph-message__title {
+  max-width: 480px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ── Polypharmacy Pair Results ──────────────────────────────────── */
+.poly-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+.poly-pair-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  animation: fadeIn 0.3s ease;
+  transition: box-shadow var(--transition-fast);
+}
+.poly-pair-item:hover { box-shadow: var(--shadow-sm); }
+.poly-pair-item--harmful { border-left: 4px solid var(--cdc-red); }
+.poly-pair-item--safe    { border-left: 4px solid var(--cdc-green); }
+.poly-pair-item__drugs {
+  flex: 1;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  color: var(--gray-900);
+}
+.poly-pair-item__arrow {
+  color: var(--gray-400);
+  font-size: 0.9rem;
+  margin: 0 4px;
+}
+.poly-pair-item__confidence {
+  font-size: var(--font-size-xs);
+  color: var(--gray-500);
+  font-weight: 600;
+  min-width: 60px;
+  text-align: right;
+}
+.poly-pair-item__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.poly-pair-item__badge--harmful { background: #fdecea; color: var(--cdc-red); }
+.poly-pair-item__badge--safe    { background: #e8f5e9; color: var(--cdc-green); }
+
+/* ── Recent Predictions Table ──────────────────────────────────── */
+.recent-predictions {
+  margin-top: var(--space-8);
+}
+.recent-predictions__title {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--cdc-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-3);
+}
+.recent-pred-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--gray-100);
+  transition: background var(--transition-fast);
+}
+.recent-pred-row:hover { background: var(--gray-50); }
+.recent-pred-row__pair { flex: 1; font-weight: 600; color: var(--gray-800); }
+.recent-pred-row__time { color: var(--gray-400); min-width: 80px; text-align: right; }
+
+/* ── Graph canvas wrap (interactions) ─────────────────────────── */
+.graph-canvas-wrap--interactions {
+  background: #0d1b2a;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-height: 380px;
+  position: relative;
+}
+.graph-canvas-wrap--interactions svg {
+  display: block;
+  width: 100%;
+}
+
+/* ── Graph Legend ──────────────────────────────────────────────── */
+.graph-legend--interactions {
+  display: flex;
+  gap: var(--space-5);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-4);
+  background: rgba(13,27,42,0.6);
+  border-radius: var(--radius-md);
+}
+.graph-legend--interactions .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-dot--center  { background: #fcc419; }
+.legend-dot--harmful { background: #ff6b6b; }
+.legend-dot--safe    { background: #69db7c; }
+.legend-line--harmful { width: 20px; height: 2px; background: #ff6b6b; border-radius: 2px; }
+.legend-line--safe    { width: 20px; height: 2px; background: #69db7c; border-radius: 2px; }
+
+/* ── Interactions section reveal animation ─────────────────────── */
+.interactions-panel {
+  animation: fadeIn 0.35s ease;
+}
+
+@media (max-width: 760px) {
+  .explorer-pair-form {
+    grid-template-columns: 1fr;
+  }
+  .interaction-card,
+  .poly-pair-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .poly-pair-item__confidence {
+    min-width: 0;
+    text-align: left;
+  }
+}

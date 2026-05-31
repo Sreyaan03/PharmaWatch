@@ -25,110 +25,7 @@ const RECENT_ALERTS_DATA = [
   { drug: 'Warfarin + Ciprofloxacin', event: 'GI Bleeding', prr: 4.81, time: '7 min ago', sev: 'critical' }
 ];
 
-/* ──────────────── DRUG-DRUG INTERACTIONS ────────────────── */
-
-const INTERACTION_DATA = {
-  'Metformin': {
-    nodes: [
-      { id: 0, label: 'Metformin', risk: 'center', x: 350, y: 210 },
-      { id: 1, label: 'Empagliflozin', risk: 'critical', x: 180, y: 100 },
-      { id: 2, label: 'Furosemide', risk: 'moderate', x: 160, y: 320 },
-      { id: 3, label: 'Alcohol', risk: 'critical', x: 520, y: 90 },
-      { id: 4, label: 'Contrast Dye', risk: 'critical', x: 540, y: 330 },
-      { id: 5, label: 'Cimetidine', risk: 'low', x: 350, y: 50 },
-      { id: 6, label: 'Topiramate', risk: 'moderate', x: 220, y: 390 },
-    ],
-    edges: [
-      { from: 0, to: 1, risk: 'critical' },
-      { from: 0, to: 2, risk: 'moderate' },
-      { from: 0, to: 3, risk: 'critical' },
-      { from: 0, to: 4, risk: 'critical' },
-      { from: 0, to: 5, risk: 'low' },
-      { from: 0, to: 6, risk: 'moderate' },
-    ]
-  },
-  'Warfarin': {
-    nodes: [
-      { id: 0, label: 'Warfarin', risk: 'center', x: 350, y: 210 },
-      { id: 1, label: 'Aspirin', risk: 'critical', x: 180, y: 90 },
-      { id: 2, label: 'Amiodarone', risk: 'critical', x: 540, y: 90 },
-      { id: 3, label: 'Ciprofloxacin', risk: 'critical', x: 540, y: 330 },
-      { id: 4, label: 'Vitamin K', risk: 'moderate', x: 160, y: 330 },
-      { id: 5, label: 'Ibuprofen', risk: 'critical', x: 350, y: 60 },
-      { id: 6, label: 'Omeprazole', risk: 'low', x: 200, y: 380 },
-    ],
-    edges: [
-      { from: 0, to: 1, risk: 'critical' },
-      { from: 0, to: 2, risk: 'critical' },
-      { from: 0, to: 3, risk: 'critical' },
-      { from: 0, to: 4, risk: 'moderate' },
-      { from: 0, to: 5, risk: 'critical' },
-      { from: 0, to: 6, risk: 'low' },
-    ]
-  },
-  'Atorvastatin': {
-    nodes: [
-      { id: 0, label: 'Atorvastatin', risk: 'center', x: 350, y: 210 },
-      { id: 1, label: 'Amiodarone', risk: 'critical', x: 170, y: 100 },
-      { id: 2, label: 'Clarithromycin', risk: 'critical', x: 530, y: 100 },
-      { id: 3, label: 'Cyclosporine', risk: 'critical', x: 540, y: 320 },
-      { id: 4, label: 'Niacin', risk: 'moderate', x: 160, y: 320 },
-      { id: 5, label: 'Grapefruit', risk: 'moderate', x: 350, y: 55 },
-      { id: 6, label: 'Warfarin', risk: 'low', x: 220, y: 390 },
-    ],
-    edges: [
-      { from: 0, to: 1, risk: 'critical' },
-      { from: 0, to: 2, risk: 'critical' },
-      { from: 0, to: 3, risk: 'critical' },
-      { from: 0, to: 4, risk: 'moderate' },
-      { from: 0, to: 5, risk: 'moderate' },
-      { from: 0, to: 6, risk: 'low' },
-    ]
-  },
-  'Amiodarone': {
-    nodes: [
-      { id: 0, label: 'Amiodarone', risk: 'center', x: 350, y: 210 },
-      { id: 1, label: 'Warfarin', risk: 'critical', x: 180, y: 90 },
-      { id: 2, label: 'Simvastatin', risk: 'critical', x: 530, y: 100 },
-      { id: 3, label: 'Digoxin', risk: 'critical', x: 540, y: 320 },
-      { id: 4, label: 'Metoprolol', risk: 'moderate', x: 155, y: 320 },
-      { id: 5, label: 'Quinidine', risk: 'critical', x: 350, y: 55 },
-    ],
-    edges: [
-      { from: 0, to: 1, risk: 'critical' },
-      { from: 0, to: 2, risk: 'critical' },
-      { from: 0, to: 3, risk: 'critical' },
-      { from: 0, to: 4, risk: 'moderate' },
-      { from: 0, to: 5, risk: 'critical' },
-    ]
-  },
-  'Lisinopril': {
-    nodes: [
-      { id: 0, label: 'Lisinopril', risk: 'center', x: 350, y: 210 },
-      { id: 1, label: 'Potassium', risk: 'critical', x: 170, y: 90 },
-      { id: 2, label: 'Spironolactone', risk: 'critical', x: 530, y: 90 },
-      { id: 3, label: 'NSAIDs', risk: 'moderate', x: 540, y: 330 },
-      { id: 4, label: 'Lithium', risk: 'moderate', x: 160, y: 330 },
-      { id: 5, label: 'Metformin', risk: 'low', x: 350, y: 55 },
-    ],
-    edges: [
-      { from: 0, to: 1, risk: 'critical' },
-      { from: 0, to: 2, risk: 'critical' },
-      { from: 0, to: 3, risk: 'moderate' },
-      { from: 0, to: 4, risk: 'moderate' },
-      { from: 0, to: 5, risk: 'low' },
-    ]
-  }
-};
-
-const CLUSTERS = [
-  { drugs: 'Warfarin + Aspirin + Ibuprofen', risk: 'CRITICAL', desc: 'Triple anticoagulation — severe haemorrhage risk. PRR 6.2 for major bleeding events.' },
-  { drugs: 'Amiodarone + Simvastatin + Cyclosporine', risk: 'CRITICAL', desc: 'CYP3A4 saturation leading to rhabdomyolysis cascade. PRR 5.9.' },
-  { drugs: 'Metformin + Contrast Dye + Furosemide', risk: 'HIGH', desc: 'Acute lactic acidosis triad — renal clearance impairment. PRR 4.1.' },
-  { drugs: 'Sertraline + Tramadol + Linezolid', risk: 'CRITICAL', desc: 'Serotonin syndrome cluster. PRR 7.4 for serotonin toxicity.' },
-  { drugs: 'Ciprofloxacin + Warfarin + Omeprazole', risk: 'HIGH', desc: 'CYP2C9 inhibition with anticoagulant potentiation. PRR 4.8.' },
-  { drugs: 'Metoprolol + Verapamil + Digoxin', risk: 'HIGH', desc: 'Severe bradycardia and AV block risk. PRR 3.9.' },
-];
+/* ──────────────── INTERACTIONS (replaced with live data) ──── */
 
 /* ──────────────── SIGNALS TABLE ──────────────────────────── */
 function generateSignals(count = 40) {
@@ -479,112 +376,12 @@ async function loadDrugProfile(name) {
   if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
 }
 
-/* ──────────────── INTERACTION GRAPH ───────────────────────── */
-let graphAnimFrame = null;
-
-async function drawGraph(drugName) {
-  const wrap = document.getElementById('graph-canvas-wrap');
-  if (!wrap) return;
-
-  // Replace the canvas with an SVG for D3
-  wrap.innerHTML = `
-    <svg id="d3-graph-svg" width="700" height="420" style="background:#0d1b2a; border-radius:8px;"></svg>
-    <div class="graph-legend">
-      <span class="graph-legend-item graph-legend-item--red">● High Co-prescription</span>
-      <span class="graph-legend-item graph-legend-item--orange">● Moderate Co-prescription</span>
-      <span class="graph-legend-item graph-legend-item--green">● Low Co-prescription</span>
-      <span class="graph-legend-item graph-legend-item--center">★ Selected Drug</span>
-    </div>
-  `;
-
-  const svg = d3.select("#d3-graph-svg");
-  const width = 700;
-  const height = 420;
-
-  try {
-    // Fetch REAL interaction data from our Python backend
-    const res = await fetch(`http://127.0.0.1:5000/api/graph?drug=${encodeURIComponent(drugName)}`);
-    const graphData = await res.json();
-
-    if (graphData.error || !graphData.nodes || graphData.nodes.length === 0) {
-      wrap.innerHTML = `<p style="color:#888; text-align:center; padding:2rem;">No interaction data found for "${drugName}" in openFDA.</p>`;
-      return;
-    }
-
-    // Assign risk levels based on link weight (co-prescription frequency)
-    graphData.links.forEach(link => {
-      if (link.value >= 8) link.risk = 'critical';
-      else if (link.value >= 3) link.risk = 'moderate';
-      else link.risk = 'low';
-    });
-
-    // D3 force simulation — physics engine
-    const simulation = d3.forceSimulation(graphData.nodes)
-      .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(120))
-      .force("charge", d3.forceManyBody().strength(-350))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(30));
-
-    // Draw links (lines)
-    const link = svg.append("g")
-      .selectAll("line").data(graphData.links).join("line")
-      .attr("stroke", d => d.risk === 'critical' ? '#ff6b6b' : d.risk === 'moderate' ? '#ffa94d' : '#69db7c')
-      .attr("stroke-opacity", 0.7)
-      .attr("stroke-width", d => Math.min(Math.sqrt(d.value) * 2, 8));
-
-    // Draw nodes (circles)
-    const nodeColor = d => ({ 1: '#fcc419', 2: '#ff6b6b', 3: '#ffa94d', 4: '#69db7c' }[d.group] || '#4dabf7');
-    const node = svg.append("g")
-      .selectAll("circle").data(graphData.nodes).join("circle")
-      .attr("r", d => d.group === 1 ? 22 : 14)
-      .attr("fill", nodeColor)
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 1.5)
-      .style("cursor", "pointer");
-
-    // Draw labels (drug names)
-    const labels = svg.append("g")
-      .selectAll("text").data(graphData.nodes).enter().append("text")
-      .text(d => d.id)
-      .attr("font-size", d => d.group === 1 ? "11px" : "9px")
-      .attr("font-family", "Open Sans, sans-serif")
-      .attr("fill", "#e0e0e0")
-      .attr("text-anchor", "middle")
-      .attr("dy", d => d.group === 1 ? 34 : 26);
-
-    // Physics tick — updates positions every frame
-    simulation.on("tick", () => {
-      link
-        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-      node.attr("cx", d => d.x).attr("cy", d => d.y);
-      labels.attr("x", d => d.x).attr("y", d => d.y);
-    });
-
-    // Interaction detail panel
-    const details = document.getElementById('interaction-details-list');
-    if (details) {
-      details.innerHTML = `
-        <h3 style="font-size:0.875rem;font-weight:700;color:#003d7c;margin-bottom:0.75rem;text-transform:uppercase;">
-          ${drugName} — Co-Prescribed Drugs (openFDA)
-        </h3>
-        ${graphData.links.map(link => `
-          <div class="alert-item alert-item--${link.risk === 'critical' ? 'critical' : link.risk === 'moderate' ? 'high' : 'moderate'}" style="margin-bottom:0.5rem;">
-            <div class="alert-item__icon">${link.risk === 'critical' ? '🔴' : link.risk === 'moderate' ? '🟡' : '🟢'}</div>
-            <div class="alert-item__body">
-              <div class="alert-item__drug">${drugName} + ${link.target.id || link.target}</div>
-              <div class="alert-item__event">Co-prescription frequency: ${link.risk.toUpperCase()}</div>
-            </div>
-          </div>
-        `).join('')}
-      `;
-    }
-
-  } catch (e) {
-    wrap.innerHTML = `<p style="color:#ff6b6b; text-align:center; padding:2rem;">❌ Could not reach backend. Is <code>python backend/app.py</code> running?</p>`;
-  }
+/* ──────────────── INTERACTION GRAPH (SECTION 1 & 2) ───────── */
+/* NOTE: replaced by initInteractionsTab() in interactions_module.js */
+function initInteractionGraph() {
+  // Delegated to initInteractionsTab() — kept as no-op for legacy call sites
+  if (typeof initInteractionsTab === 'function') initInteractionsTab();
 }
-
 
 /* ──────────────── CHARTS ──────────────────────────────────── */
 let signalIntensityChart = null;
@@ -951,8 +748,7 @@ function navigateTo(sectionId) {
   }
   if (sectionId === 'interactions' && !chartsInitialized.interactions) {
     chartsInitialized.interactions = true;
-    renderClusterGrid();
-    drawGraph('Metformin');
+    if (typeof initInteractionsTab === 'function') initInteractionsTab();
   }
   if (sectionId === 'data-sources' && !chartsInitialized.datasources) {
     chartsInitialized.datasources = true;
@@ -1024,66 +820,9 @@ function initNavigation() {
 }
 
 /* ──────────────── INTERACTION GRAPH EVENTS ─────────────────── */
-function initInteractionGraph() {
-  const input = document.getElementById('graph-drug-select');
-  const suggs = document.getElementById('graph-drug-suggestions');
-  const btn   = document.getElementById('load-graph-btn');
-  if (!input) return;
-
-  let searchTimeout = null;
-
-  // Autocomplete — mirrors Drug Search section pattern
-  input.addEventListener('input', () => {
-    const q = input.value.trim();
-    if (!q || q.length < 2) { suggs.style.display = 'none'; return; }
-
-    clearTimeout(searchTimeout);
-    suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">Searching openFDA…</li>`;
-    suggs.style.display = 'block';
-
-    searchTimeout = setTimeout(async () => {
-      if (typeof ApiLayer === 'undefined') return;
-      const matches = await ApiLayer.searchDrugNames(q);
-      if (matches.length === 0) {
-        suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">No results for "${escHtml(q)}"</li>`;
-      } else {
-        suggs.innerHTML = matches.slice(0, 8).map(d =>
-          `<li role="option" data-drug="${d}" style="padding:8px 12px; cursor:pointer;">${d}</li>`
-        ).join('');
-      }
-      suggs.style.display = 'block';
-    }, 280);
-  });
-
-  // Click a suggestion → load graph
-  suggs.addEventListener('click', e => {
-    const li = e.target.closest('li[data-drug]');
-    if (!li) return;
-    input.value = li.dataset.drug;
-    suggs.style.display = 'none';
-    drawGraph(li.dataset.drug);
-  });
-
-  // Load Graph button
-  btn?.addEventListener('click', () => {
-    suggs.style.display = 'none';
-    const drug = input.value.trim();
-    if (drug) drawGraph(drug);
-  });
-
-  // Enter key → load graph
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { suggs.style.display = 'none'; const drug = input.value.trim(); if (drug) drawGraph(drug); }
-    if (e.key === 'Escape') suggs.style.display = 'none';
-  });
-
-  // Close suggestions on outside click
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#graph-drug-select') && !e.target.closest('#graph-drug-suggestions')) {
-      suggs.style.display = 'none';
-    }
-  });
-}
+// NOTE: initInteractionGraph is fully defined above (lines 484-586).
+// The duplicate definition has been removed to prevent it from overwriting
+// the working version that correctly references #graph-suggestions.
 
 
 /* ──────────────── SIGNALS PAGE EVENTS ─────────────────────── */
@@ -1314,12 +1053,18 @@ async function loadBoxedWarningAnalysis(drugName) {
       const allSorted = [...eventsRes.warned_events, ...eventsRes.other_events].sort((a,b) => b.count - a.count);
       tableDiv.innerHTML = `
         <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid #ddd; text-align:left; background:#f8f9fa;">
+              <th style="padding:6px 8px;">Adverse Event</th>
+              <th style="padding:6px 8px;">Reports (n)</th>
+              <th style="padding:6px 8px;">%</th>
+              <th style="padding:6px 8px;">Boxed Warning?</th>
             </tr>
           </thead>
           <tbody>
             ${allSorted.map(ev => `
               <tr style="border-bottom:1px solid #eee; ${ev.is_boxed_warning ? 'background:#fef2f2;' : ''}">
-                <td style="padding:6px 8px; font-weight:${ev.is_boxed_warning ? '700' : '400'};">${escHtml(ev.term)}</td>
+                <td style="padding:6px 8px; font-weight:${ev.is_boxed_warning ? '700' : '400'}; color:${ev.is_boxed_warning ? '#c0392b' : 'inherit'}">${escHtml(ev.term)}</td>
                 <td style="padding:6px 8px;">${ev.count.toLocaleString()}</td>
                 <td style="padding:6px 8px;">${ev.percentage}%</td>
                 <td style="padding:6px 8px;">${ev.is_boxed_warning ? '<span style="color:#c0392b; font-weight:700;">⚠ YES</span>' : '<span style="color:#999;">No</span>'}</td>
@@ -1334,6 +1079,32 @@ async function loadBoxedWarningAnalysis(drugName) {
       `;
     }
 
+    // ── Phase 2: Show skeletons immediately, then fire API calls in parallel ──
+    // Skeletons give instant visual feedback while the backend fetches data.
+    showSecondarySkeletons();
+
+    const drug = drugName;
+    Promise.all([
+      fetch(`http://127.0.0.1:5000/api/boxed-warning/timeline/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
+      fetch(`http://127.0.0.1:5000/api/boxed-warning/violations/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
+      fetch(`http://127.0.0.1:5000/api/boxed-warning/bias-analysis/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null)
+    ]).then(([timelineData, violationsData, biasData]) => {
+      renderTimelineChart(timelineData);
+      renderViolationsLog(drug, violationsData);
+      renderBiasChart(biasData);
+      renderLiteratureCard(drug, eventsRes, violationsData, timelineData, biasData);
+    }).catch(e => {
+      console.warn('[PharmaWatch] Secondary boxed-warning analyses failed:', e.message);
+      // Replace all skeletons with a generic error notice
+      ['bw-literature-card','bw-timeline-card','bw-violations-card','bw-bias-card'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.dataset.skeleton === 'true') {
+          el.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#888; font-size:0.85rem;">⚠️ Could not load — backend may be offline.</div>`;
+          el.dataset.skeleton = '';
+        }
+      });
+    });
+
   } catch (err) {
     loadingDiv.style.display = 'none';
     noWarningDiv.style.display = 'block';
@@ -1341,11 +1112,159 @@ async function loadBoxedWarningAnalysis(drugName) {
   }
 }
 
+/* ──────────────── SKELETON SCREENS (Boxed Warning secondary panels) ──── */
+function showSecondarySkeletons() {
+  const s = (n) => `<div class="skeleton-pulse" style="height:${n}px; margin-bottom:10px;"></div>`;
+  const header = (icon, title) => `
+    <div class="skeleton-card__header">
+      <span style="font-size:1.1rem;">${icon}</span>
+      <div class="skeleton-pulse" style="height:15px; width:52%; border-radius:6px;"></div>
+      <div class="skeleton-pulse" style="height:20px; width:110px; border-radius:12px; margin-left:auto;"></div>
+    </div>`;
+
+  // ── Literature card ──
+  const lit = document.getElementById('bw-literature-card');
+  if (lit) {
+    lit.dataset.skeleton = 'true';
+    lit.style.display = 'block';
+    lit.innerHTML = `
+      ${header('📚', '')}
+      <div class="skeleton-grid-2">
+        <div class="skeleton-pulse" style="height:130px;"></div>
+        <div class="skeleton-pulse" style="height:130px;"></div>
+        <div class="skeleton-pulse" style="height:130px;"></div>
+        <div class="skeleton-pulse" style="height:130px;"></div>
+      </div>`;
+  }
+
+  // ── Timeline card ──
+  const tl = document.getElementById('bw-timeline-card');
+  if (tl) {
+    tl.dataset.skeleton = 'true';
+    tl.style.display = 'block';
+    tl.innerHTML = `
+      ${header('📈', '')}
+      <div class="skeleton-grid-3">
+        <div class="skeleton-pulse" style="height:72px;"></div>
+        <div class="skeleton-pulse" style="height:72px;"></div>
+        <div class="skeleton-pulse" style="height:72px;"></div>
+      </div>
+      <div class="skeleton-pulse" style="height:300px;"></div>
+      ${s(14)}`;
+  }
+
+  // ── Violations card ──
+  const viol = document.getElementById('bw-violations-card');
+  if (viol) {
+    viol.dataset.skeleton = 'true';
+    viol.style.display = 'block';
+    viol.innerHTML = `
+      ${header('⚠️', '')}
+      ${s(18)}
+      <div class="skeleton-pulse" style="height:220px;"></div>
+      <div style="display:flex; gap:0.75rem; margin-top:0.75rem;">
+        <div class="skeleton-pulse" style="height:32px; width:160px;"></div>
+        <div class="skeleton-pulse" style="height:14px; width:120px; margin-top:8px;"></div>
+      </div>`;
+  }
+
+  // ── Bias card ──
+  const bias = document.getElementById('bw-bias-card');
+  if (bias) {
+    bias.dataset.skeleton = 'true';
+    bias.style.display = 'block';
+    bias.innerHTML = `
+      ${header('📊', '')}
+      <div class="skeleton-pulse" style="height:280px;"></div>
+      ${s(44)}`;
+  }
+}
+
+function showSecondaryCardMessage(cardId, title, message) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  card.dataset.skeleton = '';
+  card.style.display = 'block';
+  card.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">${title}</h2>
+    </div>
+    <div style="padding:1rem 0; color:#666; font-size:0.84rem; line-height:1.6;">
+      ${message}
+    </div>`;
+}
+
+function ensureLiteratureCardStructure(card) {
+  if (!card || document.getElementById('bw-literature-body')) return;
+  card.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">📚 Literature Context — Real-World Impact of This Warning</h2>
+      <span style="font-size:0.72rem; color:#888; align-self:center;">Based on pharmacovigilance literature + live FAERS data</span>
+    </div>
+    <div id="bw-literature-body" style="display:grid; grid-template-columns: repeat(2,1fr); gap:1rem; padding:0.5rem 0;"></div>`;
+}
+
+function ensureTimelineCardStructure(card) {
+  if (!card || document.getElementById('bw-timeline-chart')) return;
+  card.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">📈 Before &amp; After Timeline — Annual FAERS Reports</h2>
+      <span id="bw-timeline-badge"
+        style="font-size:0.75rem; padding:3px 10px; border-radius:12px; background:#e3f2fd; color:#1565c0; font-weight:700; align-self:center;">
+        Loading…
+      </span>
+    </div>
+    <div id="bw-timeline-slopes" style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1rem;"></div>
+    <div class="chart-container" style="height:300px;">
+      <canvas id="bw-timeline-chart"></canvas>
+    </div>
+    <div id="bw-timeline-interp" style="margin-top:0.75rem; font-size:0.8rem; color:#555; padding:8px 12px; background:#f8f9fa; border-radius:6px;"></div>`;
+}
+
+function ensureViolationsCardStructure(card) {
+  if (!card || document.getElementById('bw-violations-table')) return;
+  card.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">⚠️ Post-Warning Violation Log — Persistent SQLite Record</h2>
+      <span style="font-size:0.72rem; color:#888; align-self:center;">Stored in local pharmawatch.db</span>
+    </div>
+    <div id="bw-violations-summary" style="margin-bottom:0.75rem; font-size:0.83rem; color:#555;"></div>
+    <div id="bw-violations-table" style="max-height:380px; overflow-y:auto;"></div>
+    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+      <button id="bw-view-all-violations-btn" class="btn btn--sm btn--outline"
+        style="font-size:0.78rem;">📋 View Entire DB Log</button>
+      <span id="bw-db-log-status" style="font-size:0.75rem; color:#888;"></span>
+    </div>
+    <div id="bw-all-violations-log" style="display:none; margin-top:1rem;"></div>`;
+}
+
+function ensureBiasCardStructure(card) {
+  if (!card || document.getElementById('bw-bias-chart')) return;
+  card.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">📊 FAERS Bias Analysis — Weber Effect &amp; Notoriety Bias</h2>
+      <span id="bw-weber-badge"
+        style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:700; align-self:center;">
+        Analysing…
+      </span>
+    </div>
+    <div class="chart-container" style="height:280px;">
+      <canvas id="bw-bias-chart"></canvas>
+    </div>
+    <div id="bw-bias-note"
+      style="margin-top:0.75rem; font-size:0.8rem; line-height:1.6; padding:10px 14px;
+             background:#fff8e1; border-left:4px solid #f9a825; border-radius:6px; color:#333;">
+    </div>`;
+}
+
 /* ──────────────── LITERATURE CARD RENDERER ────────────────── */
 function renderLiteratureCard(drugName, eventsRes, violationsData, timelineData, biasData) {
   const card = document.getElementById('bw-literature-card');
+  if (!card) return;
+  ensureLiteratureCardStructure(card);
   const body = document.getElementById('bw-literature-body');
-  if (!card || !body) return;
+  if (!body) return;
+  card.dataset.skeleton = '';
 
   const warnedPct = eventsRes.boxed_warning_percentage || 0;
   const violCount = violationsData?.violations_detected ?? '?';
@@ -1400,16 +1319,33 @@ function renderLiteratureCard(drugName, eventsRes, violationsData, timelineData,
       <div style="font-size:0.8rem; line-height:1.55; color:#333;">${p.value}</div>
     </div>`).join('');
 
+  card.dataset.skeleton = '';
   card.style.display = 'block';
+  card.classList.remove('bw-section-reveal');
+  void card.offsetWidth; // force reflow so animation re-triggers
+  card.classList.add('bw-section-reveal');
 }
 
 /* ──────────────── TIMELINE CHART RENDERER ──────────────────── */
 let bwTimelineChart = null;
 function renderTimelineChart(data) {
   const card = document.getElementById('bw-timeline-card');
-  if (!card || !data || data.error) return;
+  if (!card) return;
+  if (!data || data.error) {
+    showSecondaryCardMessage(
+      'bw-timeline-card',
+      '📈 Before & After Timeline — Annual FAERS Reports',
+      'Timeline data is unavailable right now. The backend did not return a usable FAERS time series for this drug.'
+    );
+    return;
+  }
+  ensureTimelineCardStructure(card);
 
+  card.dataset.skeleton = '';
   card.style.display = 'block';
+  card.classList.remove('bw-section-reveal');
+  void card.offsetWidth;
+  card.classList.add('bw-section-reveal');
 
   // Slope badges
   const slopesEl = document.getElementById('bw-timeline-slopes');
@@ -1488,16 +1424,7 @@ function renderTimelineChart(data) {
               return ` ${ctx2.raw.toLocaleString()} reports${suffix}`;
             }
           }
-        },
-        annotation: wIdx !== null ? {
-          annotations: {
-            warningLine: {
-              type: 'line', xMin: wIdx, xMax: wIdx,
-              borderColor: '#c0392b', borderWidth: 2, borderDash: [6,3],
-              label: { content: '⬛ Warning', enabled: true, position: 'start', font: { size: 10 }, color: '#c0392b' }
-            }
-          }
-        } : {}
+        }
       },
       scales: {
         x: { ticks: { font: { size: 10 } } },
@@ -1512,12 +1439,25 @@ function renderTimelineChart(data) {
 
 /* ──────────────── VIOLATIONS LOG RENDERER ──────────────────── */
 function renderViolationsLog(drugName, data) {
-  const card    = document.getElementById('bw-violations-card');
+  const card = document.getElementById('bw-violations-card');
+  if (!card) return;
+  if (!data || data.error) {
+    showSecondaryCardMessage(
+      'bw-violations-card',
+      '⚠️ Post-Warning Violation Log — Persistent SQLite Record',
+      'Violation analysis is unavailable right now. The backend did not return a usable post-warning report summary.'
+    );
+    return;
+  }
+  ensureViolationsCardStructure(card);
   const summary = document.getElementById('bw-violations-summary');
   const table   = document.getElementById('bw-violations-table');
-  if (!card || !data) return;
 
+  card.dataset.skeleton = '';
   card.style.display = 'block';
+  card.classList.remove('bw-section-reveal');
+  void card.offsetWidth;
+  card.classList.add('bw-section-reveal');
 
   const violations = data.violations || [];
   const stored     = data.stored_violations || [];
@@ -1609,11 +1549,24 @@ function renderViolationsLog(drugName, data) {
 let bwBiasChart = null;
 function renderBiasChart(data) {
   const card = document.getElementById('bw-bias-card');
+  if (!card) return;
+  if (!data || data.error) {
+    showSecondaryCardMessage(
+      'bw-bias-card',
+      '📊 FAERS Bias Analysis — Weber Effect & Notoriety Bias',
+      'Weber-effect analysis is unavailable right now. The backend did not return a usable bias-analysis response.'
+    );
+    return;
+  }
+  ensureBiasCardStructure(card);
   const note = document.getElementById('bw-bias-note');
   const badge = document.getElementById('bw-weber-badge');
-  if (!card || !data || data.error) return;
 
+  card.dataset.skeleton = '';
   card.style.display = 'block';
+  card.classList.remove('bw-section-reveal');
+  void card.offsetWidth;
+  card.classList.add('bw-section-reveal');
 
   if (note) note.textContent = data.notoriety_note || '';
 

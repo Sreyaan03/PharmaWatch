@@ -28,7 +28,8 @@ class PatchedRequests:
 http_requests = PatchedRequests()
 from database import (init_db, insert_drug_event, get_drug_event_counts,
                        get_prr_data, get_db,
-                       insert_violation, get_violations, get_all_violations)
+                       insert_violation, get_violations, get_all_violations,
+                       upsert_prediction, get_prediction, get_recent_predictions)
 init_db()
 from reddit_scraper import scrape_all, process_posts_with_ner
 try:
@@ -40,22 +41,21 @@ except ImportError as e:
     print(f"[LSTM] lstm_model.py not found — LSTM endpoints disabled: {e}")
 
 
-app = Flask(__name__)
-CORS(app)  # Allow browser requests from any origin (needed for localhost dev)
-
-# Resolve the absolute path to the src/ folder (one level up from backend/)
 import pathlib
-SRC_DIR = pathlib.Path(__file__).parent.parent / "src"
+SRC_DIR = str(pathlib.Path(__file__).parent.parent / "src")
+
+app = Flask(__name__, static_folder=SRC_DIR, static_url_path='/static')
+CORS(app)  # Allow browser requests from any origin (needed for localhost dev)
 
 @app.route("/")
 def serve_index():
-    """Serve the PharmaWatch frontend at http://127.0.0.1:5000/"""
-    return send_from_directory(str(SRC_DIR), "index.html")
-
-@app.route("/src/<path:filename>")
-def serve_src(filename):
-    """Serve JS/CSS/assets from the src/ directory."""
-    return send_from_directory(str(SRC_DIR), filename)
+    """Serve the PharmaWatch frontend — never cached so script paths always update."""
+    from flask import make_response
+    resp = make_response(send_from_directory(SRC_DIR, "index.html"))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 # ── Load Biomedical NER model once at server startup ─────────────────────────
 # This downloads ~260 MB the first time, then caches it in ~/.cache/huggingface
@@ -385,6 +385,514 @@ def get_detailed_graph():
         return jsonify({"nodes": nodes, "links": links})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Interaction helpers ───────────────────────────────────────────────────────
+
+import subprocess
+import sys as _sys
+import re as _re
+
+PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound"
+MODEL_PATH   = os.path.join(os.path.dirname(__file__), "trained_models", "twosides_gnn_model.pth")
+SCRIPTS_DIR  = os.path.join(os.path.dirname(__file__), "..", "scripts")
+_sys.path.insert(0, os.path.abspath(SCRIPTS_DIR))
+
+# Lazy-load GNN so server starts even if torch_geometric / rdkit not installed
+_gnn_model   = None
+_gnn_loaded  = False
+
+def _load_gnn():
+    global _gnn_model, _gnn_loaded
+    if _gnn_loaded:
+        return _gnn_model
+    try:
+        from train_gnn_model import GNN_Predictor
+        import torch as _torch
+        m = GNN_Predictor(node_feature_dim=8, hidden_dim=64)
+        m.load_state_dict(_torch.load(MODEL_PATH, map_location="cpu"))
+        m.eval()
+        _gnn_model  = m
+        _gnn_loaded = True
+        print("[GNN] Model loaded OK")
+    except Exception as e:
+        print(f"[GNN] Could not load model: {e}")
+        _gnn_loaded = True   # don't retry on every request
+    return _gnn_model
+
+
+def _is_smiles(text: str) -> bool:
+    """Heuristic: SMILES strings contain chemistry chars not found in drug names."""
+    return bool(_re.search(r'[=#@\[\]\\\/\+\-]|\d', text)) and ' ' not in text.strip()
+
+
+def _pubchem_name_to_cid(name: str):
+    """Resolve a drug name to a PubChem CID. Returns int or None."""
+    try:
+        url = f"{PUBCHEM_BASE}/name/{original_requests.utils.quote(name)}/cids/JSON"
+        r = original_requests.get(url, timeout=8)
+        if r.status_code == 200:
+            cids = r.json().get("IdentifierList", {}).get("CID", [])
+            return cids[0] if cids else None
+    except Exception:
+        pass
+    return None
+
+
+def _pubchem_smiles_to_cid(smiles: str):
+    """Resolve a SMILES string to a PubChem CID. Returns int or None."""
+    try:
+        url = f"{PUBCHEM_BASE}/smiles/{original_requests.utils.quote(smiles)}/cids/JSON"
+        r = original_requests.get(url, timeout=8)
+        if r.status_code == 200:
+            cids = r.json().get("IdentifierList", {}).get("CID", [])
+            return cids[0] if cids else None
+    except Exception:
+        pass
+    return None
+
+
+def _pubchem_cid_to_smiles(cid: int):
+    """Fetch the canonical SMILES for a PubChem CID. Returns str or None."""
+    try:
+        url = f"{PUBCHEM_BASE}/cid/{cid}/property/IsomericSMILES,CanonicalSMILES/JSON"
+        r = original_requests.get(url, timeout=8)
+        if r.status_code == 200:
+            props = r.json().get("PropertyTable", {}).get("Properties", [])
+            if props:
+                p = props[0]
+                return p.get("IsomericSMILES") or p.get("CanonicalSMILES") or p.get("SMILES")
+    except Exception:
+        pass
+    return None
+
+
+def _pubchem_cid_to_name(cid: int):
+    """Fetch the preferred IUPAC/common name for a PubChem CID. Returns str or None."""
+    try:
+        url = f"{PUBCHEM_BASE}/cid/{cid}/property/IUPACName,Title/JSON"
+        r = original_requests.get(url, timeout=8)
+        if r.status_code == 200:
+            props = r.json().get("PropertyTable", {}).get("Properties", [])
+            if props:
+                return props[0].get("Title") or props[0].get("IUPACName")
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_drug(input_text: str):
+    """
+    Resolve a drug name or SMILES to { name, smiles, cid, input_type }.
+    Returns None if resolution fails.
+    """
+    input_text = input_text.strip()
+    if not input_text:
+        return None
+
+    if _is_smiles(input_text):
+        cid = _pubchem_smiles_to_cid(input_text)
+        if cid is None:
+            return None
+        name   = _pubchem_cid_to_name(cid) or input_text
+        smiles = input_text
+        return {"name": name, "smiles": smiles, "cid": cid, "input_type": "smiles"}
+    else:
+        cid = _pubchem_name_to_cid(input_text)
+        if cid is None:
+            return None
+        smiles = _pubchem_cid_to_smiles(cid)
+        name   = input_text.title()
+        return {"name": name, "smiles": smiles, "cid": cid, "input_type": "name"}
+
+
+def _run_gnn_pair(smiles_a: str, smiles_b: str):
+    """
+    Run the trained GNN on a SMILES pair.
+    Returns (is_harmful: bool, confidence: float) or raises.
+    """
+    from train_gnn_model import smiles_to_graph
+    import torch as _torch
+
+    gnn = _load_gnn()
+    if gnn is None:
+        raise RuntimeError("GNN model not available")
+
+    g1 = smiles_to_graph(smiles_a)
+    g2 = smiles_to_graph(smiles_b)
+    if g1 is None or g2 is None:
+        raise ValueError("Invalid SMILES — could not build molecular graph")
+
+    with _torch.no_grad():
+        out  = gnn(g1, g2)
+        prob = _torch.sigmoid(out).item()
+
+    is_harmful = prob > 0.5
+    confidence = prob if is_harmful else 1.0 - prob
+    return is_harmful, round(confidence, 4)
+
+
+def _hbase_connect():
+    """Return a live happybase Connection or raise."""
+    import happybase
+    conn = happybase.Connection('127.0.0.1', port=9090, timeout=5000)
+    conn.open()
+    return conn
+
+
+# ── Route: POST /api/system/start-bigdata ────────────────────────────────────
+@app.route("/api/system/start-bigdata", methods=["POST"])
+def start_bigdata():
+    """
+    Starts the hbase-server Docker container and waits up to 30 s for it to
+    accept connections on port 9090 (HBase Thrift).
+    """
+    import time, happybase
+
+    # 1. Fire docker start (non-blocking — container may already be running)
+    try:
+        result = subprocess.run(
+            ["docker", "start", "hbase-server"],
+            capture_output=True, text=True, timeout=15
+        )
+        start_msg = result.stdout.strip() or result.stderr.strip()
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"docker start failed: {e}"}), 500
+
+    # 2. Poll until HBase Thrift is ready (max 30 s)
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        try:
+            conn = happybase.Connection('127.0.0.1', port=9090, timeout=2000)
+            conn.open()
+            conn.tables()   # actual round-trip to confirm it's alive
+            conn.close()
+            return jsonify({"status": "ready", "message": "HBase is online"})
+        except Exception:
+            time.sleep(2)
+
+    return jsonify({"status": "timeout",
+                    "message": "HBase container started but Thrift not ready within 30 s. "
+                               "Try again in a few seconds."}), 202
+
+
+# ── Route: GET /api/system/bigdata-status ────────────────────────────────────
+@app.route("/api/system/bigdata-status", methods=["GET"])
+def bigdata_status():
+    """Quick liveness check for HBase Thrift on port 9090."""
+    try:
+        conn = _hbase_connect()
+        conn.tables()
+        conn.close()
+        return jsonify({"hbase_ready": True})
+    except Exception:
+        return jsonify({"hbase_ready": False})
+
+
+# ── Route: GET /api/interactions/resolve ─────────────────────────────────────
+@app.route("/api/interactions/resolve", methods=["GET"])
+def resolve_drug():
+    """
+    Resolve a drug name or SMILES string.
+    For plain names: returns immediately with the name (no PubChem call needed
+    for the Explorer tab which uses name-based HBase keys).
+    For SMILES: resolves to name+CID via PubChem (needed for GNN tab).
+    GET /api/interactions/resolve?input=Warfarin
+    GET /api/interactions/resolve?input=CC(=O)Oc1ccccc1C(=O)O
+    """
+    raw = request.args.get("input", "").strip()
+    if not raw:
+        return jsonify({"error": "input param required"}), 400
+
+    if _is_smiles(raw):
+        # SMILES path — needs PubChem to get name + CID
+        resolved = _resolve_drug(raw)
+        if resolved is None:
+            return jsonify({"found": False, "input": raw}), 200
+        return jsonify({"found": True, **resolved})
+    else:
+        # Plain name — return immediately, no API call needed
+        # The GNN polypharmacy tab needs SMILES, so fetch that too
+        cid = _pubchem_name_to_cid(raw)
+        if cid is None:
+            # Still return found=True with just the name — Explorer will work,
+            # GNN tab will fail gracefully if SMILES unavailable
+            return jsonify({
+                "found":      True,
+                "name":       raw.title(),
+                "smiles":     None,
+                "cid":        None,
+                "input_type": "name"
+            })
+        smiles = _pubchem_cid_to_smiles(cid)
+        return jsonify({
+            "found":      True,
+            "name":       raw.title(),
+            "smiles":     smiles,
+            "cid":        cid,
+            "input_type": "name"
+        })
+
+
+# ── Route: GET /api/graph/twosides ───────────────────────────────────────────
+@app.route("/api/graph/twosides", methods=["GET"])
+def get_twosides_graph():
+    """
+    Fetches known interactions from HBase (TWOSIDES dataset).
+    Accepts a drug name OR a SMILES string.
+
+    Row key format in HBase (set by load_to_hbase.py):
+        DRUG1NAME_DRUG2NAME   (uppercase, e.g. METFORMIN_ASPIRIN)
+
+    So we scan with prefix = UPPERCASE_DRUG_NAME + "_"
+    If SMILES is given we resolve to a name first via PubChem (one call).
+    """
+    raw = request.args.get("drug", "").strip()
+    if not raw:
+        return jsonify({"error": "drug param required"}), 400
+
+    # ── 1. Get a canonical uppercase drug name ────────────────────────────
+    if _is_smiles(raw):
+        # SMILES → resolve to name via PubChem
+        resolved = _resolve_drug(raw)
+        if resolved is None:
+            return jsonify({"error": f"Could not resolve SMILES to a known compound"}), 404
+        drug_name = resolved["name"].upper()
+    else:
+        # Plain name — just uppercase it; no PubChem call needed for the scan
+        drug_name = raw.upper().strip()
+
+    # ── 2. Query HBase with name prefix ──────────────────────────────────
+    try:
+        conn  = _hbase_connect()
+        table = conn.table('interactions')
+
+        # Scan all rows where drug1 == drug_name
+        prefix  = (drug_name + "_").encode("utf-8")
+        records = table.scan(row_prefix=prefix, limit=50)
+
+        nodes        = [{"id": drug_name, "group": 1}]
+        links        = []
+        interactions = []
+        seen_drug2   = set()
+
+        for _key, data in records:
+            drug2_name  = data.get(b'info:drug2_name', b'').decode().strip()
+            side_effect = data.get(b'info:side_effect', b'').decode().strip()
+            drug2_cid   = data.get(b'info:drug2_cid',  b'').decode().strip()
+
+            if not drug2_name or drug2_name == drug_name:
+                continue
+            if drug2_name in seen_drug2:
+                continue
+            seen_drug2.add(drug2_name)
+
+            nodes.append({
+                "id":          drug2_name,
+                "group":       2,
+                "harmful":     True,
+                "cid":         drug2_cid,
+                "side_effect": side_effect
+            })
+            links.append({
+                "source":  drug_name,
+                "target":  drug2_name,
+                "value":   1,
+                "harmful": True
+            })
+            interactions.append({
+                "drug":        drug2_name,
+                "cid":         drug2_cid,
+                "side_effect": side_effect,
+                "harmful":     True
+            })
+
+        conn.close()
+
+        return jsonify({
+            "drug_name":    drug_name,
+            "nodes":        nodes,
+            "links":        links,
+            "interactions": interactions,
+            "top_5":        interactions[:5]
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Route: POST /api/graph/predict ───────────────────────────────────────────
+@app.route("/api/graph/predict", methods=["POST"])
+def predict_interaction():
+    """
+    Runs GNN inference on a drug pair.
+    Accepts:
+      { "smiles_a": "...", "smiles_b": "..." }          — raw SMILES (original)
+      { "drug_a":   "Warfarin", "drug_b": "Aspirin" }   — generic names (new)
+      { "composition": "...", "target_composition": "..." } — legacy SMILES keys
+    Stores result in SQLite and returns prediction.
+    """
+    body = request.get_json(silent=True) or {}
+
+    # Support all three calling conventions
+    smiles_a = body.get("smiles_a") or body.get("composition", "")
+    smiles_b = body.get("smiles_b") or body.get("target_composition", "")
+    drug_a   = body.get("drug_a", "")
+    drug_b   = body.get("drug_b", "")
+
+    resolved_a = resolved_b = None
+
+    # Resolve names → SMILES if names were provided
+    if drug_a and not smiles_a:
+        resolved_a = _resolve_drug(drug_a)
+        if resolved_a:
+            smiles_a = resolved_a.get("smiles", "")
+    if drug_b and not smiles_b:
+        resolved_b = _resolve_drug(drug_b)
+        if resolved_b:
+            smiles_b = resolved_b.get("smiles", "")
+
+    # Also resolve SMILES inputs to get names for storage
+    if smiles_a and not resolved_a:
+        resolved_a = _resolve_drug(smiles_a)
+    if smiles_b and not resolved_b:
+        resolved_b = _resolve_drug(smiles_b)
+
+    if not smiles_a or not smiles_b:
+        return jsonify({"error": "Provide smiles_a+smiles_b or drug_a+drug_b"}), 400
+
+    name_a = (resolved_a or {}).get("name") or drug_a or smiles_a[:20]
+    name_b = (resolved_b or {}).get("name") or drug_b or smiles_b[:20]
+    cid_a  = str((resolved_a or {}).get("cid", ""))
+    cid_b  = str((resolved_b or {}).get("cid", ""))
+
+    try:
+        is_harmful, confidence = _run_gnn_pair(smiles_a, smiles_b)
+
+        # Persist to SQLite
+        upsert_prediction(
+            drug_a=name_a, drug_b=name_b,
+            is_harmful=is_harmful, confidence=confidence,
+            smiles_a=smiles_a, smiles_b=smiles_b,
+            cid_a=cid_a, cid_b=cid_b,
+            source="gnn"
+        )
+
+        return jsonify({
+            "drug_a":      name_a,
+            "drug_b":      name_b,
+            "is_harmful":  is_harmful,
+            "confidence":  confidence,
+            "prediction":  "Harmful Interaction Detected" if is_harmful else "No Significant Interaction",
+            "predicted_interactions": ["High risk — avoid combination"] if is_harmful else ["Safe to combine"],
+            "source":      "gnn"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Route: POST /api/interactions/polypharmacy ───────────────────────────────
+@app.route("/api/interactions/polypharmacy", methods=["POST"])
+def polypharmacy_analysis():
+    """
+    Accepts up to 5 drugs (names or SMILES), resolves each to SMILES,
+    runs GNN on every pair combination, stores results, returns a graph
+    structure suitable for D3 force rendering.
+
+    Body: { "drugs": ["Warfarin", "Aspirin", "CC(=O)Oc1ccccc1C(=O)O"] }
+    """
+    from itertools import combinations
+
+    body  = request.get_json(silent=True) or {}
+    drugs = body.get("drugs", [])
+
+    if not drugs or len(drugs) < 2:
+        return jsonify({"error": "Provide at least 2 drugs"}), 400
+    if len(drugs) > 5:
+        return jsonify({"error": "Maximum 5 drugs allowed"}), 400
+
+    # ── 1. Resolve all drugs ──────────────────────────────────────────────
+    resolved_drugs = []
+    for d in drugs:
+        r = _resolve_drug(d.strip())
+        if r is None:
+            return jsonify({"error": f"Could not resolve drug: '{d}'"}), 404
+        # Always use the name the frontend sent (already resolved/validated)
+        # so node ids match the link source/target values exactly.
+        if r.get("input_type") == "name":
+            r["name"] = d.strip().title()
+        resolved_drugs.append(r)
+
+    # ── 2. Run GNN on every pair ──────────────────────────────────────────
+    pairs  = []
+    errors = []
+
+    for (i, ra), (j, rb) in combinations(enumerate(resolved_drugs), 2):
+        if not ra.get("smiles") or not rb.get("smiles"):
+            errors.append(f"No SMILES for {ra['name']} or {rb['name']}")
+            continue
+        try:
+            is_harmful, confidence = _run_gnn_pair(ra["smiles"], rb["smiles"])
+
+            upsert_prediction(
+                drug_a=ra["name"], drug_b=rb["name"],
+                is_harmful=is_harmful, confidence=confidence,
+                smiles_a=ra["smiles"], smiles_b=rb["smiles"],
+                cid_a=str(ra.get("cid", "")), cid_b=str(rb.get("cid", "")),
+                source="gnn"
+            )
+
+            pairs.append({
+                "drug_a":     ra["name"],
+                "drug_b":     rb["name"],
+                "is_harmful": is_harmful,
+                "confidence": confidence,
+                "index_a":    i,
+                "index_b":    j
+            })
+        except Exception as e:
+            errors.append(f"{ra['name']} + {rb['name']}: {e}")
+
+    # ── 3. Build D3 graph structure ───────────────────────────────────────
+    nodes = [
+        {
+            "id":    r["name"],
+            "cid":   str(r.get("cid", "")),
+            "group": 1,
+            "harmful_count": sum(
+                1 for p in pairs
+                if p["is_harmful"] and (p["drug_a"] == r["name"] or p["drug_b"] == r["name"])
+            )
+        }
+        for r in resolved_drugs
+    ]
+
+    links = [
+        {
+            "source":     p["drug_a"],
+            "target":     p["drug_b"],
+            "is_harmful": p["is_harmful"],
+            "confidence": p["confidence"],
+            "value":      2 if p["is_harmful"] else 1
+        }
+        for p in pairs
+    ]
+
+    return jsonify({
+        "drugs":  [r["name"] for r in resolved_drugs],
+        "pairs":  pairs,
+        "errors": errors,
+        "graph":  {"nodes": nodes, "links": links}
+    })
+
+
+# ── Route: GET /api/interactions/recent ──────────────────────────────────────
+@app.route("/api/interactions/recent", methods=["GET"])
+def recent_predictions():
+    """Return the last N GNN predictions stored in SQLite."""
+    limit = min(int(request.args.get("limit", 20)), 100)
+    return jsonify({"predictions": get_recent_predictions(limit)})
 
 
 # ── Route: GET /api/boxed-warning/<drug_name> ────────────────────────────────

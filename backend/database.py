@@ -225,3 +225,138 @@ def get_all_violations(limit=200):
 
 
 init_db()
+
+
+# ── Interaction Predictions ───────────────────────────────────────────────────
+
+def init_interaction_predictions_table():
+    """
+    Creates the interaction_predictions table for caching GNN results locally.
+    Pairs are stored alphabetically (drug_a <= drug_b) so (A,B) == (B,A).
+    """
+    conn = get_db()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS interaction_predictions (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            drug_a           TEXT NOT NULL,
+            drug_b           TEXT NOT NULL,
+            smiles_a         TEXT,
+            smiles_b         TEXT,
+            cid_a            TEXT,
+            cid_b            TEXT,
+            is_harmful       INTEGER NOT NULL DEFAULT 0,
+            confidence       REAL    NOT NULL DEFAULT 0.0,
+            top_side_effect  TEXT,
+            all_side_effects TEXT,
+            source           TEXT    NOT NULL DEFAULT 'gnn',
+            queried_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_pred_pair
+            ON interaction_predictions(drug_a, drug_b);
+        CREATE INDEX IF NOT EXISTS idx_pred_drug_a
+            ON interaction_predictions(drug_a);
+        CREATE INDEX IF NOT EXISTS idx_pred_drug_b
+            ON interaction_predictions(drug_b);
+    """)
+    conn.commit()
+    conn.close()
+    print("[DB] interaction_predictions table ready")
+
+
+def _normalize_pair(drug_a, drug_b):
+    """Return (a, b) sorted alphabetically so pair order is always consistent."""
+    a, b = drug_a.strip().lower(), drug_b.strip().lower()
+    return (a, b) if a <= b else (b, a)
+
+
+def upsert_prediction(drug_a, drug_b, is_harmful, confidence,
+                      smiles_a=None, smiles_b=None,
+                      cid_a=None, cid_b=None,
+                      top_side_effect=None, all_side_effects=None,
+                      source='gnn'):
+    """
+    Insert or update a GNN prediction for a drug pair.
+    Pair is stored alphabetically so (Warfarin, Aspirin) == (Aspirin, Warfarin).
+    all_side_effects should be a list or JSON string.
+    """
+    import json
+    da, db = _normalize_pair(drug_a, drug_b)
+    # Keep smiles/cid aligned with the normalized order
+    if drug_a.strip().lower() != da:
+        smiles_a, smiles_b = smiles_b, smiles_a
+        cid_a, cid_b = cid_b, cid_a
+
+    if isinstance(all_side_effects, list):
+        all_side_effects = json.dumps(all_side_effects)
+
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM interaction_predictions WHERE drug_a=? AND drug_b=?",
+        (da, db)
+    ).fetchone()
+
+    if existing:
+        conn.execute("""
+            UPDATE interaction_predictions
+               SET smiles_a=?, smiles_b=?, cid_a=?, cid_b=?,
+                   is_harmful=?, confidence=?, top_side_effect=?,
+                   all_side_effects=?, source=?,
+                   queried_at=CURRENT_TIMESTAMP
+             WHERE id=?
+        """, (smiles_a, smiles_b, cid_a, cid_b,
+              int(is_harmful), float(confidence),
+              top_side_effect, all_side_effects, source,
+              existing["id"]))
+    else:
+        conn.execute("""
+            INSERT INTO interaction_predictions
+              (drug_a, drug_b, smiles_a, smiles_b, cid_a, cid_b,
+               is_harmful, confidence, top_side_effect, all_side_effects, source)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (da, db, smiles_a, smiles_b, cid_a, cid_b,
+              int(is_harmful), float(confidence),
+              top_side_effect, all_side_effects, source))
+    conn.commit()
+    conn.close()
+
+
+def get_prediction(drug_a, drug_b):
+    """
+    Fetch a cached prediction for a drug pair (order-insensitive).
+    Returns a dict or None if not cached.
+    """
+    import json
+    da, db = _normalize_pair(drug_a, drug_b)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM interaction_predictions WHERE drug_a=? AND drug_b=?",
+        (da, db)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    result = dict(row)
+    if result.get("all_side_effects"):
+        try:
+            result["all_side_effects"] = json.loads(result["all_side_effects"])
+        except Exception:
+            result["all_side_effects"] = []
+    return result
+
+
+def get_recent_predictions(limit=20):
+    """Return the most recently queried predictions across all drug pairs."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT drug_a, drug_b, is_harmful, confidence,
+               top_side_effect, source, queried_at
+          FROM interaction_predictions
+         ORDER BY queried_at DESC
+         LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# Initialise the new table on import
+init_interaction_predictions_table()
