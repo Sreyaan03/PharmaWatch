@@ -409,7 +409,7 @@ def _load_gnn():
     try:
         from train_gnn_model import GNN_Predictor
         import torch as _torch
-        m = GNN_Predictor(node_feature_dim=8, hidden_dim=64)
+        m = GNN_Predictor(node_feature_dim=16, hidden_dim=64)
         m.load_state_dict(_torch.load(MODEL_PATH, map_location="cpu"))
         m.eval()
         _gnn_model  = m
