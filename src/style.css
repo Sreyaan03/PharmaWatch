@@ -1653,3 +1653,14 @@ code {
     text-align: left;
   }
 }
+
+/* ── Side-effect row inside pair card (Phase 01/Plan 02) ─────── */
+.poly-pair-item__se {
+  font-size: 0.72rem;
+  color: var(--gray-500, #9ca3af);
+  font-style: italic;
+  margin-top: 2px;
+  grid-column: 1 / -1;
+  padding-left: 2px;
+  width: 100%;
+}

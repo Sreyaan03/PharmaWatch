@@ -494,9 +494,10 @@ function normalizePolyGraph(graph, pairs) {
       ...link,
       source,
       target,
-      is_harmful: pair.is_harmful ?? link.is_harmful,
-      confidence: Number(pair.confidence ?? link.confidence ?? 0),
-      pair_key: makePairKey(source, target)
+      is_harmful:   pair.is_harmful ?? link.is_harmful,
+      confidence:   Number(pair.confidence ?? link.confidence ?? 0),
+      side_effects: pair.side_effects ?? link.side_effects ?? [],
+      pair_key:     makePairKey(source, target)
     };
   });
   return { nodes, links };
@@ -543,13 +544,33 @@ function drawPolypharmacyGraph(graph, container) {
     return;
   }
   if (!showSafePairs && !hasHarmfulLinks) {
-    renderPolyGraphMessage(container, 'No harmful interactions found. Turn on "Show safe pairs" to view all checked combinations.');
-    return;
+    // Don't disappear — draw graph nodes, show safe caption as SVG overlay
+    // (early return removed: graph always renders)
   }
 
   const svg = d3.select(container).append('svg')
     .attr('width', W).attr('height', H)
     .style('background', '#0d1b2a').style('border-radius', '12px');
+
+  // D3 zoom + pan
+  const zoom = d3.zoom()
+    .scaleExtent([0.4, 3])
+    .on('zoom', (event) => g.attr('transform', event.transform));
+  svg.call(zoom);
+
+  // Reset zoom button
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = '\u27f3 Reset zoom';
+  resetBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:10;' +
+    'background:rgba(255,255,255,0.1);color:#ccc;border:none;border-radius:4px;' +
+    'padding:3px 8px;font-size:0.72rem;cursor:pointer;';
+  resetBtn.addEventListener('click', () =>
+    svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity));
+  container.style.position = 'relative';
+  container.appendChild(resetBtn);
+
+  // All graph content lives in this group (receives zoom transform)
+  const g = svg.append('g');
 
   const sim = d3.forceSimulation(graph.nodes)
     .force('link', d3.forceLink(visibleLinks).id(d => d.id).distance(160))
@@ -565,7 +586,7 @@ function drawPolypharmacyGraph(graph, container) {
     document.body.appendChild(tip);
   }
 
-  const link = svg.append('g').selectAll('line').data(visibleLinks).join('line')
+  const link = g.append('g').selectAll('line').data(visibleLinks).join('line')
     .attr('stroke', d => getInteractionSeverity(d).color)
     .attr('stroke-opacity', d => d.is_harmful ? 0.85 : 0.45)
     .attr('stroke-width', d => getInteractionSeverity(d).width)
@@ -573,8 +594,9 @@ function drawPolypharmacyGraph(graph, container) {
     .on('mouseover', (event, d) => {
       const conf = (d.confidence * 100).toFixed(0);
       const severity = getInteractionSeverity(d);
+      const se = (d.side_effects || []).slice(0, 2).join('; ');
       tip.innerHTML = `<strong>${escHtml(d.source.id || d.source)} + ${escHtml(d.target.id || d.target)}</strong><br>
-        ${escHtml(severity.label)} · ${conf}% confidence`;
+        ${escHtml(severity.label)} · ${conf}% confidence${se ? `<br><em style="color:#a5d8ff">${escHtml(se)}</em>` : ''}`;
       tip.style.display = 'block';
     })
     .on('mousemove', event => {
@@ -583,7 +605,7 @@ function drawPolypharmacyGraph(graph, container) {
     })
     .on('mouseout', () => { tip.style.display = 'none'; });
 
-  const node = svg.append('g').selectAll('circle').data(graph.nodes).join('circle')
+  const node = g.append('g').selectAll('circle').data(graph.nodes).join('circle')
     .attr('r', d => 18 + (d.harmful_count || 0) * 4)
     .attr('fill', d => d.harmful_count > 0 ? '#ff6b6b' : '#69db7c')
     .attr('stroke', '#fff').attr('stroke-width', 2)
@@ -603,11 +625,22 @@ function drawPolypharmacyGraph(graph, container) {
       .on('end',   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
     );
 
-  const labels = svg.append('g').selectAll('text').data(graph.nodes).join('text')
-    .text(d => d.id.length > 12 ? d.id.slice(0, 11) + '…' : d.id)
-    .attr('font-size', '10px').attr('fill', '#e0e0e0')
-    .attr('text-anchor', 'middle').attr('dy', 34)
+  const labels = g.append('g').selectAll('text').data(graph.nodes).join('text')
+    .text(d => d.id.length > 18 ? d.id.slice(0, 17) + '\u2026' : d.id)
+    .attr('font-size', '11px').attr('font-weight', '500').attr('fill', '#e0e0e0')
+    .attr('text-anchor', 'middle').attr('dy', 38)
     .style('pointer-events', 'none');
+
+  // If all pairs are safe and toggle is off, show a calm overlay caption
+  if (!showSafePairs && !hasHarmfulLinks) {
+    svg.append('text')
+      .attr('x', W / 2).attr('y', 20)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#69db7c')
+      .attr('font-size', '12px')
+      .attr('font-weight', '500')
+      .text('\u2713 No harmful interactions in this combination \u2014 all pairs appear safe');
+  }
 
   sim.on('tick', () => {
     link
@@ -636,20 +669,22 @@ function renderPolyPairs(pairs, container) {
     return;
   }
   container.innerHTML = visiblePairs.map(p => {
-    const harmful = p.is_harmful;
-    const conf    = (p.confidence * 100).toFixed(0);
+    const harmful  = p.is_harmful;
+    const conf     = (p.confidence * 100).toFixed(0);
     const severity = getInteractionSeverity(p);
+    const seText   = (p.side_effects || []).slice(0, 2).join(', ');
     return `
       <div class="poly-pair-item poly-pair-item--${harmful ? 'harmful' : 'safe'}">
         <div class="poly-pair-item__drugs">
           ${escHtml(p.drug_a)}
-          <span class="poly-pair-item__arrow">↔</span>
+          <span class="poly-pair-item__arrow">\u2194</span>
           ${escHtml(p.drug_b)}
         </div>
         <span class="poly-pair-item__confidence">${conf}% conf.</span>
         <span class="poly-pair-item__badge poly-pair-item__badge--${harmful ? 'harmful' : 'safe'}">
           ${escHtml(severity.label)}
         </span>
+        ${seText ? `<div class="poly-pair-item__se">${escHtml(seText)}</div>` : ''}
       </div>`;
   }).join('');
 }
@@ -672,7 +707,7 @@ async function loadRecentPredictions() {
             ${escHtml(p.drug_a)} + ${escHtml(p.drug_b)}
           </span>
           <span class="poly-pair-item__badge poly-pair-item__badge--${p.is_harmful ? 'harmful' : 'safe'}" style="font-size:0.7rem;">
-            ${p.is_harmful ? '⚠ Harmful' : '✓ Safe'}
+            ${p.is_harmful ? '\u26a0 Harmful' : '\u2713 Safe'}
           </span>
           <span class="recent-pred-row__time">${escHtml(when)}</span>
         </div>`;

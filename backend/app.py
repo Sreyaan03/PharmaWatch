@@ -812,17 +812,30 @@ def polypharmacy_analysis():
     if len(drugs) > 5:
         return jsonify({"error": "Maximum 5 drugs allowed"}), 400
 
-    # ── 1. Resolve all drugs ──────────────────────────────────────────────
-    resolved_drugs = []
-    for d in drugs:
+    # ── 1. Resolve all drugs in parallel ─────────────────────────────────
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _resolve_one(idx_drug):
+        idx, d = idx_drug
         r = _resolve_drug(d.strip())
-        if r is None:
-            return jsonify({"error": f"Could not resolve drug: '{d}'"}), 404
-        # Always use the name the frontend sent (already resolved/validated)
-        # so node ids match the link source/target values exactly.
-        if r.get("input_type") == "name":
-            r["name"] = d.strip().title()
-        resolved_drugs.append(r)
+        return idx, d.strip(), r
+
+    resolved_drugs = [None] * len(drugs)
+    errors_resolve = []
+
+    with ThreadPoolExecutor(max_workers=min(len(drugs), 5)) as ex:
+        futures = {ex.submit(_resolve_one, (i, d)): i for i, d in enumerate(drugs)}
+        for fut in as_completed(futures):
+            idx, raw, result = fut.result()
+            if result is None:
+                errors_resolve.append(raw)
+            else:
+                if result.get("input_type") == "name":
+                    result["name"] = raw.title()
+                resolved_drugs[idx] = result
+
+    if errors_resolve:
+        return jsonify({"error": f"Could not resolve: {', '.join(errors_resolve)}"}), 404
 
     # ── 2. Run GNN on every pair ──────────────────────────────────────────
     pairs  = []
@@ -843,13 +856,34 @@ def polypharmacy_analysis():
                 source="gnn"
             )
 
+            # ── HBase side-effect enrichment (graceful fallback) ──────────
+            side_effects = []
+            if is_harmful:
+                try:
+                    conn = _hbase_connect()
+                    table = conn.table('interactions')
+                    for key_candidate in [
+                        f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
+                        f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
+                    ]:
+                        row = table.row(key_candidate)
+                        if row:
+                            se = row.get(b'info:side_effect', b'').decode().strip()
+                            if se:
+                                side_effects.append(se)
+                            break
+                    conn.close()
+                except Exception:
+                    pass  # HBase offline — skip enrichment silently
+
             pairs.append({
-                "drug_a":     ra["name"],
-                "drug_b":     rb["name"],
-                "is_harmful": is_harmful,
-                "confidence": confidence,
-                "index_a":    i,
-                "index_b":    j
+                "drug_a":       ra["name"],
+                "drug_b":       rb["name"],
+                "is_harmful":   is_harmful,
+                "confidence":   confidence,
+                "side_effects": side_effects,
+                "index_a":      i,
+                "index_b":      j
             })
         except Exception as e:
             errors.append(f"{ra['name']} + {rb['name']}: {e}")
@@ -870,11 +904,12 @@ def polypharmacy_analysis():
 
     links = [
         {
-            "source":     p["drug_a"],
-            "target":     p["drug_b"],
-            "is_harmful": p["is_harmful"],
-            "confidence": p["confidence"],
-            "value":      2 if p["is_harmful"] else 1
+            "source":       p["drug_a"],
+            "target":       p["drug_b"],
+            "is_harmful":   p["is_harmful"],
+            "confidence":   p["confidence"],
+            "side_effects": p.get("side_effects", []),
+            "value":        2 if p["is_harmful"] else 1
         }
         for p in pairs
     ]
