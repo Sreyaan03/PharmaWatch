@@ -249,6 +249,24 @@
           <div class="card-header">
             <h2 class="card-title">Pipeline Health — Live</h2>
           </div>
+          <!-- Architecture Demo Disclaimer -->
+          <div id="pipeline-demo-badge" style="
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.4);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.78rem;
+            color: #f0a500;
+            font-weight: 600;
+            margin: 0 0 1rem 0;
+            line-height: 1.4;
+          ">
+            <span style="font-size:1rem; flex-shrink:0;">⚡</span>
+            <span><strong>Architecture Demo</strong> — Kafka, Spark, and HDFS/HBase metrics are simulated to illustrate the intended big-data pipeline. Only <strong>BioBERT NLP</strong> and <strong>LSTM Predictor</strong> run on real live data.</span>
+          </div>
           <div class="pipeline-stages">
             <div class="pipeline-stage pipeline-stage--ok" id="ps-kafka">
               <div class="pipeline-stage__icon">⚡</div>
@@ -313,7 +331,8 @@
           </select>
           <select id="signal-source" class="filter-select" aria-label="Filter by source">
             <option value="all">All Sources</option>
-            <option value="fda">openFDA / FAERS</option>
+            <option value="faers_local">FAERS Local (DuckDB)</option>
+            <option value="fda">openFDA API (Fallback)</option>
             <option value="ehr">EHR</option>
             <option value="social">Social Media</option>
           </select>
@@ -327,11 +346,12 @@
                 <th scope="col" class="sortable" data-col="rank">Rank</th>
                 <th scope="col" class="sortable" data-col="drug">Drug</th>
                 <th scope="col" class="sortable" data-col="event">Adverse Event</th>
-                <th scope="col" class="sortable" data-col="prr">PRR Score</th>
+                <th scope="col" class="sortable" data-col="prr">PRR</th>
+                <th scope="col" class="sortable" data-col="ror">ROR</th>
+                <th scope="col" class="sortable" data-col="bcpnn_ic">BCPNN IC</th>
                 <th scope="col" class="sortable" data-col="reports">Reports (n)</th>
                 <th scope="col" class="sortable" data-col="source">Source</th>
-                <th scope="col" class="sortable" data-col="detected">Detected</th>
-                <th scope="col">Status</th>
+                <th scope="col" class="sortable" data-col="severity">Severity</th>
               </tr>
             </thead>
             <tbody id="signals-tbody">
@@ -345,9 +365,100 @@
             <h2 class="card-title" id="signal-detail-title">Signal Detail</h2>
             <button class="btn btn--sm" id="close-signal-detail">✕ Close</button>
           </div>
-          <div class="signal-detail-body" id="signal-detail-body"></div>
-          <div class="chart-container">
-            <canvas id="signal-prr-chart"></canvas>
+          <div class="signal-detail-body" id="signal-detail-body">
+            <!-- Details rendered by JS -->
+          </div>
+          
+          <div class="metrics-gauges-container" style="display: flex; gap: 1.5rem; justify-content: space-around; margin-top: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <div class="gauge-wrap" style="text-align: center; width: 150px;">
+              <h4 style="margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">PRR Score</h4>
+              <div style="height: 90px; position: relative;">
+                <canvas id="gauge-prr-canvas"></canvas>
+              </div>
+            </div>
+            <div class="gauge-wrap" style="text-align: center; width: 150px;">
+              <h4 style="margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">ROR Score</h4>
+              <div style="height: 90px; position: relative;">
+                <canvas id="gauge-ror-canvas"></canvas>
+              </div>
+            </div>
+            <div class="gauge-wrap" style="text-align: center; width: 150px;">
+              <h4 style="margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">BCPNN IC Score</h4>
+              <div style="height: 90px; position: relative;">
+                <canvas id="gauge-ic-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-card" id="signal-network-card" style="margin-top: 2rem; display: none;">
+          <div class="card-header">
+            <h2 class="card-title" id="network-card-title">Signal Propagation Network (1-Hop FAERS Neighborhood)</h2>
+          </div>
+          <div class="network-container" id="signal-network-wrap" style="height: 380px; background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; overflow: hidden; position: relative; margin: 1rem 0;">
+            <!-- D3 SVG injected here -->
+          </div>
+          <div style="padding: 0 1rem 1rem 1rem; font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap;">
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#3b82f6; margin-right:5px;"></span>Target Drug</span>
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#ef4444; margin-right:5px;"></span>Target Event</span>
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b; margin-right:5px;"></span>Co-Prescribed Drugs</span>
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981; margin-right:5px;"></span>Co-Occurring Events</span>
+          </div>
+        </div>
+
+        <!-- NEW OCR/NER Clinical Mining Panel -->
+        <div class="dashboard-card" style="margin-top:2rem;">
+          <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <h2 class="card-title">🔬 Clinical Narrative Signal Mining (BioBERT OCR + NER)</h2>
+          </div>
+          <div class="card-body" style="padding: 1.5rem;">
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+              Drag & drop de-identified PDF discharge summaries, upload text files, or paste clinical notes. The system will run OCR on scanned PDFs, perform Named Entity Recognition (NER), and query openFDA to calculate real disproportionality signals in real-time.
+            </p>
+            
+            <div id="ner-drop-zone" style="border: 2px dashed rgba(59, 130, 246, 0.4); border-radius: 8px; padding: 2rem; text-align: center; background: rgba(59, 130, 246, 0.02); cursor: pointer; transition: all 0.3s ease;">
+              <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📄</div>
+              <p style="font-weight: 500; margin-bottom: 0.3rem;">Drag & drop de-identified PDF/TXT files here, or click to browse</p>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">PDF summaries will be parsed via EasyOCR and fitz</p>
+              <input type="file" id="ner-file-input" accept=".pdf,.txt" style="display: none;" />
+            </div>
+            
+            <div id="ner-file-info" style="display: none; align-items: center; justify-content: space-between; margin-top: 1rem; padding: 0.8rem; background: rgba(59, 130, 246, 0.08); border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.15);">
+              <span id="ner-file-name" style="font-weight: 500; font-size: 0.9rem;">No file selected</span>
+              <button class="btn btn--sm" id="ner-remove-file-btn" style="padding: 2px 8px; background: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">Remove</button>
+            </div>
+
+            <div style="margin-top: 1.5rem;">
+              <label for="ner-text-input" style="display: block; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Or Paste Text Directly:</label>
+              <textarea id="ner-text-input" style="width: 100%; height: 120px; background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 0.8rem; color: #fff; font-family: monospace; resize: vertical; font-size: 0.9rem;" placeholder="e.g., Patient presented with severe tendon pain after starting Ciprofloxacin..."></textarea>
+            </div>
+
+            <div style="margin-top: 1.5rem; display: flex; gap: 1rem; align-items: center;">
+              <button class="btn btn--primary" id="ner-mine-btn">Extract & Score Signals</button>
+              <button class="btn btn--outline" id="ner-clear-btn">Clear</button>
+            </div>
+
+            <!-- SSE Progress logging -->
+            <div class="ner-progress-wrap" id="ner-progress-wrap" style="display: none; margin-top: 1.5rem; padding: 1rem; background: rgba(15, 23, 42, 0.6); border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 500;">
+                <span id="ner-progress-text">Processing...</span>
+                <span id="ner-progress-pct">0%</span>
+              </div>
+              <div style="height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden;">
+                <div id="ner-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.3s ease;"></div>
+              </div>
+              <div id="ner-progress-log" style="margin-top: 0.8rem; font-size: 0.8rem; font-family: monospace; color: var(--text-muted); max-height: 120px; overflow-y: auto; line-height: 1.5; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                <!-- real-time progress steps -->
+              </div>
+            </div>
+
+            <!-- Extracted Mined signals -->
+            <div id="ner-results-container" style="display: none; margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 1.5rem;">
+              <h3 style="font-size: 1rem; margin-bottom: 1rem; font-weight: 600;">Mined Safety Signals (From BioBERT + FAERS)</h3>
+              <div id="ner-results-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                <!-- Injected cards -->
+              </div>
+            </div>
           </div>
         </div>
 
@@ -629,6 +740,9 @@
               <div class="recent-predictions__title">Recent Predictions (cached locally)</div>
               <div id="poly-recent-list"></div>
             </div>
+
+            <!-- Uncharted Interactions Panel (filled async after analysis) -->
+            <div id="uncharted-panel" class="uncharted-panel" style="display:none;"></div>
 
           </div><!-- /dashboard-card -->
 

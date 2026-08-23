@@ -647,10 +647,11 @@ code {
   font-size: var(--font-size-xs);
   font-weight: 600;
 }
-.source-chip--fda    { background: #e3f2fd; color: #1565c0; }
-.source-chip--ehr    { background: #e8f5e9; color: #2e7d32; }
-.source-chip--social { background: #fce4ec; color: #880e4f; }
-.source-chip--ct     { background: #f3e5f5; color: #4a148c; }
+.source-chip--fda         { background: #e3f2fd; color: #1565c0; }
+.source-chip--faers-local { background: #e0f2f1; color: #004d40; font-weight: 700; border: 1px solid rgba(0, 77, 64, 0.2); }
+.source-chip--ehr         { background: #e8f5e9; color: #2e7d32; }
+.source-chip--social      { background: #fce4ec; color: #880e4f; }
+.source-chip--ct          { background: #f3e5f5; color: #4a148c; }
 
 /* ── Signal Detail ─────────────────────────────────────────── */
 .signal-detail-panel {
@@ -1663,4 +1664,228 @@ code {
   grid-column: 1 / -1;
   padding-left: 2px;
   width: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FAERS SIGNAL LAYER — Source badges, meta row, label severity
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Pair card meta row ─────────────────────────────────────────── */
+.poly-pair-item {
+  flex-wrap: wrap;
+}
+.poly-pair-item__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+
+/* ── Data source badge ──────────────────────────────────────────── */
+.pair-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.pair-source-badge svg { flex-shrink: 0; }
+
+.pair-source-badge--src-fda       { background: #fff0f0; color: #c0392b; border: 1px solid rgba(192,57,43,0.25); }
+.pair-source-badge--src-faers     { background: #fff8e1; color: #e65100; border: 1px solid rgba(230,81,0,0.25); }
+.pair-source-badge--src-faers-weak{ background: #e3f2fd; color: #1565c0; border: 1px solid rgba(21,101,192,0.25); }
+.pair-source-badge--src-gnn       { background: #f0fdf4; color: #2d6a4f; border: 1px solid rgba(45,106,79,0.25); }
+
+/* ── FAERS co-report count ──────────────────────────────────────── */
+.pair-faers-count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  padding: 2px 6px;
+  background: var(--gray-100);
+  border-radius: 10px;
+}
+
+/* ── FDA label severity chip ────────────────────────────────────── */
+.pair-label-sev {
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pair-label-sev--contraindicated { background: #1a1a1a; color: #fff; }
+.pair-label-sev--major           { background: #fdecea; color: var(--cdc-red); }
+.pair-label-sev--moderate        { background: #fff8e1; color: #e65100; }
+.pair-label-sev--minor           { background: #e3f2fd; color: #1565c0; }
+
+/* ── FDA label snippet quote ────────────────────────────────────── */
+.pair-label-snippet {
+  font-size: 0.71rem;
+  color: var(--gray-600);
+  font-style: italic;
+  line-height: 1.5;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-left: 3px solid var(--gray-200);
+  background: var(--gray-50);
+  border-radius: 0 4px 4px 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   UNCHARTED INTERACTIONS PANEL
+   ═══════════════════════════════════════════════════════════════ */
+
+.uncharted-panel {
+  margin-top: var(--space-8);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: fadeIn 0.4s ease;
+  background: var(--white);
+}
+
+.uncharted-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  background: #0d1b2a;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.uncharted-header__title {
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+  color: rgba(255,255,255,0.92);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.uncharted-header__sub {
+  font-size: var(--font-size-xs);
+  color: rgba(255,255,255,0.5);
+  font-style: italic;
+}
+
+.uncharted-loading {
+  padding: var(--space-5) var(--space-6);
+  color: var(--gray-500);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+}
+
+.uncharted-desc {
+  font-size: var(--font-size-xs);
+  color: var(--gray-600);
+  line-height: 1.7;
+  padding: var(--space-3) var(--space-5);
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  margin: 0;
+}
+
+.uncharted-empty {
+  padding: var(--space-5) var(--space-6);
+  color: var(--gray-600);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.uncharted-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.uncharted-th {
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  text-align: left;
+}
+
+.uncharted-td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--gray-100);
+  font-size: var(--font-size-sm);
+  color: var(--gray-800);
+  vertical-align: middle;
+}
+
+.uncharted-td--num { text-align: left; }
+
+.uncharted-row:hover td { background: var(--gray-50); }
+
+.uncharted-row--highlight td {
+  background: #fffbea;
+}
+.uncharted-row--highlight:hover td { background: #fff8d6; }
+
+/* Signal strength pills */
+.sig-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sig-strong   { background: #fdecea; color: var(--cdc-red); }
+.sig-moderate { background: #fff8e1; color: #e65100; }
+.sig-weak     { background: #e3f2fd; color: #1565c0; }
+.sig-none     { background: var(--gray-100); color: var(--gray-500); }
+
+/* Evidence source tags */
+.uncharted-src {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.uncharted-src--documented { background: #e8f5e9; color: #2d6a4f; }
+.uncharted-src--twosides   { background: #e3f2fd; color: #1565c0; }
+.uncharted-src--novel      { background: #fff8e1; color: #e65100; }
+
+/* NEW SIGNAL badge */
+.uncharted-new-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #fff0c2;
+  color: #b36800;
+  border: 1px solid rgba(179,104,0,0.3);
+  vertical-align: middle;
+}
+
+.uncharted-footnote {
+  padding: var(--space-3) var(--space-5);
+  font-size: 0.7rem;
+  color: var(--gray-400);
+  border-top: 1px solid var(--gray-100);
+  margin: 0;
+  background: var(--gray-50);
 }

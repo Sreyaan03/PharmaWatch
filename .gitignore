@@ -43,3 +43,6 @@ backend/trained_models/
 .Trashes
 Thumbs.db
 .agent/
+
+# Data
+data/

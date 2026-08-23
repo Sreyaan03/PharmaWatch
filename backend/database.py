@@ -64,6 +64,32 @@ def init_db():
             ON boxed_warning_violations(drug);
         CREATE INDEX IF NOT EXISTS idx_viol_event
             ON boxed_warning_violations(adverse_event);
+
+        -- openFDA Cache Table:
+        CREATE TABLE IF NOT EXISTS fda_cache (
+            url TEXT PRIMARY KEY,
+            response_json TEXT NOT NULL,
+            cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- signals_cache Table:
+        CREATE TABLE IF NOT EXISTS signals_cache (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            drug         TEXT NOT NULL,
+            event        TEXT NOT NULL,
+            a            INTEGER,  -- co-reports (drug+event)
+            b            INTEGER,  -- drug only
+            c            INTEGER,  -- event only
+            d            INTEGER,  -- neither
+            prr          REAL,
+            ror          REAL,
+            bcpnn_ic     REAL,
+            n_reports    INTEGER,
+            severity     TEXT,
+            source       TEXT DEFAULT 'faers',
+            computed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_pair ON signals_cache(drug, event);
     """)
     conn.commit()
     conn.close()
@@ -360,3 +386,95 @@ def get_recent_predictions(limit=20):
 
 # Initialise the new table on import
 init_interaction_predictions_table()
+
+
+# ── openFDA Cache Helpers ─────────────────────────────────────────────────────
+
+def get_cached_fda_response(url):
+    """Retrieve cached JSON response for a URL if it is less than 7 days old."""
+    import json
+    from datetime import datetime
+    conn = get_db()
+    row = conn.execute("""
+        SELECT response_json, cached_at 
+          FROM fda_cache 
+         WHERE url = ?
+    """, (url,)).fetchone()
+    conn.close()
+    if row:
+        try:
+            cached_time = datetime.strptime(row["cached_at"], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            try:
+                cached_time = datetime.fromisoformat(row["cached_at"].rstrip("Z"))
+            except ValueError:
+                return None
+        delta = datetime.utcnow() - cached_time
+        if delta.days < 7:
+            return json.loads(row["response_json"])
+    return None
+
+def cache_fda_response(url, response_json):
+    """Upsert response_json into fda_cache table."""
+    import json
+    conn = get_db()
+    response_str = json.dumps(response_json)
+    conn.execute("""
+        INSERT OR REPLACE INTO fda_cache (url, response_json, cached_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+    """, (url, response_str))
+    conn.commit()
+    conn.close()
+
+
+# ── signals_cache Helpers ─────────────────────────────────────────────────────
+
+def upsert_signal(drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source='faers'):
+    """Upsert a computed signal into signals_cache table."""
+    conn = get_db()
+    # Try inserting. If unique index conflicts, update the values.
+    # Note: SQLite supports ON CONFLICT from version 3.24.0
+    conn.execute("""
+        INSERT INTO signals_cache (drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(drug, event) DO UPDATE SET
+            a = excluded.a,
+            b = excluded.b,
+            c = excluded.c,
+            d = excluded.d,
+            prr = excluded.prr,
+            ror = excluded.ror,
+            bcpnn_ic = excluded.bcpnn_ic,
+            n_reports = excluded.n_reports,
+            severity = excluded.severity,
+            source = excluded.source,
+            computed_at = CURRENT_TIMESTAMP
+    """, (drug.lower(), event.lower(), a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source))
+    conn.commit()
+    conn.close()
+
+
+def get_cached_signals(limit=100):
+    """Fetch all cached signals from signals_cache."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at
+          FROM signals_cache
+         ORDER BY prr DESC
+         LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_signal(drug, event):
+    """Fetch a single cached signal."""
+    conn = get_db()
+    row = conn.execute("""
+        SELECT drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at
+          FROM signals_cache
+         WHERE drug = ? AND event = ?
+    """, (drug.lower(), event.lower())).fetchone()
+    conn.close()
+    return dict(row) if row else None
+

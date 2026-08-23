@@ -1,30 +1,56 @@
 # PharmaWatch — Feature Audit: Real vs Hardcoded
+**Last updated:** 2026-06-05  
+**Reflects commits:** `5ac78a3` → `f175af7` → `25d9a7d` → `a68b2f3`
 
-## Overview
+---
+
+## Summary Table
 
 | Feature | Status | Data Source |
 |---------|--------|-------------|
 | Drug Search autocomplete | ✅ **REAL** | openFDA `label.json` API |
 | Drug Profile (class, indication, dosage) | ✅ **REAL** | openFDA `label.json` API |
 | ADE Bar Chart (top adverse events) | ✅ **REAL** | openFDA `event.json` API |
-| Drug Trend Line (monthly reports) | ❌ **FAKE** | `Math.random()` × total reports (line 395) |
-| "Active Signals" badge on drug profile | ❌ **FAKE** | `Math.random() * 4` (line 343) |
-| "Highest PRR" badge on drug profile | ❌ **FAKE** | `1.5 + Math.random() * 2` (line 344) |
+| Drug Trend Line (monthly reports) | ❌ **FAKE** | `Math.random()` × total reports (app.js:586) |
+| \"Active Signals\" badge | ❌ **REMOVED** | Removed from header — not rendered anymore |
+| \"Highest PRR\" badge | ✅ **REAL** | `/api/prr-trials` endpoint (slow async load) |
 | PRR Calculator | ✅ **REAL** | Backend `/api/prr` → openFDA (4 API calls) |
-| LSTM Time-Series Chart | ✅ **REAL** | Backend `/api/lstm` → openFDA `receivedate` counts |
-| D3 Interaction Graph | ✅ **REAL** | Backend `/api/graph` → openFDA co-prescription data |
-| Signal Intensity Chart (24h) | ❌ **FAKE** | `randomArray(24, 5, 20)` (lines 577–591) |
-| Drug Category Doughnut | ❌ **FAKE** | Hardcoded: `[31, 18, 22, 14, 9, 6]` (line 616) |
-| PRR Distribution Histogram | ❌ **FAKE** | Hardcoded: `[1840, 920, 480, ...]` (line 641) |
-| Signals Table (40 signals) | ❌ **FAKE** | All random: `Math.random() * 7 + 1` for PRR (line 136) |
-| Recent Alerts List | ❌ **FAKE** | Hardcoded array `RECENT_ALERTS_DATA` (lines 23–26) |
-| Cluster Grid | ❌ **FAKE** | Hardcoded array `CLUSTERS` (lines 124–131) |
-| INTERACTION_DATA object | ❌ **DEAD CODE** | Old hardcoded graph data (lines 30–122) — no longer used |
-| Pipeline Metrics (Kafka msg/s, etc.) | ❌ **FAKE** | Hardcoded strings cycling (lines 700–716) |
-| Source Meters (FDA, EHR, Social) | ❌ **FAKE** | Hardcoded percentages (lines 685–697) |
-| BioBERT NER | ⚠️ **RUNS** but broken | Base model, random labels — not fine-tuned |
+| LSTM Time-Series Chart (ML Models tab) | ✅ **REAL** | Backend `/api/lstm` → openFDA `receivedate` counts |
+| LSTM Gap-Scan (Warning Gap bar) | ✅ **REAL** | Backend `/api/lstm/gap-scan` → FAERS comparison |
+| D3 Interaction Graph (Drug Search tab) | ✅ **REAL** | Backend `/api/graph` → openFDA co-prescription data |
+| Signal Intensity Chart (24h) | ❌ **FAKE** | `randomArray(24, 5, 20)` (app.js:668) |
+| Drug Category Doughnut | ❌ **FAKE** | Hardcoded `[31, 18, 22, 14, 9, 6]` (app.js:707) |
+| PRR Distribution Histogram | ✅ **REAL** (derived) | Built from cached live signals in SQLite |
+| Signals Table | ✅ **REAL** | `/api/signals` → live PRR/ROR/BCPNN from FAERS + SQLite cache |
+| Signal Network Graph (on row click) | ✅ **REAL** | `/api/signals/network` → openFDA co-report data |
+| Recent Alerts List | ✅ **REAL** | Pulled from `/api/signals` cached results on load |
+| Cluster Grid (dashboard) | ❌ **NOT PRESENT** | Removed in f175af7 refactor |
+| Animated counters (dashboard) | ❌ **FAKE** | Hardcoded `data-target` values in HTML |
+| BioBERT NER (Signals tab) | ✅ **REAL** | `d4data/biomedical-ner-all` model — correct model ✅ |
+| NER Mine (PDF/Text upload) | ✅ **REAL** | SSE stream: OCR → NER → FAERS scoring |
 | Wikipedia Tooltips | ✅ **REAL** | Wikipedia REST API |
-| Live Alert Banner | ❌ **FAKE** | Hardcoded rotating strings (lines 990–1001) |
+| Live Alert Banner | ❌ **FAKE** | Hardcoded rotating strings (app.js:795) |
+| Pipeline Metrics (Kafka msg/s, Spark, HBase) | ❌ **FAKE** | `distributed_storage.js` — fully simulated |
+| Source Meters (FDA, EHR, Social) | ❌ **FAKE** | Hardcoded percentages cycling (app.js:776) |
+| **[NEW] DDI Interaction Graph (Interactions tab)** | ✅ **REAL** | `/api/graph/twosides` → TWOSIDES HBase + openFDA |
+| **[NEW] GNN DDI Prediction** | ✅ **REAL** | `/api/graph/predict` → PyTorch GNN (retrained, 16-feat, balanced) |
+| **[NEW] Polypharmacy Analysis** | ✅ **REAL** | `/api/interactions/polypharmacy` → GNN per-pair + TWOSIDES side-effects |
+| **[NEW] Side-Effects on Graph Edges** | ✅ **REAL** | HBase `interactions` table lookup → tooltip + pair list |
+| **[NEW] Safe-pair Graph (all-safe fix)** | ✅ **FIXED** | Graph no longer disappears when no harmful pairs |
+| **[NEW] Zoom/Pan on Polypharmacy Graph** | ✅ **REAL** | D3 zoom behaviour added |
+| **[NEW] Uncharted Interactions** | ✅ **REAL** | `/api/interactions/uncharted` → FAERS signal mining (no label) |
+| **[NEW] Recent Interactions History** | ✅ **REAL** | `/api/interactions/recent` → SQLite `predictions` table |
+| **[NEW] Boxed Warnings tab** | ✅ **REAL** | `/api/boxed-warning/<drug>` → openFDA label scrape |
+| **[NEW] Boxed Warning Events chart** | ✅ **REAL** | `/api/boxed-warning-events/<drug>` → FAERS event spikes |
+| **[NEW] Boxed Warning Timeline** | ✅ **REAL** | `/api/boxed-warning/timeline/<drug>` → LSTM pre/post analysis |
+| **[NEW] Weber Effect / Bias Analysis** | ✅ **REAL** | `/api/boxed-warning/bias-analysis/<drug>` → notoriety peak detection |
+| **[NEW] FDA Violations Table** | ✅ **REAL** | `/api/boxed-warning/violations/all` → SQLite `violations` table |
+| **[NEW] Clinical Trials Badge** | ✅ **REAL** | `/api/trials/<drug>` → ClinicalTrials.gov API |
+| **[NEW] PRR + Trials combined badge** | ✅ **REAL** | `/api/prr-trials` → openFDA + trials combined |
+| **[NEW] Drug name resolver (PubChem)** | ✅ **REAL** | `/api/interactions/resolve` → PubChem parallel lookup |
+| **[NEW] Big Data system start/status** | ⚠️ **PARTIAL** | `/api/system/start-bigdata` attempts real HBase; falls back gracefully |
+| INTERACTION_DATA dead code | ✅ **CLEANED** | Removed in f175af7 |
+| RECENT_ALERTS_DATA hardcoded array | ✅ **CLEANED** | Removed — alerts now from live signals |
 
 ---
 
@@ -37,100 +63,97 @@
 | Drug class & indication | ✅ Real | — |
 | Dosage info | ✅ Real | — |
 | ADE bar chart | ✅ Real | — |
-| Monthly trend chart | ❌ Fake | **Easy** — use `/api/lstm` data |
-| "Active Signals" count | ❌ Fake | **Medium** — needs real PRR check |
-| "Highest PRR" value | ❌ Fake | **Medium** — calculate from top ADE |
-| Signal alerts under chart | ⚠️ Semi-real | Events are real, status labels are fake |
+| Monthly trend chart | ❌ Fake | **Easy** — use `/api/lstm` data (Fix 2A in guide) |
+| \"Highest PRR\" badge | ✅ Real (async) | — |
+| Clinical Trials badge | ✅ Real (async) | — |
+| Signal alerts under chart | ✅ Real | ADE events from openFDA |
 
 ### 2. Signals Detection Table
 | Element | Real/Fake | Fix Difficulty |
 |---------|-----------|----------------|
-| All 40 signals | ❌ Fully random | **Hard** — need batch PRR for multiple drugs |
-| PRR values | ❌ `Math.random()` | Same as above |
-| Report counts | ❌ `Math.random()` | Same as above |
-| Source attribution | ❌ Random | Same as above |
+| Signals table (watchlist) | ✅ Real | — |
+| PRR / ROR / BCPNN values | ✅ Real | — |
+| Report counts | ✅ Real | — |
+| Signal network graph (on click) | ✅ Real | — |
+| NER mine (text/PDF upload) | ✅ Real | — |
 
 ### 3. Dashboard Page
 | Element | Real/Fake | Fix Difficulty |
 |---------|-----------|----------------|
-| Signal Intensity (24h line chart) | ❌ Random | **Medium** — aggregate from DB |
-| Drug Category doughnut | ❌ Hardcoded | **Easy** — count from openFDA |
-| PRR Distribution histogram | ❌ Hardcoded | **Hard** — needs many PRR calculations |
-| Recent Alerts list | ❌ Hardcoded | **Easy** — pull from DB |
-| Cluster Grid | ❌ Hardcoded | **Hard** — needs graph analysis |
-| Animated counters | ❌ Hardcoded | **Easy** — pull from DB stats |
+| Signal Intensity (24h line chart) | ❌ Fake | **Medium** — add `/api/dashboard/signal-intensity` (guide Phase 2C) |
+| Drug Category doughnut | ❌ Fake | **Easy** — openFDA `count` endpoint (guide Phase 2E) |
+| PRR Distribution histogram | ✅ Real | Derived from live cached signals |
+| Recent Alerts list | ✅ Real | From `/api/signals` on boot |
+| Animated counters | ❌ Fake | **Easy** — pull from `/api/local-stats` |
+| Live alert banner | ❌ Fake | **Low priority** — cosmetic |
 
 ### 4. ML Models Section
 | Element | Real/Fake | Fix Difficulty |
 |---------|-----------|----------------|
 | PRR Calculator | ✅ Real | — |
 | LSTM Chart | ✅ Real | — |
-| BioBERT demo | ⚠️ Runs, bad output | **Easy** — swap model (Phase 1 upgrade) |
+| LSTM Warning Gap bar | ✅ Real | — |
+| BioBERT NER demo | ✅ Real | `d4data/biomedical-ner-all` model |
 
-### 5. Interaction Graph
+### 5. Interactions Tab — **Largely New & Real**
 | Element | Real/Fake | Fix Difficulty |
 |---------|-----------|----------------|
-| D3 force graph | ✅ Real | — |
-| Co-prescription data | ✅ Real | — |
-| Risk coloring | ✅ Real (relative) | — |
-| Autocomplete search | ✅ Real | — |
+| TWOSIDES DDI Graph | ✅ Real | — |
+| GNN DDI Prediction (single pair) | ✅ Real | — |
+| Polypharmacy multi-drug analysis | ✅ Real | — |
+| Side-effects on graph edges & tooltips | ✅ Real | — |
+| Safe-pair graph rendering | ✅ Fixed | — |
+| Zoom/pan graph | ✅ Real | — |
+| Uncharted Interactions | ✅ Real | — |
+| Recent interaction history | ✅ Real | — |
+| Hardcoded absolute URLs (`127.0.0.1`) | ❌ Still present | **Easy** — 7 occurrences in `_interactions_new.js` |
 
-### 6. Pipeline Section
+### 6. Boxed Warnings Tab — **Fully New & Real**
 | Element | Real/Fake | Fix Difficulty |
 |---------|-----------|----------------|
-| Kafka msg/s | ❌ Hardcoded strings | N/A (visual demo) |
-| Spark events/s | ❌ Hardcoded strings | N/A (visual demo) |
-| HDFS storage | ❌ Hardcoded strings | N/A (visual demo) |
-| Source meters | ❌ Hardcoded | N/A (visual demo) |
+| Boxed warning text | ✅ Real | — |
+| Post-warning FAERS event spike chart | ✅ Real | — |
+| Warning timeline (pre/post LSTM) | ✅ Real | — |
+| Weber Effect / Bias Analysis | ✅ Real | — |
+| FDA Violations table | ✅ Real | — |
+| Hardcoded absolute URLs (`127.0.0.1`) | ❌ Still present | **Easy** — 5 occurrences in `app.js` |
+
+### 7. Pipeline Section
+| Element | Real/Fake | Fix Difficulty |
+|---------|-----------|----------------|
+| Kafka msg/s | ❌ Simulated | N/A — architecture demo |
+| Spark events/s | ❌ Simulated | N/A — architecture demo |
+| HDFS storage | ❌ Simulated | N/A — architecture demo |
+| HBase ops | ❌ Simulated | N/A — architecture demo |
+| Source meters | ❌ Hardcoded | N/A — architecture demo |
+
+> Recommend adding a visible disclaimer badge per guide Phase 5D.
 
 ---
 
-## Dead Code to Clean Up
+## Remaining Issues (Quick Fix List)
 
-The `INTERACTION_DATA` object (lines 30–122) is **no longer used**. The D3 graph now fetches from `/api/graph`. This entire block can be deleted to save ~90 lines.
+### 🔴 Security / Reliability
+1. **`127.0.0.1` hardcoded** in `_interactions_new.js` (7 occurrences) and `app.js` (9 occurrences) — replace with relative paths
 
----
+### 🟠 Fake Data Still Present
+2. **Drug Trend Chart** — `app.js:586` still uses `Math.random()` — easy fix with `/api/lstm`
+3. **Signal Intensity Chart** — `app.js:668` uses `randomArray()` — needs new backend endpoint
+4. **Drug Category Doughnut** — `app.js:707` hardcoded — easy fix with openFDA count API
+5. **Animated Counters** — `data-target` values in HTML are hardcoded — pull from `/api/local-stats`
+6. **Live Alert Banner** — `app.js:795-804` cycles hardcoded strings
 
-## Suggested Improvements (by priority)
-
-### Quick Wins (< 1 hour each)
-
-1. **Make the Drug Trend chart real** — Replace `Math.random()` on line 395 with a `fetch('/api/lstm?drug=...')` call. You already have the endpoint.
-
-2. **Make "Highest PRR" badge real** — After loading ADE data, call `/api/prr?drug=X&event=TOP_ADE` for the #1 adverse event and display the real value.
-
-3. **Delete dead INTERACTION_DATA** — Lines 30–122. Not used anymore.
-
-4. **Fix BioBERT** — Swap model to `d4data/biomedical-ner-all` (Phase 1 from upgrade guide).
-
-### Medium Effort (2–4 hours)
-
-5. **Make Recent Alerts real** — After Phase 2 (database), pull latest drug-event pairs from SQLite.
-
-6. **Add event dropdown to PRR Calculator** — Currently hardcoded to "Nausea". Add a second autocomplete input so users can pick any event.
-
-7. **Make "Active Signals" count real** — Check if PRR > 2 for the top 5 ADEs of the searched drug.
-
-8. **Drug Category doughnut from real data** — Use openFDA `count` endpoint: `api.fda.gov/drug/event.json?count=patient.drug.openfda.pharm_class_epc.exact`
-
-### Bigger Features (half day+)
-
-9. **Real Signals Table** — Precompute PRR for top drug-event pairs and store in database. Display real ranked signals.
-
-10. **Search history / recent drugs** — Store recent searches in localStorage, show as chips.
-
-11. **Comparison mode** — Search two drugs side-by-side, compare ADE profiles.
-
-12. **Export data** — Add "Download CSV" buttons for charts and signal tables.
-
-13. **Drug recall alerts** — Fetch from `api.fda.gov/drug/enforcement.json` and show real FDA recall notices for the searched drug.
+### 🟡 Architecture
+7. **`backend/app.py` is 2,928 lines** — needs splitting into route blueprints (Phase 4 of guide)
+8. **CORS is wide-open** — `CORS(app)` allows `*` — should be scoped to `ALLOWED_ORIGIN`
 
 ---
 
-## Summary
+## Real vs Fake Score
 
-**Real features**: 7 out of 20 (Drug search, profile, ADE chart, PRR calc, LSTM, D3 graph, Wikipedia tooltips)
+| Version | Real Features | Fake/Hardcoded | Score |
+|---------|--------------|----------------|-------|
+| **Original audit** | 7 / 20 | 13 / 20 | 35% real |
+| **Current (after f175af7 + a68b2f3)** | **~28 / 38** | **~10 / 38** | **~74% real** |
 
-**Fake/hardcoded**: 13 out of 20
-
-**Biggest impact fixes**: Trend chart (#1), BioBERT (#4), Signals table (#9)
+**Net new real features added:** Polypharmacy GNN, TWOSIDES DDI graph, Uncharted Interactions, Boxed Warnings, Weber Effect/Bias Analysis, Violations table, Clinical Trials badge, PRR+Trials badge, LSTM gap-scan, NER mine pipeline, side-effects on edges, drug name resolver.

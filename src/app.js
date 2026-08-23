@@ -5,6 +5,30 @@
 
 'use strict';
 
+/* ──────────────── GLOBAL DRUG CONTEXT ──────────────────────── */
+const DrugContext = {
+  state: {
+    drug: '',
+    label: null,
+    totalReports: 0,
+    adeList: [],
+    prr: null
+  },
+  listeners: [],
+  on(event, cb) {
+    if (event === 'change') {
+      this.listeners.push(cb);
+    }
+  },
+  set(newState) {
+    this.state = { ...this.state, ...newState };
+    this.listeners.forEach(cb => {
+      try { cb(this.state); } catch (e) { console.error("Error in DrugContext listener:", e); }
+    });
+  }
+};
+window.DrugContext = DrugContext;
+
 /* ──────────────── DATA STORE ──────────────────────────────── */
 const DRUGS = [
   'Metformin', 'Atorvastatin', 'Lisinopril', 'Amoxicillin', 'Ibuprofen',
@@ -28,51 +52,143 @@ const RECENT_ALERTS_DATA = [
 /* ──────────────── INTERACTIONS (replaced with live data) ──── */
 
 /* ──────────────── SIGNALS TABLE ──────────────────────────── */
-function generateSignals(count = 40) {
-  return Array.from({ length: count }, (_, i) => {
-    const prr = (Math.random() * 7 + 1).toFixed(2);
-    const sev = prr >= 5 ? 'critical' : prr >= 3 ? 'high' : 'moderate';
-    const src = SOURCES[Math.floor(Math.random() * SOURCES.length)];
-    const status = prr >= 4 ? 'Active' : prr >= 2.5 ? 'Under Review' : 'Closed';
-    const minsAgo = Math.floor(Math.random() * 1440);
-    return {
-      rank: i + 1,
-      drug: DRUGS[Math.floor(Math.random() * DRUGS.length)],
-      event: ADE_EVENTS[Math.floor(Math.random() * ADE_EVENTS.length)],
-      prr: parseFloat(prr),
-      reports: Math.floor(Math.random() * 9000 + 50),
-      source: src,
-      detected: minsAgo < 60 ? `${minsAgo}m ago` : `${Math.floor(minsAgo / 60)}h ago`,
-      status, sev
-    };
-  }).sort((a, b) => b.prr - a.prr).map((s, i) => ({ ...s, rank: i + 1 }));
-}
+let signalsData = [];
+let gaugePRRChart = null;
+let gaugeRORChart = null;
+let gaugeICChart = null;
 
-let signalsData = generateSignals();
-let signalPRRChart = null;
+async function fetchAndRenderSignals(forceRefresh = false) {
+  const tbody = document.getElementById('signals-tbody');
+  if (tbody && signalsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--text-muted);"><span style="animation: spin 1s linear infinite; display:inline-block; margin-right:8px;">⏳</span>Loading safety signals...</td></tr>`;
+  }
+  try {
+    const url = forceRefresh ? '/api/signals?refresh=true' : '/api/signals';
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json && json.signals) {
+      signalsData = json.signals.map((s, idx) => ({
+        rank: idx + 1,
+        drug: s.drug,
+        event: s.event,
+        prr: s.prr,
+        ror: s.ror,
+        bcpnn_ic: s.bcpnn_ic,
+        reports: s.n_reports,
+        source: s.source,
+        sev: s.severity,
+        a: s.a, b: s.b, c: s.c, d: s.d
+      }));
+      filterSignals();
+      initPRRDistributionChart();
+    }
+  } catch (err) {
+    console.error("Error fetching signals:", err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:2rem; color:#ef4444;">⚠️ Failed to retrieve active signals. Check backend connection.</td></tr>`;
+    }
+  }
+}
 
 function renderSignalsTable(data) {
   const tbody = document.getElementById('signals-tbody');
   if (!tbody) return;
-  tbody.innerHTML = data.map(s => `
-    <tr data-rank="${s.rank}" class="signal-row">
-      <td><strong>${s.rank}</strong></td>
-      <td><strong>${escHtml(s.drug)}</strong></td>
-      <td><span class="illness-hover" data-illness="${escHtml(s.event)}" style="cursor:help; border-bottom:1px dashed #bbb;">${escHtml(s.event)}</span></td>
-      <td class="${s.sev === 'critical' ? 'prr-critical' : s.sev === 'high' ? 'prr-high' : 'prr-moderate'}">${s.prr.toFixed(2)}</td>
-      <td>${s.reports.toLocaleString()}</td>
-      <td><span class="source-chip source-chip--${s.source}">${SOURCE_LABELS[s.source]}</span></td>
-      <td>${escHtml(s.detected)}</td>
-      <td><span class="status-pill status-pill--${s.status === 'Active' ? 'active' : s.status === 'Under Review' ? 'review' : 'closed'}">${s.status}</span></td>
-    </tr>
-  `).join('');
+  
+  if (data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--text-muted);">No safety signals found matching filters.</td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = data.map(s => {
+    // Style chip for source
+    let srcClass = s.source;
+    let srcLabel = String(s.source).toUpperCase();
+    if (s.source === 'faers' || s.source === 'openfda') {
+      srcClass = 'fda';
+      srcLabel = 'openFDA API';
+    } else if (s.source === 'faers_local') {
+      srcClass = 'faers-local';
+      srcLabel = 'FAERS Local';
+    } else if (s.source === 'ner_clinical') {
+      srcClass = 'ehr';
+      srcLabel = 'Clinical NER';
+    }
+    
+    return `
+      <tr data-rank="${s.rank}" class="signal-row" style="cursor: pointer;">
+        <td><strong>${s.rank}</strong></td>
+        <td><strong>${escHtml(s.drug)}</strong></td>
+        <td><span class="illness-hover" data-illness="${escHtml(s.event)}" style="cursor:help; border-bottom:1px dashed #bbb;">${escHtml(s.event)}</span></td>
+        <td class="${s.sev === 'critical' ? 'prr-critical' : s.sev === 'high' ? 'prr-high' : 'prr-moderate'}">${s.prr !== undefined ? s.prr.toFixed(2) : 'N/A'}</td>
+        <td>${s.ror !== undefined ? s.ror.toFixed(2) : 'N/A'}</td>
+        <td>${s.bcpnn_ic !== undefined ? s.bcpnn_ic.toFixed(2) : 'N/A'}</td>
+        <td>${s.reports.toLocaleString()}</td>
+        <td><span class="source-chip source-chip--${srcClass}">${srcLabel}</span></td>
+        <td><span class="status-pill status-pill--${s.sev === 'critical' ? 'active' : s.sev === 'high' ? 'review' : 'closed'}">${s.sev.toUpperCase()}</span></td>
+      </tr>
+    `;
+  }).join('');
 
   tbody.querySelectorAll('.signal-row').forEach(row => {
-    row.addEventListener('click', () => showSignalDetail(signalsData.find(s => s.rank == row.dataset.rank)));
+    row.addEventListener('click', () => {
+      const selected = signalsData.find(s => s.rank == row.dataset.rank);
+      if (selected) showSignalDetail(selected);
+    });
   });
 
-  // Re-init illness tooltips — needed because elements are dynamically injected
   if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
+}
+
+function renderGauge(canvasId, value, minVal, maxVal, title, color, existingChartVar) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return null;
+  
+  if (existingChartVar) {
+    existingChartVar.destroy();
+  }
+  
+  // Bound value
+  const val = Math.min(Math.max(value, minVal), maxVal);
+  const percent = ((val - minVal) / (maxVal - minVal)) * 100;
+  
+  const config = {
+    type: 'doughnut',
+    data: {
+      labels: [title, 'Remaining'],
+      datasets: [{
+        data: [percent, 100 - percent],
+        backgroundColor: [color, 'rgba(255,255,255,0.05)'],
+        borderWidth: 0,
+        hoverOffset: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      circumference: 180,
+      rotation: -90,
+      cutout: '75%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      }
+    },
+    plugins: [{
+      id: 'centerText',
+      afterDraw(chart) {
+        const { ctx, chartArea: { top, bottom, left, right, width, height } } = chart;
+        ctx.save();
+        ctx.font = 'bold 0.95rem Outfit, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value.toFixed(2), left + width / 2, top + height * 0.85);
+        ctx.restore();
+      }
+    }]
+  };
+  
+  return new Chart(ctx, config);
 }
 
 function showSignalDetail(signal) {
@@ -83,61 +199,239 @@ function showSignalDetail(signal) {
   if (!panel || !title || !body) return;
 
   title.textContent = `${signal.drug} — ${signal.event}`;
+  
+  // Calculate flags for consensus display
+  let consensusFlags = [];
+  if (signal.prr > 2.0 && signal.reports >= 3) consensusFlags.push("PRR Alert (>2.0)");
+  if (signal.ror > 2.0 && signal.reports >= 3) consensusFlags.push("ROR Alert (>2.0)");
+  if (signal.bcpnn_ic > 1.5) consensusFlags.push("BCPNN IC Alert (>1.5)");
+  
+  const consensusText = consensusFlags.length >= 2 
+    ? `<span style="color:#10b981; font-weight:bold;">✅ CONSENSUS SIGNAL MET</span> (${consensusFlags.length}/3 Methods Flagged)`
+    : `<span style="color:#f59e0b; font-weight:bold;">⚠️ WEAK/NO CONSENSUS</span> (${consensusFlags.length}/3 Methods Flagged)`;
+
   body.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem;">
-      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr.toFixed(2)}</div><div class="stat-mini__lbl">PRR Score</div></div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-bottom:1rem;">
+      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr !== undefined ? signal.prr.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">PRR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val" style="color: #8b5cf6;">${signal.ror !== undefined ? signal.ror.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">ROR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val" style="color: #10b981;">${signal.bcpnn_ic !== undefined ? signal.bcpnn_ic.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">BCPNN IC Score</div></div>
       <div class="stat-mini"><div class="stat-mini__val">${signal.reports.toLocaleString()}</div><div class="stat-mini__lbl">Reports (n)</div></div>
-      <div class="stat-mini"><div class="stat-mini__val">${signal.detected}</div><div class="stat-mini__lbl">Detected</div></div>
-      <div class="stat-mini"><div class="stat-mini__val">${signal.status}</div><div class="stat-mini__lbl">Status</div></div>
     </div>
-    <p style="font-size:0.875rem;color:#495057;">Signal detected via <strong>${SOURCE_LABELS[signal.source]}</strong>. The PRR of <strong>${signal.prr.toFixed(2)}</strong> exceeds the alert threshold of 2.0, with ${signal.reports.toLocaleString()} supporting reports. Hover over the illness <span class="illness-hover" data-illness="${signal.event}" style="font-weight:bold; cursor:help; border-bottom:1px dashed #bbb;">${signal.event}</span> to view its clinical definition.</p>
+    
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
+      <strong>Consensus Analysis:</strong> ${consensusText}<br/>
+      <span style="font-size: 0.8rem; color: var(--text-muted);">Flagged by: ${consensusFlags.join(', ') || 'None'}</span>
+    </div>
+    
+    <div style="background: rgba(15, 23, 42, 0.4); border-radius: 6px; padding: 1rem; border: 1px solid rgba(255,255,255,0.03);">
+      <h4 style="margin-top:0; margin-bottom:0.5rem; font-size:0.9rem; font-weight:600;">Statistical Summary (2x2 FAERS Contingency):</h4>
+      <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text-muted);">
+            <th style="padding:4px;">Metric Description</th>
+            <th style="padding:4px; text-align:right;">Report Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:4px;">Reports with drug <strong>${signal.drug}</strong> and event <strong>${signal.event}</strong> (a)</td>
+            <td style="padding:4px; text-align:right; font-weight:bold;">${(signal.a || 0).toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px;">Reports with drug <strong>${signal.drug}</strong> without event (b)</td>
+            <td style="padding:4px; text-align:right; font-weight:bold;">${(signal.b || 0).toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px;">Reports for other drugs with event <strong>${signal.event}</strong> (c)</td>
+            <td style="padding:4px; text-align:right; font-weight:bold;">${(signal.c || 0).toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px;">Reports for other drugs without event (d)</td>
+            <td style="padding:4px; text-align:right; font-weight:bold;">${(signal.d || 0).toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   `;
 
-  // Mini sparkline for PRR over time
-  const ctx = document.getElementById('signal-prr-chart');
-  if (ctx) {
-    if (signalPRRChart) signalPRRChart.destroy();
-    const labels = Array.from({ length: 12 }, (_, i) => `${i * 2}h`);
-    const vals = labels.map((_, i) => +(signal.prr * (0.4 + Math.random() * 0.8)).toFixed(2));
-    vals[vals.length - 1] = signal.prr;
-    signalPRRChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'PRR Over 24h',
-          data: vals,
-          borderColor: signal.sev === 'critical' ? '#c0392b' : signal.sev === 'high' ? '#e65100' : '#f57c00',
-          backgroundColor: signal.sev === 'critical' ? 'rgba(192,57,43,0.1)' : 'rgba(230,81,0,0.1)',
-          tension: 0.4, fill: true, pointRadius: 3,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { min: 0 } }
-      }
-    });
-  }
+  // Draw the half doughnut gauges
+  setTimeout(() => {
+    gaugePRRChart = renderGauge('gauge-prr-canvas', signal.prr || 0, 0, 10, 'PRR', '#3b82f6', gaugePRRChart);
+    gaugeRORChart = renderGauge('gauge-ror-canvas', signal.ror || 0, 0, 10, 'ROR', '#8b5cf6', gaugeRORChart);
+    gaugeICChart = renderGauge('gauge-ic-canvas', signal.bcpnn_ic || 0, -2, 5, 'BCPNN IC', '#10b981', gaugeICChart);
+  }, 50);
 
   panel.style.display = 'block';
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Render D3 graph
+  renderSignalNetworkGraph(signal.drug, signal.event);
 }
 
 function filterSignals() {
   const query = (document.getElementById('signal-search')?.value || '').toLowerCase();
   const sev = document.getElementById('signal-severity')?.value || 'all';
   const src = document.getElementById('signal-source')?.value || 'all';
+  
   let filtered = signalsData;
   if (query) filtered = filtered.filter(s => s.drug.toLowerCase().includes(query) || s.event.toLowerCase().includes(query));
   if (sev !== 'all') {
-    const ranges = { critical: [5, 99], high: [3, 5], moderate: [2, 3] };
-    const [lo, hi] = ranges[sev];
-    filtered = filtered.filter(s => s.prr >= lo && s.prr < hi);
+    filtered = filtered.filter(s => s.sev === sev);
   }
-  if (src !== 'all') filtered = filtered.filter(s => s.source === src);
+  if (src !== 'all') {
+    filtered = filtered.filter(s => {
+      let mappedSource = s.source;
+      if (s.source === 'faers' || s.source === 'openfda') {
+        mappedSource = 'fda';
+      } else if (s.source === 'ner_clinical') {
+        mappedSource = 'ehr';
+      }
+      return mappedSource === src;
+    });
+  }
   renderSignalsTable(filtered);
 }
+
+async function renderSignalNetworkGraph(drug, event) {
+  const container = document.getElementById('signal-network-wrap');
+  const card = document.getElementById('signal-network-card');
+  if (!container || !card) return;
+  
+  card.style.display = 'block';
+  container.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text-muted); font-size:0.9rem;">
+    <span style="animation: spin 1s linear infinite; display:inline-block; margin-right: 8px;">⏳</span> Loading network neighborhood...
+  </div>`;
+  
+  try {
+    const res = await fetch(`/api/signals/network?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`);
+    if (!res.ok) throw new Error("Network response not ok");
+    const data = await res.json();
+    
+    container.innerHTML = '';
+    
+    const width = container.clientWidth || 600;
+    const height = container.clientHeight || 380;
+    
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', '100%')
+      .attr('height', '100%')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('style', 'max-width: 100%; height: auto;');
+      
+    const simulation = d3.forceSimulation(data.nodes)
+      .force('link', d3.forceLink(data.links).id(d => d.id).distance(90))
+      .force('charge', d3.forceManyBody().strength(-150))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(d => d.val + 8));
+      
+    const link = svg.append('g')
+      .selectAll('line')
+      .data(data.links)
+      .enter()
+      .append('line')
+      .attr('stroke', d => {
+        if (d.type === 'primary') return '#ef4444';
+        if (d.type === 'cross_link') return 'rgba(239, 68, 68, 0.4)';
+        return 'rgba(255, 255, 255, 0.15)';
+      })
+      .attr('stroke-width', d => {
+        if (d.type === 'primary') return 3.5;
+        return 1.5;
+      })
+      .attr('stroke-dasharray', d => d.type === 'cross_link' ? '4,4' : 'none');
+
+    const colorScale = type => {
+      switch (type) {
+        case 'drug': return '#3b82f6';
+        case 'event': return '#ef4444';
+        case 'co_drug': return '#f59e0b';
+        case 'co_event': return '#10b981';
+        default: return '#94a3b8';
+      }
+    };
+    
+    const node = svg.append('g')
+      .selectAll('.node-group')
+      .data(data.nodes)
+      .enter()
+      .append('g')
+      .attr('class', 'node-group')
+      .call(d3.drag()
+        .on('start', dragstarted)
+        .on('drag', dragged)
+        .on('end', dragended)
+      );
+      
+    node.append('circle')
+      .attr('r', d => d.val)
+      .attr('fill', d => colorScale(d.type))
+      .attr('stroke', '#0f172a')
+      .attr('stroke-width', 2)
+      .attr('style', 'cursor: pointer; transition: filter 0.2s;')
+      .on('mouseover', function() {
+        d3.select(this).attr('filter', 'brightness(1.2)');
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('filter', 'none');
+      });
+      
+    node.append('text')
+      .text(d => d.label)
+      .attr('dx', 0)
+      .attr('dy', d => d.val + 14)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#ffffff')
+      .attr('font-size', '0.75rem')
+      .attr('font-family', 'Outfit, sans-serif')
+      .attr('style', 'pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.8);');
+
+    node.append('title')
+      .text(d => `${d.label} (${d.type.toUpperCase()})`);
+      
+    simulation.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+        
+      node
+        .attr('transform', d => {
+          const r = d.val;
+          const x = Math.max(r, Math.min(width - r, d.x));
+          const y = Math.max(r, Math.min(height - r, d.y));
+          d.x = x;
+          d.y = y;
+          return `translate(${x},${y})`;
+        });
+    });
+    
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+    
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+    
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+    
+  } catch (err) {
+    console.error("D3 network render error:", err);
+    container.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text-muted); font-size:0.9rem;">
+      ⚠️ Error loading network graph.
+    </div>`;
+  }
+}
+
 
 /* ──────────────── DRUG SEARCH ─────────────────────────────── */
 let drugADEChart = null, drugTrendChart = null;
@@ -240,6 +534,17 @@ async function loadDrugProfile(name) {
 
   const totalReportsLocal = eventsData.totalReports;
 
+  // Publish drug selection to the global DrugContext
+  if (typeof DrugContext !== 'undefined') {
+    DrugContext.set({
+      drug: name,
+      label: labelData,
+      totalReports: totalReportsLocal,
+      adeList: eventsData.ades,
+      prr: null
+    });
+  }
+
   // Render header immediately with '…' placeholders for the slow badges
   document.getElementById('drug-profile-header').innerHTML = `
     <div style="font-size:3rem">💊</div>
@@ -269,9 +574,9 @@ async function loadDrugProfile(name) {
   // The rest of the panel is already visible to the user.
   const currentName = name; // capture for closure safety
   Promise.all([
-    fetch(`http://127.0.0.1:5000/api/trials/${encodeURIComponent(currentName)}`)
+    fetch(`/api/trials/${encodeURIComponent(currentName)}`)
       .then(r => r.json()).catch(() => null),
-    fetch(`http://127.0.0.1:5000/api/prr-trials?drug=${encodeURIComponent(currentName)}&event=Nausea`)
+    fetch(`/api/prr-trials?drug=${encodeURIComponent(currentName)}&event=Nausea`)
       .then(r => r.json()).catch(() => null)
   ]).then(([trialsData, prrData]) => {
     const trialsBadge = document.getElementById('dp-trials-badge');
@@ -293,6 +598,10 @@ async function loadDrugProfile(name) {
       prrBadge.textContent = `PRR: ${prr}${sig ? ' ⚠ Signal' : ''}`;
       prrBadge.style.background = sig ? 'rgba(192,57,43,0.5)' : 'rgba(255,255,255,0.15)';
       prrBadge.style.opacity = '1';
+      // Publish updated PRR back to context
+      if (typeof DrugContext !== 'undefined') {
+        DrugContext.set({ prr: prrData });
+      }
     } else if (prrBadge) {
       prrBadge.textContent = 'PRR: unavailable';
       prrBadge.style.opacity = '0.5';
@@ -327,19 +636,20 @@ async function loadDrugProfile(name) {
     });
   }
 
-  // Trend line chart - keeping a simulated fallback for trend since FDA doesn't allow simple monthly bucketing by drug in one query
+  // Drug Trend chart — real LSTM data from /api/lstm (async update after initial render)
   const trendCtx = document.getElementById('drug-trend-chart');
   if (trendCtx) {
     if (drugTrendChart) drugTrendChart.destroy();
-    const months = ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
-    const fakeTrend = months.map(() => Math.floor(totalReportsLocal / 12 * (0.8 + Math.random() * 0.4)));
+    // Show a flat fallback immediately while LSTM loads
+    const fallbackLabels = ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
+    const fallbackData = fallbackLabels.map(() => Math.round(totalReportsLocal / 12));
     drugTrendChart = new Chart(trendCtx, {
       type: 'line',
       data: {
-        labels: months,
+        labels: fallbackLabels,
         datasets: [{
-          label: 'Monthly Reports',
-          data: fakeTrend,
+          label: 'Monthly Reports (FAERS)',
+          data: fallbackData,
           borderColor: '#003d7c',
           backgroundColor: 'rgba(0,61,124,0.08)',
           tension: 0.4, fill: true, pointRadius: 4, pointHoverRadius: 6,
@@ -350,6 +660,17 @@ async function loadDrugProfile(name) {
         plugins: { legend: { display: false } },
       }
     });
+    // Async update with real LSTM time-series data
+    fetch(`/api/lstm?drug=${encodeURIComponent(name)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error || data.fallback || !data.actual || !data.labels) return;
+        drugTrendChart.data.labels = data.labels.slice(-12);
+        drugTrendChart.data.datasets[0].data = data.actual.slice(-12);
+        drugTrendChart.data.datasets[0].label = `Monthly Reports (LSTM${data.trained_on ? ' — ' + data.trained_on + ' pts' : ''})`;
+        drugTrendChart.update();
+      })
+      .catch(() => {}); // silent fail — flat fallback stays
   }
 
   // Signals list with illness-hover tooltips on event terms
@@ -407,26 +728,28 @@ function initSignalIntensityChart() {
   const ctx = document.getElementById('signal-intensity-chart');
   if (!ctx) return;
   if (signalIntensityChart) signalIntensityChart.destroy();
+  // Initialize with zeroed arrays — async-filled from real SQLite signals cache
+  const emptyLabels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2,'0')}:00`);
   signalIntensityChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: buildLabels24h(),
+      labels: emptyLabels,
       datasets: [
         {
           label: 'Critical Signals',
-          data: randomArray(24, 5, 20),
+          data: new Array(24).fill(0),
           borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.12)',
           tension: 0.4, fill: true, pointRadius: 2,
         },
         {
           label: 'High Signals',
-          data: randomArray(24, 15, 40),
+          data: new Array(24).fill(0),
           borderColor: '#e65100', backgroundColor: 'rgba(230,81,0,0.08)',
           tension: 0.4, fill: true, pointRadius: 2,
         },
         {
           label: 'Moderate Signals',
-          data: randomArray(24, 30, 80),
+          data: new Array(24).fill(0),
           borderColor: '#0070c0', backgroundColor: 'rgba(0,112,192,0.08)',
           tension: 0.4, fill: true, pointRadius: 2,
         }
@@ -442,29 +765,48 @@ function initSignalIntensityChart() {
       }
     }
   });
+  // Async fill with real signal intensity data from SQLite
+  fetch('/api/dashboard/signal-intensity')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.labels || !data.critical) return;
+      signalIntensityChart.data.labels = data.labels;
+      signalIntensityChart.data.datasets[0].data = data.critical;
+      signalIntensityChart.data.datasets[1].data = data.high;
+      signalIntensityChart.data.datasets[2].data = data.moderate;
+      signalIntensityChart.update();
+    })
+    .catch(() => {}); // silent fail — chart stays zeroed (not random)
 }
 
 function initDrugCategoryChart() {
   const ctx = document.getElementById('drug-category-chart');
   if (!ctx) return;
   if (drugCatChart) drugCatChart.destroy();
+  const defaultLabels = ['Cardiovascular', 'Antibiotics', 'CNS/Psychiatric', 'Diabetes', 'Pain/NSAID', 'Other'];
+  const defaultColors = ['#003d7c', '#0070c0', '#00695c', '#f0a500', '#c0392b', '#adb5bd'];
+  // Initialize empty — async-filled from signals cache distribution
   drugCatChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Cardiovascular', 'Antibiotics', 'CNS/Psychiatric', 'Diabetes', 'Pain/NSAID', 'Other'],
-      datasets: [{
-        data: [31, 18, 22, 14, 9, 6],
-        backgroundColor: ['#003d7c', '#0070c0', '#00695c', '#f0a500', '#c0392b', '#adb5bd'],
-        borderWidth: 2, borderColor: '#fff'
-      }]
+      labels: defaultLabels,
+      datasets: [{ data: [0, 0, 0, 0, 0, 0], backgroundColor: defaultColors, borderWidth: 2, borderColor: '#fff' }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
-      }
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
     }
   });
+  // Async fill with real drug category distribution
+  fetch('/api/dashboard/drug-categories')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.labels || !data.data) return;
+      drugCatChart.data.labels = data.labels;
+      drugCatChart.data.datasets[0].data = data.data;
+      drugCatChart.update();
+    })
+    .catch(() => {}); // silent fail
 }
 
 function initPRRDistributionChart() {
@@ -478,7 +820,7 @@ function initPRRDistributionChart() {
       labels: bins,
       datasets: [{
         label: 'Drug-Event Pairs',
-        data: [1840, 920, 480, 260, 140, 80, 50, 30],
+        data: [0, 0, 0, 0, 0, 0, 0, 0],
         backgroundColor: bins.map((_, i) => i < 2 ? '#90caf9' : i < 4 ? '#f0a500' : '#c0392b'),
         borderRadius: 6,
       }]
@@ -495,6 +837,15 @@ function initPRRDistributionChart() {
       }
     }
   });
+  // Async fill with real PRR distribution data
+  fetch('/api/dashboard/prr-distribution')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.labels || !data.data) return;
+      prrDistChart.data.labels = data.labels;
+      prrDistChart.data.datasets[0].data = data.data;
+      prrDistChart.update();
+    })
 }
 
 
@@ -513,7 +864,33 @@ function animateCounter(el, target, duration = 1600, suffix = '') {
   requestAnimationFrame(step);
 }
 
-function initCounters() {
+async function initCounters() {
+  let stats = {
+    reports_analyzed: 14283740,
+    signals_detected: 47,
+    drugs_monitored: 12490
+  };
+  try {
+    const res = await fetch('/api/local-stats');
+    const data = await res.json();
+    if (data && !data.error) {
+      stats.reports_analyzed = data.reports_analyzed || stats.reports_analyzed;
+      stats.signals_detected = data.signals_detected || stats.signals_detected;
+      stats.drugs_monitored = data.drugs_monitored || stats.drugs_monitored;
+    }
+  } catch (e) {
+    console.warn("[Counters] Failed to fetch live local-stats, using fallback values:", e);
+  }
+
+  const elReports = document.querySelector('#stat-reports .stat-card__number');
+  if (elReports) elReports.dataset.target = stats.reports_analyzed;
+
+  const elSignals = document.querySelector('#stat-signals .stat-card__number');
+  if (elSignals) elSignals.dataset.target = stats.signals_detected;
+
+  const elDrugs = document.querySelector('#stat-drugs .stat-card__number');
+  if (elDrugs) elDrugs.dataset.target = stats.drugs_monitored;
+
   document.querySelectorAll('[data-target]').forEach(el => {
     const target = parseFloat(el.dataset.target);
     animateCounter(el, target);
@@ -560,7 +937,7 @@ function updatePipelineMetrics() {
   if (lstmEl) {
     const updateLSTMMetric = async () => {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/lstm?drug=Metformin');
+        const res = await fetch('/api/lstm?drug=Metformin');
         const data = await res.json();
         if (data.error) { lstmEl.textContent = 'Backend offline'; return; }
         if (data.fallback) {
@@ -590,22 +967,56 @@ function updatePipelineMetrics() {
 }
 
 /* ──────────────── RECENT ALERTS LIST ──────────────────────── */
-function renderRecentAlerts() {
+async function renderRecentAlerts() {
   const list = document.getElementById('recent-alerts-list');
   if (!list) return;
-  list.innerHTML = RECENT_ALERTS_DATA.map(a => `
-    <li class="alert-item alert-item--${a.sev}">
-      <div class="alert-item__icon">${a.sev === 'critical' ? '🚨' : a.sev === 'high' ? '⚠️' : 'ℹ️'}</div>
-      <div class="alert-item__body">
-        <div class="alert-item__drug">${escHtml(a.drug)}</div>
-        <div class="alert-item__event">${escHtml(a.event)}</div>
-        <div class="alert-item__meta">
-          <span class="alert-item__prr">PRR ${a.prr}</span>
-          <span class="alert-item__time">${a.time}</span>
-        </div>
-      </div>
-    </li>
-  `).join('');
+  try {
+    const res = await fetch('/api/signals');
+    const data = await res.json();
+    const signals = data.signals || [];
+    
+    // Sort by PRR descending
+    signals.sort((x, y) => (y.prr || 0) - (x.prr || 0));
+
+    // Update alert count badge in UI
+    const badge = document.getElementById('alert-count-badge');
+    if (badge) badge.textContent = signals.length;
+
+    // Take top 5
+    const topSignals = signals.slice(0, 5);
+    
+    if (topSignals.length === 0) {
+      list.innerHTML = `<li class="alert-item" style="color:var(--text-muted); padding:1rem; text-align:center;">No recent safety alerts</li>`;
+      return;
+    }
+
+    list.innerHTML = topSignals.map(s => {
+      const sev = s.severity || 'moderate';
+      return `
+        <li class="alert-item alert-item--${sev}">
+          <div class="alert-item__icon">${sev === 'critical' ? '🚨' : sev === 'high' ? '⚠️' : 'ℹ️'}</div>
+          <div class="alert-item__body">
+            <div class="alert-item__drug">${escHtml(s.drug)}</div>
+            <div class="alert-item__event">${escHtml(s.event)}</div>
+            <div class="alert-item__meta">
+              <span class="alert-item__prr">PRR ${s.prr.toFixed(2)}</span>
+              <span class="alert-item__time">Active</span>
+            </div>
+          </div>
+        </li>
+      `;
+    }).join('');
+
+    // Also update the top warning banner with the highest PRR signal!
+    const alertText = document.getElementById('alert-text');
+    if (alertText && signals.length > 0) {
+      const topSig = signals[0];
+      alertText.innerHTML = `<strong>ACTIVE SIGNAL:</strong> Elevated PRR detected for <strong>${escHtml(topSig.drug)}</strong> — <strong>${escHtml(topSig.event)}</strong> signal. PRR = ${topSig.prr.toFixed(2)}. Under review by pharmacovigilance team.`;
+    }
+  } catch (e) {
+    console.error("Failed to render recent alerts:", e);
+    list.innerHTML = `<li class="alert-item" style="color:var(--text-muted); padding:1rem; text-align:center;">Failed to load alerts</li>`;
+  }
 }
 
 /* ──────────────── CLUSTER GRID ────────────────────────────── */
@@ -638,7 +1049,7 @@ function initPRRCalculator() {
       const drug = (drugInput && drugInput.value.trim()) || 'Metformin';
       const event = 'Nausea'; // You can make this dynamic too
 
-      const res = await fetch(`http://127.0.0.1:5000/api/prr-trials?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`);
+      const res = await fetch(`/api/prr-trials?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`);
       const data = await res.json();
 
       if (data.error) {
@@ -743,8 +1154,7 @@ function navigateTo(sectionId) {
   }
   if (sectionId === 'signals' && !chartsInitialized.signals) {
     chartsInitialized.signals = true;
-    renderSignalsTable(signalsData);
-    initPRRDistributionChart();
+    fetchAndRenderSignals();
   }
   if (sectionId === 'interactions' && !chartsInitialized.interactions) {
     chartsInitialized.interactions = true;
@@ -766,6 +1176,25 @@ function navigateTo(sectionId) {
     if (typeof MLModels !== 'undefined') {
       MLModels.initLSTMDrugSelector();
       MLModels.initLSTMDemoChart('Metformin');
+    }
+  }
+
+  // Auto-sync global DrugContext to active inputs on tab change
+  if (typeof DrugContext !== 'undefined' && DrugContext.state.drug) {
+    if (sectionId === 'boxed-warnings') {
+      const bwInput = document.getElementById('bw-search-input');
+      if (bwInput) {
+        bwInput.value = DrugContext.state.drug;
+        const resultsPanel = document.getElementById('bw-results-panel');
+        if (resultsPanel && (resultsPanel.style.display !== 'block' || resultsPanel.dataset.drug !== DrugContext.state.drug)) {
+          loadBoxedWarningAnalysis(DrugContext.state.drug);
+        }
+      }
+    } else if (sectionId === 'interactions') {
+      const inputA = document.getElementById('explorer-drug-a');
+      if (inputA) {
+        inputA.value = DrugContext.state.drug;
+      }
     }
   }
 
@@ -830,14 +1259,256 @@ function initSignalsPage() {
   document.getElementById('signal-search')?.addEventListener('input', filterSignals);
   document.getElementById('signal-severity')?.addEventListener('change', filterSignals);
   document.getElementById('signal-source')?.addEventListener('change', filterSignals);
-  document.getElementById('refresh-signals-btn')?.addEventListener('click', () => {
-    signalsData = generateSignals();
-    filterSignals();
+  document.getElementById('refresh-signals-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-signals-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Loading...';
+    }
+    await fetchAndRenderSignals(true);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh';
+    }
   });
   document.getElementById('close-signal-detail')?.addEventListener('click', () => {
     const panel = document.getElementById('signal-detail-panel');
     if (panel) panel.style.display = 'none';
+    const netCard = document.getElementById('signal-network-card');
+    if (netCard) netCard.style.display = 'none';
   });
+  
+  initNerPanel();
+}
+
+let selectedNerFile = null;
+
+function initNerPanel() {
+  const dropZone = document.getElementById('ner-drop-zone');
+  const fileInput = document.getElementById('ner-file-input');
+  const fileInfo = document.getElementById('ner-file-info');
+  const fileName = document.getElementById('ner-file-name');
+  const removeBtn = document.getElementById('ner-remove-file-btn');
+  const textInput = document.getElementById('ner-text-input');
+  const mineBtn = document.getElementById('ner-mine-btn');
+  const clearBtn = document.getElementById('ner-clear-btn');
+  
+  const progressWrap = document.getElementById('ner-progress-wrap');
+  const progressText = document.getElementById('ner-progress-text');
+  const progressPct = document.getElementById('ner-progress-pct');
+  const progressBar = document.getElementById('ner-progress-bar');
+  const progressLog = document.getElementById('ner-progress-log');
+  const resultsContainer = document.getElementById('ner-results-container');
+  const resultsGrid = document.getElementById('ner-results-grid');
+
+  if (!dropZone || !mineBtn) return;
+
+  // Open file selector on drop zone click
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  // Prevent default drag behaviors
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, e => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  // Highlight drop zone
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.style.borderColor = 'var(--primary)';
+      dropZone.style.background = 'rgba(59, 130, 246, 0.08)';
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+      dropZone.style.background = 'rgba(59, 130, 246, 0.02)';
+    }, false);
+  });
+
+  // Handle dropped files
+  dropZone.addEventListener('drop', e => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length > 0) {
+      handleNerFileSelect(files[0]);
+    }
+  });
+
+  // Handle file input selection
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) {
+      handleNerFileSelect(fileInput.files[0]);
+    }
+  });
+
+  function handleNerFileSelect(file) {
+    selectedNerFile = file;
+    fileName.textContent = file.name;
+    fileInfo.style.display = 'flex';
+    textInput.value = ''; // clear text input when file is chosen
+  }
+
+  // Remove selected file
+  removeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    selectedNerFile = null;
+    fileInput.value = '';
+    fileInfo.style.display = 'none';
+  });
+
+  // Clear inputs and results
+  clearBtn.addEventListener('click', () => {
+    selectedNerFile = null;
+    fileInput.value = '';
+    fileInfo.style.display = 'none';
+    textInput.value = '';
+    progressWrap.style.display = 'none';
+    resultsContainer.style.display = 'none';
+    progressLog.innerHTML = '';
+  });
+
+  // Run NLP Mining task
+  mineBtn.addEventListener('click', async () => {
+    const textVal = textInput.value.trim();
+    if (!selectedNerFile && !textVal) {
+      alert("Please upload a file or enter clinical text to mine.");
+      return;
+    }
+
+    progressWrap.style.display = 'block';
+    progressLog.innerHTML = '<div>[System] Registering clinical mining task...</div>';
+    updateProgress(10, 'Registering task...');
+    resultsContainer.style.display = 'none';
+
+    const formData = new FormData();
+    if (selectedNerFile) {
+      formData.append('file', selectedNerFile);
+    } else {
+      formData.append('text', textVal);
+    }
+
+    try {
+      // Step 1: POST to create task
+      const postRes = await fetch('/api/signals/ner-mine', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!postRes.ok) throw new Error("Could not start mining task.");
+      const postData = await postRes.json();
+      const taskId = postData.task_id;
+      
+      progressLog.innerHTML += `<div>[System] Task registered. Task ID: ${taskId}</div>`;
+      updateProgress(20, 'Connecting stream...');
+
+      // Step 2: Open SSE connection
+      const sse = new EventSource(`/api/signals/ner-mine/stream/${taskId}`);
+      
+      sse.addEventListener('status', e => {
+        const msg = e.data;
+        progressLog.innerHTML += `<div>[Progress] ${escHtml(msg)}</div>`;
+        progressLog.scrollTop = progressLog.scrollHeight;
+        
+        if (msg.includes('OCR: Rasterizing')) {
+          updateProgress(30, msg);
+        } else if (msg.includes('OCR: Transcribing')) {
+          updateProgress(45, msg);
+        } else if (msg.includes('NER:')) {
+          updateProgress(65, msg);
+        } else if (msg.includes('FAERS: Scoring')) {
+          const match = msg.match(/pair (\d+)\/(\d+)/);
+          if (match) {
+            const current = parseInt(match[1]);
+            const total = parseInt(match[2]);
+            const pct = 70 + Math.floor((current / total) * 25);
+            updateProgress(pct, msg);
+          } else {
+            updateProgress(80, msg);
+          }
+        } else {
+          updateProgress(50, msg);
+        }
+      });
+
+      sse.addEventListener('done', async e => {
+        const resData = JSON.parse(e.data);
+        sse.close();
+        
+        progressLog.innerHTML += `<div style="color:#10b981; font-weight:bold;">[Success] Mining completed!</div>`;
+        updateProgress(100, 'Analysis complete.');
+        
+        // Show results grid
+        renderNerResults(resData.signals);
+        
+        // Refresh signals list
+        await fetchAndRenderSignals();
+      });
+
+      sse.addEventListener('error', e => {
+        const errMsg = e.data || "Unknown streaming error occurred.";
+        progressLog.innerHTML += `<div style="color:#ef4444; font-weight:bold;">[Error] ${escHtml(errMsg)}</div>`;
+        sse.close();
+        updateProgress(0, 'Task failed.');
+      });
+
+    } catch (err) {
+      progressLog.innerHTML += `<div style="color:#ef4444; font-weight:bold;">[Error] ${escHtml(err.message)}</div>`;
+      updateProgress(0, 'Task failed.');
+    }
+  });
+
+  function updateProgress(pct, text) {
+    progressBar.style.width = `${pct}%`;
+    progressPct.textContent = `${pct}%`;
+    progressText.textContent = text;
+  }
+
+  function renderNerResults(signals) {
+    resultsContainer.style.display = 'block';
+    
+    if (signals.length === 0) {
+      resultsGrid.innerHTML = `
+        <div style="grid-column: 1/-1; padding: 1.5rem; text-align: center; color: var(--text-muted); background: rgba(0,0,0,0.1); border-radius: 6px;">
+          No statistically significant drug-event signals detected in the clinical narrative.
+        </div>`;
+      return;
+    }
+
+    resultsGrid.innerHTML = signals.map(s => {
+      return `
+        <div class="dashboard-card" style="margin: 0; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); background: rgba(15, 23, 42, 0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+            <span class="status-pill status-pill--${s.severity === 'critical' ? 'active' : s.severity === 'high' ? 'review' : 'closed'}">${s.severity.toUpperCase()}</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Source: EHR NER</span>
+          </div>
+          <h4 style="font-size: 1rem; font-weight: 700; margin: 0.2rem 0;">${escHtml(s.drug)}</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 0.8rem 0;">↳ ${escHtml(s.event)}</p>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 4px;">
+            <div>
+              <div style="font-weight: bold; color: #3b82f6;">${s.prr.toFixed(2)}</div>
+              <div style="font-size: 0.65rem; color: var(--text-muted);">PRR</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #8b5cf6;">${s.ror.toFixed(2)}</div>
+              <div style="font-size: 0.65rem; color: var(--text-muted);">ROR</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #10b981;">${s.bcpnn_ic.toFixed(2)}</div>
+              <div style="font-size: 0.65rem; color: var(--text-muted);">IC</div>
+            </div>
+          </div>
+          <div style="margin-top: 0.8rem; font-size: 0.75rem; display: flex; justify-content: space-between; color: var(--text-muted);">
+            <span>Co-reports: <strong>${s.n_reports}</strong></span>
+            <span style="color: #10b981; font-weight: 500;">Signal Persistent</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
 }
 
 /* ──────────────── BOXED WARNING ANALYSIS ──────────────────── */
@@ -911,13 +1582,16 @@ function initBoxedWarnings() {
 
 async function loadBoxedWarningAnalysis(drugName) {
   const resultsPanel = document.getElementById('bw-results-panel');
+  if (resultsPanel) {
+    resultsPanel.dataset.drug = drugName;
+  }
   const loadingDiv = document.getElementById('bw-loading');
   const noWarningDiv = document.getElementById('bw-no-warning');
   const hasWarningDiv = document.getElementById('bw-has-warning');
   const emptyState = document.getElementById('bw-empty-state');
 
   emptyState.style.display = 'none';
-  resultsPanel.style.display = 'block';
+  if (resultsPanel) resultsPanel.style.display = 'block';
   loadingDiv.style.display = 'block';
   noWarningDiv.style.display = 'none';
   hasWarningDiv.style.display = 'none';
@@ -928,9 +1602,9 @@ async function loadBoxedWarningAnalysis(drugName) {
 
   try {
     const [warningRes, eventsRes, trialsRes] = await Promise.all([
-      fetch(`http://127.0.0.1:5000/api/boxed-warning/${encodeURIComponent(drugName)}`).then(r => r.json()),
-      fetch(`http://127.0.0.1:5000/api/boxed-warning-events/${encodeURIComponent(drugName)}`).then(r => r.json()),
-      fetch(`http://127.0.0.1:5000/api/trials/${encodeURIComponent(drugName)}`).then(r => r.json()).catch(() => null)
+      fetch(`/api/boxed-warning/${encodeURIComponent(drugName)}`).then(r => r.json()),
+      fetch(`/api/boxed-warning-events/${encodeURIComponent(drugName)}`).then(r => r.json()),
+      fetch(`/api/trials/${encodeURIComponent(drugName)}`).then(r => r.json()).catch(() => null)
     ]);
 
     loadingDiv.style.display = 'none';
@@ -1085,9 +1759,9 @@ async function loadBoxedWarningAnalysis(drugName) {
 
     const drug = drugName;
     Promise.all([
-      fetch(`http://127.0.0.1:5000/api/boxed-warning/timeline/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
-      fetch(`http://127.0.0.1:5000/api/boxed-warning/violations/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
-      fetch(`http://127.0.0.1:5000/api/boxed-warning/bias-analysis/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null)
+      fetch(`/api/boxed-warning/timeline/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/boxed-warning/violations/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/boxed-warning/bias-analysis/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null)
     ]).then(([timelineData, violationsData, biasData]) => {
       renderTimelineChart(timelineData);
       renderViolationsLog(drug, violationsData);
@@ -1509,7 +2183,7 @@ function renderViolationsLog(drugName, data) {
       if (allLog.style.display !== 'none') { allLog.style.display = 'none'; allBtn.textContent = '📋 View Entire DB Log'; return; }
       allBtn.textContent = '⏳ Loading…';
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/boxed-warning/violations/all?limit=100').then(r => r.json());
+        const res = await fetch('/api/boxed-warning/violations/all?limit=100').then(r => r.json());
         const rows = res.violations || [];
         if (dbStatus) dbStatus.textContent = `${rows.length} total records in pharmawatch.db`;
         allLog.innerHTML = rows.length === 0
@@ -1559,7 +2233,7 @@ function renderBiasChart(data) {
     return;
   }
   ensureBiasCardStructure(card);
-  const note = document.getElementById('bw-bias-note');
+  const note  = document.getElementById('bw-bias-note');
   const badge = document.getElementById('bw-weber-badge');
 
   card.dataset.skeleton = '';
@@ -1568,29 +2242,78 @@ function renderBiasChart(data) {
   void card.offsetWidth;
   card.classList.add('bw-section-reveal');
 
-  if (note) note.textContent = data.notoriety_note || '';
-
+  // ── Badge ──────────────────────────────────────────────────────────────────
   if (badge) {
-    badge.textContent = data.weber_peak_detected
-      ? `⚡ Weber Peak Detected (${data.peak_year})`
-      : '✅ No Weber Peak';
-    badge.style.background = data.weber_peak_detected ? '#fff3e0' : '#e8f5e9';
-    badge.style.color       = data.weber_peak_detected ? '#e65100' : '#2e7d32';
+    const tierLabels = {
+      exact:    'Exact window',
+      proxy:    'Historical proxy',
+      relative: 'Relative pattern',
+    };
+    const tierLabel = data.weber_tier ? ` · ${tierLabels[data.weber_tier] || data.weber_tier}` : '';
+    if (data.weber_peak_detected) {
+      badge.textContent = `⚡ Weber Peak ${data.peak_year}${tierLabel}`;
+      badge.style.background = '#fff3e0';
+      badge.style.color       = '#e65100';
+    } else {
+      badge.textContent = '✅ No Weber Peak';
+      badge.style.background = '#e8f5e9';
+      badge.style.color       = '#2e7d32';
+    }
   }
 
+  // ── Notoriety note ─────────────────────────────────────────────────────────
+  if (note) note.textContent = data.notoriety_note || '';
+
+  // ── Data coverage banner (shown when warning predates FAERS) ──────────────
+  let coverageBanner = document.getElementById('bw-coverage-banner');
+  if (data.faers_predates_warning) {
+    if (!coverageBanner) {
+      coverageBanner = document.createElement('div');
+      coverageBanner.id = 'bw-coverage-banner';
+      coverageBanner.style.cssText = `
+        margin: 0.5rem 0 0.75rem;
+        padding: 7px 12px;
+        background: #fffde7;
+        border-left: 4px solid #f9a825;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        color: #5d4037;
+        line-height: 1.5;
+      `;
+      // Insert before the chart
+      const chartWrap = document.querySelector('#bw-bias-card .chart-container');
+      if (chartWrap) chartWrap.parentNode.insertBefore(coverageBanner, chartWrap);
+    }
+    const dataFirst = (data.labels || [])[0] || '?';
+    coverageBanner.innerHTML = `
+      ⚠️ <strong>Data coverage note:</strong>
+      The FDA boxed warning was originally issued in <strong>${escHtml(String(data.warning_year))}</strong>,
+      but openFDA FAERS electronic records only begin at <strong>${escHtml(dataFirst)}</strong>.
+      The chart shows available data (${escHtml(data.data_coverage || dataFirst + '–present')}).
+      Weber Effect analysis uses a <em>${escHtml(data.weber_tier === 'proxy' ? 'historical proxy' : 'relative pattern')}</em>
+      method to infer the early-reporting surge from the shape of available data.
+    `;
+  } else if (coverageBanner) {
+    coverageBanner.remove();
+  }
+
+  // ── Bar chart ──────────────────────────────────────────────────────────────
   const ctx = document.getElementById('bw-bias-chart');
   if (!ctx) return;
   if (bwBiasChart) bwBiasChart.destroy();
 
-  const labels = data.labels || [];
-  const counts = data.counts || [];
+  const labels      = data.labels || [];
+  const counts      = data.counts || [];
   const warningYear = String(data.warning_year ?? '');
   const peakYear    = String(data.peak_year ?? '');
 
-  // Color bars: warning year = amber, peak year = red, others = blue
+  // Color: peak bar = red, first-data bar (proxy anchor) = amber if warning predated FAERS,
+  // warning-year bar = amber if it falls in the visible data, others = blue.
+  const firstDataYear = labels[0] || '';
   const barColors = labels.map(yr => {
     if (yr === peakYear && data.weber_peak_detected) return '#c0392b';
     if (yr === warningYear) return '#f9a825';
+    if (data.faers_predates_warning && yr === firstDataYear) return '#ffd54f'; // proxy anchor
     return '#3498db';
   });
 
@@ -1614,7 +2337,9 @@ function renderBiasChart(data) {
             label: ctx2 => {
               const yr = labels[ctx2.dataIndex];
               let suffix = '';
-              if (yr === warningYear) suffix = ' ← Warning issued';
+              if (yr === warningYear && !data.faers_predates_warning) suffix = ' ← Warning issued';
+              if (yr === firstDataYear && data.faers_predates_warning)
+                suffix = ` ← First FAERS record (warning was ${data.warning_year})`;
               if (yr === peakYear && data.weber_peak_detected) suffix = ' ← Weber Peak';
               return ` ${ctx2.raw.toLocaleString()} reports${suffix}`;
             }

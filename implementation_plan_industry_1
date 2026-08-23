@@ -1,0 +1,501 @@
+# PharmaWatch — Industry-Grade Implementation Plan
+**4-Phase Roadmap to Production-Grade Pharmacovigilance Platform**
+
+> **Baseline snapshot (2026-06-06):** Blueprint architecture live (`general_bp`, `signals_bp`, `interactions_bp`, `boxed_warnings_bp`, `ml_bp`). PRR/ROR/BCPNN real. GNN DDI + TWOSIDES HBase + BioBERT NER + LSTM training all implemented. ~74% real features. Hardcoded counters, fake pipeline metrics, and Math.random() charts remain.
+
+---
+
+## Architecture Reference (Current State)
+
+```
+openFDA FAERS API  ←→  SQLite cache (pharmawatch.db, 18MB)
+       ↓
+Flask Backend (blueprint architecture)
+  ├── routes/general.py      → drug profiles, prr-trials, drug trend
+  ├── routes/signals.py      → PRR/ROR/BCPNN, NER-mine SSE, signal network
+  ├── routes/interactions.py → GNN DDI, TWOSIDES HBase, polypharmacy, uncharted
+  ├── routes/boxed_warnings.py → Weber effect, bias analysis, violations
+  └── routes/ml.py           → LSTM train/predict, gap-scan
+       ↓
+Frontend (src/)
+  ├── app.js (99KB monolith — Drug Search, Dashboard, Signals, Boxed Warnings)
+  ├── _interactions_new.js   → DDI graph, polypharmacy
+  ├── ml_models.js           → LSTM + PRR calculator
+  └── distributed_storage.js → Simulated Kafka/Spark/HBase pipeline UI
+```
+
+---
+
+## Phase 1 — UX Coherence + Global Drug Context
+**Goal:** Eliminate all fake/hardcoded UI data. Wire a shared `DrugContext` state so every tab reflects the same selected drug without re-fetching.
+
+### Problem Statement
+- 6 fake data sources remain (Math.random trends, hardcoded counters, randomArray signals, hardcoded doughnut, rotating alert banners, simulated pipeline metrics)
+- Each tab independently manages drug selection — switching tabs loses context and triggers redundant API calls
+- Hardcoded `127.0.0.1` in `_interactions_new.js` (7 occurrences) and `app.js` (9 occurrences)
+- No loading/error state standardization — silent failures are invisible to users
+
+### Proposed Changes
+
+#### [MODIFY] `src/app.js`
+- **Global DrugContext module:** Extract a singleton `DrugContext = { drug, label, totalReports, adeList, prr }` populated on drug search. All tabs subscribe via `DrugContext.on('change', cb)` event emitter pattern.
+- **Fix Drug Trend Chart (line 586):** Replace `Math.random()` with real `/api/lstm?drug=X` monthly buckets (already returns `actual[]` array — just bin by month).
+- **Fix Signal Intensity Chart (line 668):** Add `/api/dashboard/signal-intensity` route that returns last-24h PRR score averages from SQLite `signals` table grouped by hour.
+- **Fix Drug Category Doughnut (line 707):** Replace hardcoded `[31,18,22,14,9,6]` with openFDA `count=pharm_class_epc.exact` query cached in SQLite.
+- **Fix Animated Counters:** Add `/api/local-stats` endpoint returning `{ total_signals, total_drug_events, total_violations, monitored_drugs }` from SQLite `COUNT(*)` queries.
+- **Fix Alert Banner (line 795):** Pull top-3 highest-PRR signals from SQLite `signals` table ordered by `prr DESC`.
+- **Replace all `127.0.0.1` references** with relative paths (`/api/...`).
+
+#### [MODIFY] `src/_interactions_new.js`
+- Replace all 7 hardcoded `http://127.0.0.1:5000/api/...` with `/api/...`
+- Subscribe to `DrugContext` so Interactions tab auto-populates drug field on tab switch.
+
+#### [NEW] `backend/routes/dashboard.py`
+```python
+# New blueprint: dashboard_bp
+# GET /api/dashboard/signal-intensity  → last-24h hourly PRR averages
+# GET /api/local-stats                 → aggregate SQLite counts
+# GET /api/dashboard/drug-categories   → openFDA pharm class distribution (cached)
+```
+
+#### [MODIFY] `backend/app.py`
+- Register `dashboard_bp`.
+- Add `Flask-Limiter` with `200/hour` default (already in upgrade guide, not yet implemented).
+
+#### [MODIFY] `src/distributed_storage.js`
+- Add a prominent **"Architecture Demo"** badge/disclaimer overlay so simulated Kafka/Spark/HBase metrics are clearly labeled, not mistaken for real telemetry.
+
+### Verification
+- [ ] All `Math.random()` calls removed from production render paths
+- [ ] Drug Category doughnut shows real openFDA class distribution
+- [ ] Animated counters reflect SQLite row counts
+- [ ] Switching tabs preserves selected drug without re-search
+- [ ] All API calls use relative URLs (no `127.0.0.1`)
+- [ ] `/api/local-stats` returns non-zero counts when DB has data
+
+---
+
+## Phase 2 — Real Big Data Foundation: DuckDB + FAERS
+**Goal:** Replace per-request openFDA API polling with a local analytical engine over the full FAERS quarterly dataset. Sub-100ms PRR queries instead of 4-API-call round trips.
+
+### Problem Statement
+- Every PRR/ROR/BCPNN calculation makes **4 sequential openFDA HTTP calls** (~2–5s per drug-event pair). The watchlist of 30+ pairs serializes to 60–150s on cold load.
+- openFDA rate-limits at 240 requests/min without an API key (40/min without). The current SQLite cache helps but doesn't solve the latency problem.
+- FAERS full quarterly exports (2004–2024) contain **18M+ reports** with full demographics, MedDRA codes, and drug identifiers — far more signal fidelity than openFDA's aggregated API.
+- DuckDB can query 18M Parquet rows in <500ms on a laptop (columnar, vectorized).
+
+### Proposed Changes
+
+#### [NEW] `backend/faers/`
+```
+faers/
+├── downloader.py       # Downloads FAERS quarterly ZIPs from FDA FTP
+├── parser.py           # Parses DEMO/DRUG/REAC/INDI ASCII files → Parquet
+├── loader.py           # DuckDB schema creation + Parquet ingestion
+└── README.md           # Manual steps for initial data download
+```
+
+**`downloader.py`** — FDA publishes FAERS at `https://fda.gov/drugs/fda-adverse-event-reporting-system-faers/faers-quarterly-data-files`. Downloads the last N quarters of ASCII ZIPs (each ~150MB compressed, ~600MB uncompressed). Targets `data/faers_raw/` directory.
+
+**`parser.py`** — Reads the pipe-delimited ASCII files:
+- `DEMO*.txt` → patient demographics (case ID, age, sex, report date, country)
+- `DRUG*.txt` → drug names, roles (primary/suspect/concomitant), routes
+- `REAC*.txt` → MedDRA reaction terms (PT level)
+- `INDI*.txt` → indications (intended use)
+
+Outputs normalized Parquet files per quarter into `data/faers_parquet/`.
+
+**`loader.py`** — Creates DuckDB database `data/pharmawatch_faers.duckdb`:
+```sql
+-- Core analytical tables (partitioned by quarter)
+CREATE TABLE faers_events AS SELECT * FROM read_parquet('data/faers_parquet/**/*.parquet');
+CREATE INDEX ON faers_events(primaryid);
+CREATE INDEX ON faers_events(drug_name_normalized);
+CREATE INDEX ON faers_events(reaction_pt);
+```
+
+#### [NEW] `backend/faers/analytics.py`
+Analytical query functions:
+```python
+def compute_prr_duckdb(drug, event) -> dict:
+    """
+    2x2 contingency via DuckDB in <100ms.
+    Returns a, b, c, d, PRR, ROR, BCPNN-IC, CI95.
+    """
+
+def get_temporal_trend(drug, granularity="quarter") -> list:
+    """
+    Report counts grouped by quarter/month.
+    Replaces openFDA receivedate polling for LSTM input.
+    """
+
+def get_top_reactions(drug, limit=20) -> list:
+    """Top MedDRA PT reactions for a drug by report count."""
+
+def get_mgps_score(drug, event) -> dict:
+    """
+    Multi-item Gamma Poisson Shrinker (MGPS / EBGM).
+    Empirical Bayes estimate — the FDA's own signal detection method.
+    Requires: a, n_drug, n_event, N_total from DuckDB.
+    Returns: EBGM, EB05, EB95 (shrinkage estimates).
+    """
+
+def get_cooccurrence_matrix(drugs: list) -> pd.DataFrame:
+    """Co-occurrence counts for polypharmacy sets — replaces openFDA co-prescription queries."""
+```
+
+#### [MODIFY] `backend/routes/signals.py`
+- Replace `compute_disproportionality_helper()` to **first try DuckDB** (if `pharmawatch_faers.duckdb` exists), fall back to openFDA API if not.
+- Add `?source=duckdb|openfda` query param for explicit override.
+- Return `data_source` field in response so frontend can show "FAERS Local" vs "openFDA API" badge.
+
+#### [MODIFY] `backend/routes/general.py`
+- Replace LSTM monthly data source: use `get_temporal_trend(drug, "month")` from DuckDB instead of openFDA `receivedate` count endpoint.
+
+#### [NEW] `backend/routes/analytics.py`
+```python
+# GET /api/analytics/prr?drug=X&event=Y&source=duckdb
+# GET /api/analytics/temporal?drug=X&granularity=quarter
+# GET /api/analytics/top-reactions?drug=X&limit=20
+# GET /api/analytics/mgps?drug=X&event=Y           ← Phase 3 prerequisite
+# GET /api/analytics/data-coverage                  ← quarters loaded, total reports
+```
+
+#### [MODIFY] `src/app.js`
+- Show **"Data Source" badge** next to PRR values: green "FAERS Local (18M)" vs yellow "openFDA API".
+- Dashboard counters update from `/api/analytics/data-coverage` (total FAERS reports loaded).
+
+### Data Requirements (User Action Needed)
+> [!IMPORTANT]
+> FAERS quarterly downloads are ~150MB/quarter compressed. Full 2004–2024 corpus = ~25GB uncompressed Parquet. Minimum viable: last 8 quarters (~3GB). The `downloader.py` script will automate this, but the user needs ~5GB free disk space and ~30 min for initial download+parse.
+
+### Verification
+- [ ] `python backend/faers/loader.py` ingests at least 2 FAERS quarters without error
+- [ ] `/api/analytics/prr?drug=Metformin&event=Nausea&source=duckdb` returns <500ms
+- [ ] PRR values from DuckDB match openFDA API values within ±5% tolerance
+- [ ] LSTM temporal trend chart uses DuckDB quarterly data (no openFDA call)
+- [ ] `data_source` field present in all disproportionality API responses
+
+---
+
+## Phase 3 — Pharmacovigilance Methodology: Signal Lifecycle + Bradford Hill + MGPS
+**Goal:** Transform raw disproportionality scores into a structured pharmacovigilance workflow with formal causal assessment, signal states, and regulatory-grade evidence tiers.
+
+### Problem Statement
+- Current signals are stateless: PRR>2 triggers "critical" but there is no workflow for a pharmacovigilance officer to act on it (triage → investigate → escalate → close).
+- No causal assessment framework — the Bradford Hill criteria and MGPS (FDA's primary signal detection method) are absent.
+- The GNN DDI predictions have no explainability — a "harmful" prediction is a black box.
+- Weber Effect and bias analysis are implemented but disconnected from the signal lifecycle.
+
+### Proposed Changes
+
+#### [NEW] `backend/database.py` additions
+New SQLite tables (additive migration, no breaking changes):
+```sql
+-- Signal Lifecycle Management
+CREATE TABLE signal_cases (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    drug        TEXT NOT NULL,
+    event       TEXT NOT NULL,
+    status      TEXT DEFAULT 'new',        -- new | triaged | investigating | escalated | closed | false_positive
+    priority    TEXT DEFAULT 'medium',     -- critical | high | medium | low
+    prr         REAL,
+    ror         REAL,
+    bcpnn_ic    REAL,
+    ebgm        REAL,                      -- MGPS score (Phase 3)
+    eb05        REAL,
+    n_reports   INTEGER,
+    data_source TEXT DEFAULT 'openfda',
+    assigned_to TEXT,
+    created_at  REAL DEFAULT (unixepoch()),
+    updated_at  REAL DEFAULT (unixepoch()),
+    notes       TEXT
+);
+
+-- Bradford Hill Causal Assessment
+CREATE TABLE bradford_hill_assessments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_id       INTEGER REFERENCES signal_cases(id),
+    strength        INTEGER CHECK(strength BETWEEN 0 AND 2),    -- 0=absent, 1=weak, 2=strong
+    consistency     INTEGER CHECK(consistency BETWEEN 0 AND 2),
+    specificity     INTEGER CHECK(specificity BETWEEN 0 AND 2),
+    temporality     INTEGER CHECK(temporality BETWEEN 0 AND 2),
+    biological_gradient INTEGER CHECK(biological_gradient BETWEEN 0 AND 2),
+    plausibility    INTEGER CHECK(plausibility BETWEEN 0 AND 2),
+    coherence       INTEGER CHECK(coherence BETWEEN 0 AND 2),
+    experiment      INTEGER CHECK(experiment BETWEEN 0 AND 2),
+    analogy         INTEGER CHECK(analogy BETWEEN 0 AND 2),
+    total_score     INTEGER,               -- sum of all criteria (max 18)
+    causality_level TEXT,                  -- "definite" | "probable" | "possible" | "unlikely"
+    assessor_notes  TEXT,
+    assessed_at     REAL DEFAULT (unixepoch())
+);
+
+-- Signal Evidence Audit Trail
+CREATE TABLE signal_evidence (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_id   INTEGER REFERENCES signal_cases(id),
+    evidence_type TEXT,   -- "faers_disproportionality" | "pubmed_literature" | "clinical_trial" | "label_warning" | "ner_extraction"
+    source_ref  TEXT,
+    value       TEXT,
+    added_at    REAL DEFAULT (unixepoch())
+);
+```
+
+#### [NEW] `backend/routes/signal_lifecycle.py`
+```python
+# Blueprint: signal_lifecycle_bp
+#
+# POST /api/signals/cases              → Create case from disproportionality result
+# GET  /api/signals/cases              → List cases with filters (status, priority, drug)
+# GET  /api/signals/cases/<id>         → Full case detail with Bradford Hill scores
+# PATCH /api/signals/cases/<id>/status → Transition: new→triaged→investigating→escalated
+# POST /api/signals/cases/<id>/assess  → Submit Bradford Hill 9-criteria assessment
+# GET  /api/signals/cases/<id>/evidence → Timeline of all evidence for a case
+# POST /api/signals/cases/<id>/evidence → Attach evidence (PubMed link, trial, etc.)
+# GET  /api/signals/cases/dashboard    → KPI summary: counts by status/priority
+```
+
+**Bradford Hill auto-scoring logic:**
+- `strength`: Pre-populated from PRR/EBGM values (PRR>10 → strong=2, PRR 2–10 → weak=1)
+- `temporality`: Pre-populated from Weber Effect timeline analysis (if boxed warning pre-dates reporting spike → strong=2)
+- `biological_gradient`: Pre-populated from LSTM dose-response proxy (if higher-dose reports show higher PRR → gradient=2)
+- Remaining 6 criteria require human input via the UI assessment form.
+
+#### [NEW] `backend/pharmacovigilance/mgps.py`
+```python
+"""
+MGPS (Multi-item Gamma Poisson Shrinker) — FDA's primary signal detection algorithm.
+Implements the DuMouchel (1999) empirical Bayes model.
+
+EBGM = E[lambda | data] where lambda ~ Gamma(alpha, beta)
+EB05 = 5th percentile (conservative lower bound — used for regulatory reporting)
+EB95 = 95th percentile (optimistic upper bound)
+
+A signal is considered when EB05 > 2.0 (stronger evidence than PRR > 2.0).
+"""
+
+def fit_prior(contingency_table: pd.DataFrame) -> tuple[float, float, float, float]:
+    """Fit mixture Gamma prior parameters (alpha1, beta1, alpha2, beta2) via EM."""
+
+def compute_ebgm(a, n_drug, n_event, N_total, prior_params) -> dict:
+    """
+    Returns {'ebgm': float, 'eb05': float, 'eb95': float, 'expected': float}
+    expected = (n_drug * n_event) / N_total  (independence assumption baseline)
+    """
+
+def batch_compute_mgps(drug_event_pairs: list, duckdb_conn) -> pd.DataFrame:
+    """
+    Vectorized MGPS over a list of (drug, event) pairs using DuckDB counts.
+    Returns DataFrame with EBGM, EB05, EB95 columns.
+    """
+```
+
+#### [MODIFY] `backend/routes/signals.py`
+- After computing PRR/ROR/BCPNN, **also compute MGPS** (if DuckDB available) and include `ebgm`, `eb05` in response.
+- Auto-create a `signal_cases` record when `eb05 > 2.0` or `prr > 4.0`.
+- Add `?methodology=mgps|prr|all` query param.
+
+#### [NEW] Signal Lifecycle UI component in `src/app.js`
+New **"Signal Workbench"** panel within the Signals tab:
+- Kanban-style columns: **New → Triaged → Investigating → Escalated → Closed**
+- Drag-to-move signal cases between states (D3 or vanilla JS drag)
+- Case detail drawer: Bradford Hill 9-criteria scorecard with radio inputs (0/1/2)
+- Auto-calculated causality level ("Definite ≥14/18", "Probable 10–13", "Possible 5–9", "Unlikely <5")
+- Evidence timeline (PubMed links, clinical trial refs, NER-extracted text snippets)
+- Export case to PDF/JSON (regulatory submission format)
+
+#### [MODIFY] `src/_interactions_new.js`
+- GNN DDI predictions: Add **MGPS score overlay** on graph edges where FAERS co-reporting data exists. Show EB05 value in edge tooltip alongside GNN confidence.
+
+### Verification
+- [ ] `POST /api/signals/cases` creates a case record in SQLite
+- [ ] Bradford Hill assessment form saves and computes `total_score` + `causality_level`
+- [ ] MGPS `eb05 > 2.0` threshold agrees with PRR `>2.0` for known signals (Warfarin+bleeding, Metformin+lactic acidosis)
+- [ ] Signal Workbench Kanban renders and status transitions persist across page refresh
+- [ ] Auto-evidence attachment: Weber Effect timeline linked to signal case on creation
+
+---
+
+## Phase 4 — Real Kafka Pipeline + Explainable ML
+**Goal:** Replace the simulated `distributed_storage.js` pipeline with a real Kafka producer/consumer, and add SHAP-based explainability to both the GNN DDI predictions and LSTM forecasts.
+
+### Problem Statement
+- The entire "Big Data Pipeline" section (`distributed_storage.js`, 18KB) is 100% simulated — animated counters with `Math.random()`.
+- The GNN produces a single `harmful/safe` binary + confidence score with no explanation of which molecular features drove the prediction.
+- The LSTM forecasts anomalies but cannot explain *why* a spike occurred (drug class interaction? reporting notoriety bias? genuine ADE increase?).
+- No real-time ingestion pathway exists — new FAERS quarterly data requires manual re-download.
+
+### Proposed Changes
+
+#### [NEW] `backend/pipeline/kafka_producer.py`
+```python
+"""
+Real Kafka producer for PharmaWatch.
+Publishes FAERS report batches to topic: pharmawatch.faers.raw
+
+Requires: docker run -d --name kafka -p 9092:9092 apache/kafka:3.7.0
+(Single-node KRaft mode — no ZooKeeper needed for Kafka 3.7+)
+"""
+from kafka import KafkaProducer
+import json
+
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
+TOPIC_FAERS_RAW = "pharmawatch.faers.raw"
+TOPIC_SIGNALS   = "pharmawatch.signals.scored"
+TOPIC_ALERTS    = "pharmawatch.alerts.critical"
+
+def produce_faers_batch(reports: list[dict]):
+    """Publish a batch of FAERS reports (from quarterly parser or openFDA) to Kafka."""
+
+def produce_signal_alert(signal: dict):
+    """Publish a high-confidence signal (EB05 > 2.0) to the alerts topic."""
+```
+
+#### [NEW] `backend/pipeline/kafka_consumer.py`
+```python
+"""
+Kafka consumer: reads pharmawatch.faers.raw, runs NER + MGPS, writes to DuckDB + SQLite.
+Runs as a separate process: python -m backend.pipeline.kafka_consumer
+"""
+from kafka import KafkaConsumer
+
+def consume_and_score():
+    """
+    Consumer loop:
+    1. Read batch from pharmawatch.faers.raw
+    2. Run BioBERT NER on reaction text fields
+    3. Compute MGPS score via mgps.batch_compute_mgps()
+    4. Write to DuckDB faers_events table (append)
+    5. Upsert signal_cases if EB05 > threshold
+    6. Publish to pharmawatch.signals.scored topic
+    """
+```
+
+#### [NEW] `backend/pipeline/pipeline_api.py`
+```python
+# Blueprint: pipeline_bp
+# GET  /api/pipeline/status          → Kafka broker reachable? Topics? Consumer lag?
+# POST /api/pipeline/ingest          → Trigger FAERS batch ingest via Kafka producer
+# GET  /api/pipeline/throughput      → Real Kafka consumer metrics (msg/s, offset lag)
+# GET  /api/pipeline/topics          → List topics with partition/offset info
+```
+
+#### [MODIFY] `src/distributed_storage.js`
+- Replace ALL simulated counters with real `/api/pipeline/throughput` polling (1s interval).
+- Real metrics: Kafka consumer lag, msgs/sec from consumer group, DuckDB table row counts, SQLite signal count.
+- If Kafka offline → show grey "Offline" state with "Start Pipeline" button (calls `/api/pipeline/ingest`).
+- If Kafka online → show real green metrics. No more `Math.random()`.
+
+#### [NEW] `backend/ml/explainability.py`
+```python
+"""
+SHAP-based explainability for PharmaWatch ML models.
+
+For GNN DDI:
+  - Use GNNExplainer (PyTorch Geometric) to identify which edges/atoms drove prediction
+  - Return top-5 contributing molecular features per drug pair
+
+For LSTM forecasting:
+  - Use SHAP DeepExplainer on the last sliding window
+  - Return feature importance over the 30-day input sequence
+  - Overlay on chart: "Days 15–22 drove this spike (high input weight)"
+
+For signal attribution:
+  - Which FAERS quarters contributed most to MGPS score change?
+  - Temporal decomposition: EBGM by quarter to show trend direction
+"""
+
+def explain_gnn_prediction(drug_a: str, drug_b: str) -> dict:
+    """Returns GNNExplainer node/edge masks as feature importance dict."""
+
+def explain_lstm_forecast(drug: str, target_idx: int) -> dict:
+    """Returns SHAP values over input sequence for specified forecast step."""
+
+def explain_mgps_trend(drug: str, event: str) -> list:
+    """Returns EBGM per quarter — shows if signal is strengthening or fading."""
+```
+
+#### [MODIFY] `backend/routes/interactions.py`
+- `/api/graph/predict` response: add `explanation: { top_features: [...], node_importance: {...} }` from `explain_gnn_prediction()`.
+- Add `?explain=true` query param to opt into (slower) explainability computation.
+
+#### [MODIFY] `backend/routes/ml.py`
+- `/api/lstm` response: add `shap_values: [...]` array (one per input day) when `?explain=true`.
+- `/api/lstm/anomaly`: annotate detected anomalies with SHAP-based "likely cause" label.
+
+#### [MODIFY] `src/ml_models.js`
+- LSTM chart: when `shap_values` present, render a **heatmap row** below the time-series showing SHAP weights (blue = negative contribution, red = positive).
+- GNN prediction card: add **"Why harmful?"** expandable section with top-5 molecular feature contributions as a horizontal bar chart.
+
+#### [MODIFY] `src/_interactions_new.js`
+- Graph edges: clicking "Predict" on a pair → shows GNNExplainer node importance as node size modulation in D3 graph (larger node = more influential).
+
+### Kafka Setup (Minimal — KRaft Mode)
+```bash
+# No ZooKeeper needed for Kafka 3.7+
+docker run -d --name pharmawatch-kafka \
+  -p 9092:9092 \
+  -e KAFKA_NODE_ID=1 \
+  -e KAFKA_PROCESS_ROLES=broker,controller \
+  -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093 \
+  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+  -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  apache/kafka:3.7.0
+```
+
+### Verification
+- [ ] `docker ps` shows `pharmawatch-kafka` running
+- [ ] `/api/pipeline/status` returns `{ kafka: "online", topics: [...] }`
+- [ ] Triggering `/api/pipeline/ingest` with 100 sample reports → consumer processes and writes to DuckDB
+- [ ] Pipeline UI shows real msg/s (not `Math.random()`) — value increases during ingest
+- [ ] `explain_gnn_prediction("Warfarin", "Aspirin")` returns non-empty `top_features`
+- [ ] LSTM chart renders SHAP heatmap row when `?explain=true` is set
+- [ ] GNN "Why harmful?" panel shows molecular feature contributions
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Phase 2 — Disk space:** FAERS full corpus (2004–2024) requires ~25GB. Is this feasible, or should we scope to last 4 quarters (~3GB) for the initial implementation?
+
+> [!IMPORTANT]
+> **Phase 4 — Kafka:** Kafka adds Docker dependency (already used for HBase). Should the pipeline section be Kafka-real OR pivoted to a simpler `asyncio` queue + background worker if Docker is unavailable? Kafka gives a better portfolio story but is heavier.
+
+> [!NOTE]
+> **GNNExplainer vs SHAP for GNN:** PyTorch Geometric's `GNNExplainer` gives edge/node masks natively. SHAP `DeepExplainer` works on the GNN if we treat it as a black-box. GNNExplainer is more interpretable for graphs; SHAP is easier to visualize in the existing UI. Recommend GNNExplainer for the portfolio narrative.
+
+> [!NOTE]
+> **Phase 3 — Bradford Hill UI:** The 9-criteria assessment could be a modal form OR a dedicated tab. Given the Signals tab is already dense, recommend a slide-over drawer panel.
+
+---
+
+## Dependency Order
+
+```
+Phase 1  ──→  Phase 2  ──→  Phase 3  ──→  Phase 4
+(UX/State)   (DuckDB/FAERS) (MGPS/Lifecycle) (Kafka/SHAP)
+   │               │               │
+   │               └──────────────→ MGPS.py needed by Phase 3
+   │                               └──→ DuckDB needed by MGPS
+   └──→ DrugContext needed by all subsequent phases
+```
+
+Phase 1 and Phase 2 can partially overlap (Phase 1 is frontend-heavy, Phase 2 is backend-heavy).
+Phase 3 requires Phase 2 (`DuckDB + MGPS`).
+Phase 4 requires Phase 2 (DuckDB for consumer writes) and Phase 3 (signal_cases for alert routing).
+
+---
+
+## Estimated Effort
+
+| Phase | Backend Effort | Frontend Effort | Total |
+|-------|---------------|-----------------|-------|
+| 1 — UX Coherence | ~4h (dashboard.py, local-stats) | ~6h (DrugContext, chart fixes) | **~10h** |
+| 2 — DuckDB+FAERS | ~12h (parser, loader, analytics) | ~2h (data source badges) | **~14h** |
+| 3 — PV Methodology | ~10h (MGPS, lifecycle routes, DB) | ~8h (Kanban, Bradford Hill form) | **~18h** |
+| 4 — Kafka+SHAP | ~10h (producer, consumer, explain) | ~6h (real pipeline UI, SHAP viz) | **~16h** |
+
+**Total: ~58 hours** across 4 phases.

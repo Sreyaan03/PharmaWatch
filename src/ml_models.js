@@ -62,7 +62,7 @@ const MLModels = {
     if (statusMsg) statusMsg.textContent = `Loading LSTM data for ${drug}…`;
 
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/lstm?drug=${encodeURIComponent(drug)}`);
+      const res = await fetch(`/api/lstm?drug=${encodeURIComponent(drug)}`);
       const data = await res.json();
 
       if (data.error) {
@@ -167,7 +167,7 @@ const MLModels = {
       // Only run gap-scan enrichment if we have a real trained LSTM (not fallback)
       if (!data.fallback) {
         try {
-          const gapRes = await fetch(`http://127.0.0.1:5000/api/lstm/gap-scan?drug=${encodeURIComponent(drug)}`);
+          const gapRes = await fetch(`/api/lstm/gap-scan?drug=${encodeURIComponent(drug)}`);
           const gapData = await gapRes.json();
 
           if (!gapData.error) {
@@ -301,7 +301,7 @@ const MLModels = {
       trainBtn.disabled = true;
       try {
         const r = await fetch(
-          `http://127.0.0.1:5000/api/lstm/train?drug=${encodeURIComponent(currentDrug)}`,
+          `/api/lstm/train?drug=${encodeURIComponent(currentDrug)}`,
           { method: 'POST' }
         );
         const d = await r.json();

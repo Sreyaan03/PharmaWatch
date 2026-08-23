@@ -16,7 +16,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-# Patch requests.get to automatically include openFDA API key
+# Patch requests.get to automatically include openFDA API key and support cache layer
 FDA_API_KEY = os.getenv("FDA_API_KEY")
 class PatchedRequests:
     @staticmethod
@@ -24,7 +24,34 @@ class PatchedRequests:
         if "api.fda.gov" in url and "api_key" not in url:
             connector = "&" if "?" in url else "?"
             url = f"{url}{connector}api_key={FDA_API_KEY}"
-        return original_requests.get(url, **kwargs)
+        
+        # Check database cache for FDA responses
+        if "api.fda.gov" in url:
+            try:
+                from database import get_cached_fda_response
+                cached = get_cached_fda_response(url)
+                if cached is not None:
+                    class MockResponse:
+                        def __init__(self, json_data):
+                            self.json_data = json_data
+                            self.status_code = 200
+                        def json(self):
+                            return self.json_data
+                    return MockResponse(cached)
+            except Exception as e:
+                print(f"[CACHE ERROR] {e}")
+
+        resp = original_requests.get(url, **kwargs)
+
+        # Cache successful openFDA responses
+        if "api.fda.gov" in url and resp.status_code == 200:
+            try:
+                from database import cache_fda_response
+                cache_fda_response(url, resp.json())
+            except Exception as e:
+                print(f"[CACHE SAVE ERROR] {e}")
+
+        return resp
 
 requests = PatchedRequests()
 import os

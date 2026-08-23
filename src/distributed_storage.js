@@ -420,5 +420,31 @@ const DistributedStorage = {
     this.startHDFSSimulation();
     this.updatePipelineMetrics();
     this.animateMeters();
+
+    // Inject disclaimer badge on Data Sources tab
+    const container = document.querySelector('#data-sources .container.section-body');
+    if (container && !document.getElementById('data-sources-demo-badge')) {
+      const badge = document.createElement('div');
+      badge.id = 'data-sources-demo-badge';
+      badge.style.cssText = `
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: rgba(255, 193, 7, 0.15);
+        border: 1px solid rgba(255, 193, 7, 0.4);
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 0.78rem;
+        color: #f0a500;
+        font-weight: 600;
+        margin: 0 0 1.5rem 0;
+        line-height: 1.4;
+      `;
+      badge.innerHTML = `
+        <span style="font-size:1rem; flex-shrink:0;">⚡</span>
+        <span><strong>Architecture Demo</strong> — Kafka, Spark, HDFS, and HBase throughput charts and logs are simulated to demonstrate pipeline scaling and architecture layout. Only BioBERT NLP and LSTM models consume real clinical datasets.</span>
+      `;
+      container.insertBefore(badge, container.firstChild);
+    }
   }
 };

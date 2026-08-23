@@ -5,7 +5,7 @@ let _bigdataReady = false;
 
 async function checkBigdataStatus() {
   try {
-    const r = await fetch('http://127.0.0.1:5000/api/system/bigdata-status');
+    const r = await fetch('/api/system/bigdata-status');
     const d = await r.json();
     return d.hbase_ready === true;
   } catch { return false; }
@@ -26,7 +26,7 @@ function setBigdataUI(state, msg, sub) {
 async function startBigdata() {
   setBigdataUI('starting', 'Starting HBase container…', 'docker start hbase-server');
   try {
-    const r = await fetch('http://127.0.0.1:5000/api/system/start-bigdata', { method: 'POST' });
+    const r = await fetch('/api/system/start-bigdata', { method: 'POST' });
     const d = await r.json();
     if (d.status === 'ready') {
       _bigdataReady = true;
@@ -91,6 +91,18 @@ function initExplorerTab() {
   const suggsA = document.getElementById('explorer-suggestions-a');
   const suggsB = document.getElementById('explorer-suggestions-b');
   if (!inputA || !inputB) return;
+
+  // Sync with global DrugContext
+  if (typeof DrugContext !== 'undefined') {
+    if (DrugContext.state.drug && !inputA.value) {
+      inputA.value = DrugContext.state.drug;
+    }
+    DrugContext.on('change', (state) => {
+      if (state.drug) {
+        inputA.value = state.drug;
+      }
+    });
+  }
 
   wireExplorerDrugInput(inputA, suggsA);
   wireExplorerDrugInput(inputB, suggsB);
@@ -183,7 +195,7 @@ async function runExplorerPairCheck() {
   skeleton.style.display = 'flex';
 
   try {
-    const res = await fetch('http://127.0.0.1:5000/api/graph/predict', {
+    const res = await fetch('/api/graph/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ drug_a: drugA, drug_b: drugB })
@@ -388,7 +400,7 @@ async function resolveSlot(slot, query, badge) {
   badge.className = 'drug-slot__resolve drug-slot__resolve--loading';
   badge.textContent = '…';
   try {
-    const r = await fetch(`http://127.0.0.1:5000/api/interactions/resolve?input=${encodeURIComponent(query)}`);
+    const r = await fetch(`/api/interactions/resolve?input=${encodeURIComponent(query)}`);
     const d = await r.json();
     if (d.found) {
       slot.resolved = d;
@@ -436,7 +448,7 @@ async function runPolypharmacyAnalysis() {
   skeleton.style.display  = 'flex';
 
   try {
-    const res  = await fetch('http://127.0.0.1:5000/api/interactions/polypharmacy', {
+    const res  = await fetch('/api/interactions/polypharmacy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ drugs: resolvedDrugs })
@@ -473,6 +485,11 @@ async function runPolypharmacyAnalysis() {
     renderPolyPairs(_lastPolyPairs, pairsEl);
     pairsEl.style.display = 'flex';
     loadRecentPredictions();
+
+    // Fire the Uncharted Interactions panel asynchronously
+    // (non-blocking — graph and pairs render first, then this fills in)
+    const unchartedDrugs = resolvedDrugs.join(',');
+    renderUnchartedPanel(unchartedDrugs).catch(() => {/* silent */});
   } catch (e) {
     skeleton.style.display = 'none';
     pairsEl.style.display  = 'flex';
@@ -673,17 +690,33 @@ function renderPolyPairs(pairs, container) {
     const conf     = (p.confidence * 100).toFixed(0);
     const severity = getInteractionSeverity(p);
     const seText   = (p.side_effects || []).slice(0, 2).join(', ');
+    const sourceBadge = getSourceBadgeHTML(p);
+    const faersText = (p.faers_reports > 0)
+      ? `<span class="pair-faers-count">${p.faers_reports.toLocaleString()} FAERS reports</span>`
+      : '';
+    const labelHtml = (p.label_documented && p.label_severity && p.label_severity !== 'unknown')
+      ? `<span class="pair-label-sev pair-label-sev--${p.label_severity}">${escHtml(p.label_severity.charAt(0).toUpperCase() + p.label_severity.slice(1))}</span>`
+      : '';
+    const snippetHtml = (p.label_snippet)
+      ? `<div class="pair-label-snippet">"…${escHtml(p.label_snippet.trim())}…"</div>`
+      : '';
     return `
       <div class="poly-pair-item poly-pair-item--${harmful ? 'harmful' : 'safe'}">
         <div class="poly-pair-item__drugs">
           ${escHtml(p.drug_a)}
-          <span class="poly-pair-item__arrow">\u2194</span>
+          <span class="poly-pair-item__arrow">&#x2194;</span>
           ${escHtml(p.drug_b)}
         </div>
-        <span class="poly-pair-item__confidence">${conf}% conf.</span>
+        <div class="poly-pair-item__meta-row">
+          ${sourceBadge}
+          ${faersText}
+          ${labelHtml}
+          <span class="poly-pair-item__confidence">${conf}% GNN conf.</span>
+        </div>
         <span class="poly-pair-item__badge poly-pair-item__badge--${harmful ? 'harmful' : 'safe'}">
           ${escHtml(severity.label)}
         </span>
+        ${snippetHtml}
         ${seText ? `<div class="poly-pair-item__se">${escHtml(seText)}</div>` : ''}
       </div>`;
   }).join('');
@@ -694,7 +727,7 @@ async function loadRecentPredictions() {
   const list      = document.getElementById('poly-recent-list');
   if (!container || !list) return;
   try {
-    const r = await fetch('http://127.0.0.1:5000/api/interactions/recent?limit=10');
+    const r = await fetch('/api/interactions/recent?limit=10');
     const d = await r.json();
     const preds = d.predictions || [];
     if (!preds.length) return;
@@ -707,10 +740,147 @@ async function loadRecentPredictions() {
             ${escHtml(p.drug_a)} + ${escHtml(p.drug_b)}
           </span>
           <span class="poly-pair-item__badge poly-pair-item__badge--${p.is_harmful ? 'harmful' : 'safe'}" style="font-size:0.7rem;">
-            ${p.is_harmful ? '\u26a0 Harmful' : '\u2713 Safe'}
+            ${p.is_harmful ? '&#x26a0; Harmful' : '&#x2713; Safe'}
           </span>
           <span class="recent-pred-row__time">${escHtml(when)}</span>
         </div>`;
     }).join('');
   } catch { /* silent */ }
+}
+
+/* ── Source badge helper ─────────────────────────────────────────── */
+const SOURCE_META = {
+  fda_label:    {
+    label: 'FDA Documented',
+    cls:   'src-fda',
+    // Minimal SVG shield icon (no emoji)
+    icon:  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 1l6 2.5v4C14 11 11.5 14 8 15 4.5 14 2 11 2 7.5v-4L8 1z"/></svg>'
+  },
+  faers_signal: {
+    label: 'FAERS Signal',
+    cls:   'src-faers',
+    icon:  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 3v5H6V4h2zm0 6.5a1 1 0 110 2 1 1 0 010-2z"/></svg>'
+  },
+  faers_weak:   {
+    label: 'Weak Signal',
+    cls:   'src-faers-weak',
+    icon:  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M1 11L5 5l4 4 3-4 3 6H1z"/></svg>'
+  },
+  gnn_novel:    {
+    label: 'GNN Novel',
+    cls:   'src-gnn',
+    icon:  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M4 4l4 8M12 4l-4 8M4 4h8"/></svg>'
+  }
+};
+
+function getSourceBadgeHTML(pair) {
+  const src = SOURCE_META[pair.data_source] || SOURCE_META.gnn_novel;
+  return `<span class="pair-source-badge pair-source-badge--${src.cls}">${src.icon} ${escHtml(src.label)}</span>`;
+}
+
+/* ── Uncharted Interactions Panel ───────────────────────────────── */
+async function renderUnchartedPanel(drugsCsv) {
+  const panel = document.getElementById('uncharted-panel');
+  if (!panel) return;
+
+  // Show loading state immediately
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="uncharted-header">
+      <div class="uncharted-header__title">
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" style="vertical-align:-2px;margin-right:6px;opacity:0.8">
+          <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V6h2v3z"/>
+        </svg>
+        Uncharted Interactions
+      </div>
+      <span class="uncharted-header__sub">Scanning FAERS for undocumented co-reporting signals…</span>
+    </div>
+    <div class="uncharted-loading">Querying FDA FAERS database…</div>
+  `;
+
+  try {
+    const r   = await fetch(`/api/interactions/uncharted?drugs=${encodeURIComponent(drugsCsv)}&min_reports=50`);
+    const d   = await r.json();
+    const all = d.pairs || [];
+
+    // All pairs for context, highlighted if uncharted
+    const significant = all.filter(p => p.faers_reports >= 50);
+
+    if (!significant.length) {
+      panel.innerHTML = `
+        <div class="uncharted-header">
+          <div class="uncharted-header__title">Uncharted Interactions</div>
+          <span class="uncharted-header__sub">FAERS surveillance (≥50 co-reports threshold)</span>
+        </div>
+        <p class="uncharted-empty">No pairs with significant FAERS co-reporting found at this threshold.<br>
+          <span style="font-size:0.75rem;color:#888;">This may indicate genuinely low co-prescription or limited FAERS coverage for this combination.</span>
+        </p>
+      `;
+      return;
+    }
+
+    const unchartedCount = d.uncharted_count || 0;
+    const headerSub = unchartedCount > 0
+      ? `${unchartedCount} undocumented signal${unchartedCount > 1 ? 's' : ''} detected — real-world reporting without FDA documentation`
+      : 'All co-reported pairs have documented interactions';
+
+    const rows = significant.map(p => {
+      const isNew      = p.is_uncharted;
+      const strCls     = { strong: 'sig-strong', moderate: 'sig-moderate', weak: 'sig-weak', none: 'sig-none' }[p.signal_strength] || 'sig-none';
+      const srcLabel   = p.label_documented
+        ? `<span class="uncharted-src uncharted-src--documented">FDA Label</span>`
+        : p.in_twosides
+          ? `<span class="uncharted-src uncharted-src--twosides">TWOSIDES</span>`
+          : `<span class="uncharted-src uncharted-src--novel">Undocumented</span>`;
+
+      const newBadge = isNew
+        ? `<span class="uncharted-new-badge">NEW SIGNAL</span>`
+        : '';
+
+      return `
+        <tr class="uncharted-row${isNew ? ' uncharted-row--highlight' : ''}">
+          <td class="uncharted-td">${escHtml(p.drug_a)}</td>
+          <td class="uncharted-td">${escHtml(p.drug_b)}</td>
+          <td class="uncharted-td uncharted-td--num"><span class="sig-pill ${strCls}">${p.faers_reports.toLocaleString()}</span></td>
+          <td class="uncharted-td">${srcLabel}${newBadge}</td>
+        </tr>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="uncharted-header">
+        <div class="uncharted-header__title">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" style="vertical-align:-2px;margin-right:6px;opacity:0.8">
+            <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V6h2v3z"/>
+          </svg>
+          Uncharted Interactions
+        </div>
+        <span class="uncharted-header__sub">${escHtml(headerSub)}</span>
+      </div>
+      <p class="uncharted-desc">
+        Pairs below have real-world FAERS co-reporting but no documented interaction in FDA labels or TWOSIDES.
+        High co-report counts on undocumented pairs are candidate emerging signals.
+      </p>
+      <table class="uncharted-table">
+        <thead>
+          <tr>
+            <th class="uncharted-th">Drug A</th>
+            <th class="uncharted-th">Drug B</th>
+            <th class="uncharted-th">FAERS Reports</th>
+            <th class="uncharted-th">Evidence</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="uncharted-footnote">
+        Source: FDA FAERS co-prescription query · Threshold: ≥50 reports ·
+        <a href="https://www.fda.gov/drugs/questions-and-answers-fdas-adverse-event-reporting-system-faers/fda-adverse-event-reporting-system-faers-public-dashboard"
+           target="_blank" rel="noopener" style="color:inherit;opacity:0.6;">About FAERS</a>
+      </p>
+    `;
+  } catch (e) {
+    panel.innerHTML = `
+      <div class="uncharted-header"><div class="uncharted-header__title">Uncharted Interactions</div></div>
+      <p class="uncharted-empty" style="color:#888;">Could not load FAERS signal data. Backend unreachable or rate-limited.</p>
+    `;
+  }
 }
