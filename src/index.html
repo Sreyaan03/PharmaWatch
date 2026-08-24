@@ -1481,16 +1481,26 @@
         <!-- Search Controls -->
         <div class="dashboard-card" style="margin-bottom: var(--space-6);">
           <form id="temporal-search-form" style="display:flex; gap:var(--space-4); align-items:flex-end; flex-wrap:wrap;">
-            <div style="flex:1; min-width:200px;">
+            <div style="flex:1; min-width:200px; position:relative;">
               <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Target Drug</label>
-              <input type="text" id="temporal-drug-input" class="guide-glossary-search" value="Metformin" style="max-width:none;" required />
+              <input type="text" id="temporal-drug-input" class="guide-glossary-search" value="Metformin" style="max-width:none; width:100%;" autocomplete="off" required />
+              <ul class="drug-suggestions" id="temporal-drug-suggestions" role="listbox" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:100; background:var(--white); border:1px solid #ddd; border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:200px; overflow-y:auto; margin:0; padding:0; list-style:none;"></ul>
             </div>
             <div style="flex:1; min-width:200px;">
               <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Adverse Event</label>
-              <input type="text" id="temporal-event-input" class="guide-glossary-search" value="Nausea" style="max-width:none;" required />
+              <input type="text" id="temporal-event-input" class="guide-glossary-search" value="Nausea" style="max-width:none; width:100%;" required />
             </div>
             <button type="submit" class="btn btn--primary" style="background:var(--cdc-blue); color:var(--white); border:none; padding:var(--space-3) var(--space-6); border-radius:var(--radius-md); font-weight:600; cursor:pointer;">Analyze Patterns</button>
           </form>
+          <!-- Quick Preset Chips -->
+          <div style="margin-top:1rem; font-size:0.85rem; color:#666; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <span style="font-weight:600;">Quick Presets:</span>
+            <button type="button" class="drug-chip temporal-chip" data-drug="Metformin" data-event="Nausea">Metformin + Nausea</button>
+            <button type="button" class="drug-chip temporal-chip" data-drug="Warfarin" data-event="Hemorrhage">Warfarin + Hemorrhage</button>
+            <button type="button" class="drug-chip temporal-chip" data-drug="Atorvastatin" data-event="Myalgia">Atorvastatin + Myalgia</button>
+            <button type="button" class="drug-chip temporal-chip" data-drug="Ciprofloxacin" data-event="Tendonitis">Ciprofloxacin + Tendonitis</button>
+            <button type="button" class="drug-chip temporal-chip" data-drug="Lisinopril" data-event="Cough">Lisinopril + Cough</button>
+          </div>
         </div>
 
         <!-- Summary Cards -->
@@ -1574,16 +1584,26 @@
         <!-- Search Controls -->
         <div class="dashboard-card" style="margin-bottom: var(--space-6);">
           <form id="demo-search-form" style="display:flex; gap:var(--space-4); align-items:flex-end; flex-wrap:wrap;">
-            <div style="flex:1; min-width:200px;">
+            <div style="flex:1; min-width:200px; position:relative;">
               <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Target Drug</label>
-              <input type="text" id="demo-drug-input" class="guide-glossary-search" value="Metformin" style="max-width:none;" required />
+              <input type="text" id="demo-drug-input" class="guide-glossary-search" value="Metformin" style="max-width:none; width:100%;" autocomplete="off" required />
+              <ul class="drug-suggestions" id="demo-drug-suggestions" role="listbox" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:100; background:var(--white); border:1px solid #ddd; border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:200px; overflow-y:auto; margin:0; padding:0; list-style:none;"></ul>
             </div>
             <div style="flex:1; min-width:200px;">
               <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Adverse Event</label>
-              <input type="text" id="demo-event-input" class="guide-glossary-search" value="Nausea" style="max-width:none;" required />
+              <input type="text" id="demo-event-input" class="guide-glossary-search" value="Nausea" style="max-width:none; width:100%;" required />
             </div>
             <button type="submit" class="btn btn--primary" style="background:var(--cdc-blue); color:var(--white); border:none; padding:var(--space-3) var(--space-6); border-radius:var(--radius-md); font-weight:600; cursor:pointer;">Analyze Stratification</button>
           </form>
+          <!-- Quick Preset Chips -->
+          <div style="margin-top:1rem; font-size:0.85rem; color:#666; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <span style="font-weight:600;">Quick Presets:</span>
+            <button type="button" class="drug-chip demo-chip" data-drug="Metformin" data-event="Nausea">Metformin + Nausea</button>
+            <button type="button" class="drug-chip demo-chip" data-drug="Warfarin" data-event="Hemorrhage">Warfarin + Hemorrhage</button>
+            <button type="button" class="drug-chip demo-chip" data-drug="Atorvastatin" data-event="Rhabdomyolysis">Atorvastatin + Rhabdomyolysis</button>
+            <button type="button" class="drug-chip demo-chip" data-drug="Clozapine" data-event="Agranulocytosis">Clozapine + Agranulocytosis</button>
+            <button type="button" class="drug-chip demo-chip" data-drug="Pemberolizumab" data-event="Colitis">Pembrolizumab + Colitis</button>
+          </div>
         </div>
 
         <!-- Summary Cards -->

@@ -11,6 +11,10 @@ let temporalCharts = {
 
 function initTemporalTab() {
   const form = document.getElementById("temporal-search-form");
+  const drugInput = document.getElementById("temporal-drug-input");
+  const eventInput = document.getElementById("temporal-event-input");
+  const suggs = document.getElementById("temporal-drug-suggestions");
+
   if (form) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -18,7 +22,60 @@ function initTemporalTab() {
     });
   }
 
-  // Initial load with default drug/event
+  // Live Autocomplete for Drug Input
+  if (drugInput && suggs) {
+    let searchTimeout = null;
+
+    drugInput.addEventListener("input", () => {
+      const q = drugInput.value.trim();
+      if (!q || q.length < 2) {
+        suggs.style.display = "none";
+        return;
+      }
+
+      clearTimeout(searchTimeout);
+      suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">Searching openFDA…</li>`;
+      suggs.style.display = "block";
+
+      searchTimeout = setTimeout(async () => {
+        if (typeof ApiLayer === 'undefined') return;
+        const matches = await ApiLayer.searchDrugNames(q);
+        if (matches.length === 0) {
+          suggs.innerHTML = `<li style="color:#888; padding:8px 12px;">No results for "${q}"</li>`;
+        } else {
+          suggs.innerHTML = matches.slice(0, 8).map(d =>
+            `<li role="option" data-drug="${d}" style="padding:8px 12px; cursor:pointer;">${d}</li>`
+          ).join('');
+        }
+        suggs.style.display = "block";
+      }, 250);
+    });
+
+    suggs.addEventListener("click", e => {
+      const li = e.target.closest("li[data-drug]");
+      if (!li) return;
+      drugInput.value = li.dataset.drug;
+      suggs.style.display = "none";
+      runTemporalAnalysis();
+    });
+
+    document.addEventListener("click", e => {
+      if (!drugInput.contains(e.target) && !suggs.contains(e.target)) {
+        suggs.style.display = "none";
+      }
+    });
+  }
+
+  // Bind Preset Chips
+  document.querySelectorAll(".temporal-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (drugInput && btn.dataset.drug) drugInput.value = btn.dataset.drug;
+      if (eventInput && btn.dataset.event) eventInput.value = btn.dataset.event;
+      runTemporalAnalysis();
+    });
+  });
+
+  // Run analysis if tab is active
   runTemporalAnalysis();
 }
 
@@ -68,16 +125,16 @@ function renderVelocityChart(data) {
     temporalCharts.velocity.destroy();
   }
 
-  const pointColors = data.spikes.map(s => s ? '#c0392b' : '#0070c0');
-  const pointRadii = data.spikes.map(s => s ? 8 : 4);
+  const pointColors = (data.spikes || []).map(s => s ? '#c0392b' : '#0070c0');
+  const pointRadii = (data.spikes || []).map(s => s ? 8 : 4);
 
   temporalCharts.velocity = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: data.months,
+      labels: data.months || [],
       datasets: [{
         label: 'Monthly FAERS Reports',
-        data: data.counts,
+        data: data.counts || [],
         borderColor: '#003d7c',
         backgroundColor: 'rgba(0, 61, 124, 0.08)',
         fill: true,
@@ -95,8 +152,8 @@ function renderVelocityChart(data) {
           callbacks: {
             afterLabel: function(ctx) {
               const idx = ctx.dataIndex;
-              const isSpike = data.spikes[idx];
-              const z = data.z_scores[idx];
+              const isSpike = data.spikes ? data.spikes[idx] : false;
+              const z = data.z_scores ? data.z_scores[idx] : 0;
               return `Z-score: ${z}${isSpike ? ' (VELOCITY SPIKE DETECTED)' : ''}`;
             }
           }
@@ -121,10 +178,10 @@ function renderTTOChart(data) {
   temporalCharts.tto = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: data.buckets,
+      labels: data.buckets || [],
       datasets: [{
         label: 'Estimated Reports',
-        data: data.counts,
+        data: data.counts || [],
         backgroundColor: '#26a69a',
         borderRadius: 4
       }]
@@ -148,12 +205,13 @@ function renderSeasonalityChart(data) {
     temporalCharts.seasonality.destroy();
   }
 
-  const barColors = data.seasonality_index.map(si => si >= 1.15 ? '#f0a500' : '#0070c0');
+  const indices = data.seasonality_index || [];
+  const barColors = indices.map(si => si >= 1.15 ? '#f0a500' : '#0070c0');
 
   temporalCharts.seasonality = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: data.months,
+      labels: data.months || [],
       datasets: [
         {
           type: 'line',
@@ -166,7 +224,7 @@ function renderSeasonalityChart(data) {
         },
         {
           label: 'Seasonality Index (SI)',
-          data: data.seasonality_index,
+          data: indices,
           backgroundColor: barColors,
           borderRadius: 4
         }
@@ -194,17 +252,17 @@ function renderTemporalSummaryCards(vel, tto, season) {
   }
 
   if (elTTO) {
-    elTTO.innerHTML = `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">${tto.peak_bucket}</div><div class="stat-desc">Median onset ~${tto.median_days} days after start.</div></div>`;
+    elTTO.innerHTML = `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">${tto.peak_bucket || 'N/A'}</div><div class="stat-desc">Median onset ~${tto.median_days || 0} days after start.</div></div>`;
   }
 
   if (elSeason) {
-    const text = season.is_seasonal ? `Elevated in ${season.elevated_months.join(', ')}` : 'Uniform across months';
+    const elevated = season.elevated_months || [];
+    const text = season.is_seasonal ? `Elevated in ${elevated.join(', ')}` : 'Uniform across months';
     elSeason.innerHTML = `<div class="stat-card"><div class="stat-title">Seasonality</div><div class="stat-value">${season.is_seasonal ? 'CYCLICAL' : 'NORMAL'}</div><div class="stat-desc">${text}</div></div>`;
   }
 }
 
 // Automatically bind tab init when loaded
 document.addEventListener("DOMContentLoaded", () => {
-  // If temporal tab is visible by default or clicked
   initTemporalTab();
 });

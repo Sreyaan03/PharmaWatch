@@ -1178,13 +1178,21 @@ function navigateTo(sectionId) {
       MLModels.initLSTMDemoChart('Metformin');
     }
   }
-  if (sectionId === 'temporal-analysis' && !chartsInitialized.temporal) {
-    chartsInitialized.temporal = true;
-    if (typeof initTemporalTab === 'function') initTemporalTab();
+  if (sectionId === 'temporal-analysis') {
+    if (!chartsInitialized.temporal) {
+      chartsInitialized.temporal = true;
+      if (typeof initTemporalTab === 'function') initTemporalTab();
+    } else if (typeof runTemporalAnalysis === 'function') {
+      setTimeout(() => runTemporalAnalysis(), 50);
+    }
   }
-  if (sectionId === 'demographics' && !chartsInitialized.demographics) {
-    chartsInitialized.demographics = true;
-    if (typeof initDemographicsTab === 'function') initDemographicsTab();
+  if (sectionId === 'demographics') {
+    if (!chartsInitialized.demographics) {
+      chartsInitialized.demographics = true;
+      if (typeof initDemographicsTab === 'function') initDemographicsTab();
+    } else if (typeof runDemographicsAnalysis === 'function') {
+      setTimeout(() => runDemographicsAnalysis(), 50);
+    }
   }
 
   // Auto-sync global DrugContext to active inputs on tab change
