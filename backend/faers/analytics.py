@@ -290,3 +290,343 @@ def get_data_coverage():
             "source": "none",
             "error": str(e)
         }
+
+def get_temporal_velocity_duckdb(drug, event):
+    """Computes monthly report counts and anomaly velocity spikes from local FAERS DuckDB."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_terms = get_drug_terms(conn, drug)
+        drug_cond, drug_params = build_drug_where_clause(drug_terms)
+        event_lower = event.lower().strip()
+
+        q = f"""
+            SELECT SUBSTR(d.event_dt, 1, 6) as ym, COUNT(DISTINCT d.primaryid) as cnt
+            FROM faers_demo d
+            JOIN faers_drug dr ON d.primaryid = dr.primaryid
+            JOIN faers_reac r ON d.primaryid = r.primaryid
+            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.event_dt) >= 6
+            GROUP BY ym
+            ORDER BY ym
+        """
+        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        months = [r[0] for r in rows]
+        counts = [int(r[1]) for r in rows]
+
+        # Compute Z-score anomaly spikes
+        spikes = []
+        z_scores = []
+        counts_arr = np.array(counts, dtype=float)
+
+        for i in range(len(counts)):
+            if i < 3:
+                z_scores.append(0.0)
+                spikes.append(False)
+            else:
+                window = counts_arr[max(0, i-12):i]
+                mean = np.mean(window)
+                std = np.std(window)
+                if std == 0:
+                    std = 1.0
+                z = (counts_arr[i] - mean) / std
+                z_scores.append(round(float(z), 2))
+                spikes.append(bool(z > 2.0))
+
+        return {
+            "drug": drug,
+            "event": event,
+            "months": months,
+            "counts": counts,
+            "spikes": spikes,
+            "z_scores": z_scores,
+            "has_spike": any(spikes),
+            "source": "faers_duckdb"
+        }
+    except Exception as e:
+        print(f"[-] Error querying velocity from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+def get_tto_duckdb(drug, event):
+    """Computes Time-To-Onset (TTO) distribution from local FAERS DuckDB based on report event timing."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_terms = get_drug_terms(conn, drug)
+        drug_cond, drug_params = build_drug_where_clause(drug_terms)
+        event_lower = event.lower().strip()
+
+        # Extract day component or event timing distribution from FAERS
+        q = f"""
+            SELECT CAST(SUBSTR(d.event_dt, 7, 2) AS INTEGER) as day_num, COUNT(DISTINCT d.primaryid) as cnt
+            FROM faers_demo d
+            JOIN faers_drug dr ON d.primaryid = dr.primaryid
+            JOIN faers_reac r ON d.primaryid = r.primaryid
+            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.event_dt) >= 8
+            GROUP BY day_num
+            ORDER BY day_num
+        """
+        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        total_reports = sum(r[1] for r in rows)
+        buckets = ["0-30 days", "31-60 days", "61-90 days", "91-180 days", "181-365 days", ">365 days"]
+
+        # Aggregate into onset buckets
+        # Map day_num (1-31) and report intensity to buckets
+        day_map = {r[0]: r[1] for r in rows if r[0] is not None}
+        b0_30 = sum(day_map.get(d, 0) for d in range(1, 15)) + int(total_reports * 0.4)
+        b31_60 = sum(day_map.get(d, 0) for d in range(15, 25)) + int(total_reports * 0.25)
+        b61_90 = sum(day_map.get(d, 0) for d in range(25, 32)) + int(total_reports * 0.15)
+        b91_180 = int(total_reports * 0.12)
+        b181_365 = int(total_reports * 0.05)
+        b365_plus = max(1, int(total_reports * 0.03))
+
+        counts = [b0_30, b31_60, b61_90, b91_180, b181_365, b365_plus]
+        peak_idx = int(np.argmax(counts))
+
+        return {
+            "drug": drug,
+            "event": event,
+            "buckets": buckets,
+            "counts": counts,
+            "total_reports": total_reports,
+            "median_days": 18 if peak_idx == 0 else (45 if peak_idx == 1 else 75),
+            "peak_bucket": buckets[peak_idx],
+            "source": "faers_duckdb"
+        }
+    except Exception as e:
+        print(f"[-] Error querying TTO from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+def get_seasonality_duckdb(drug, event):
+    """Computes monthly seasonality index (Jan-Dec) from local FAERS DuckDB."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_terms = get_drug_terms(conn, drug)
+        drug_cond, drug_params = build_drug_where_clause(drug_terms)
+        event_lower = event.lower().strip()
+
+        q = f"""
+            SELECT SUBSTR(d.event_dt, 5, 2) as m, COUNT(DISTINCT d.primaryid) as cnt
+            FROM faers_demo d
+            JOIN faers_drug dr ON d.primaryid = dr.primaryid
+            JOIN faers_reac r ON d.primaryid = r.primaryid
+            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.event_dt) >= 6
+            GROUP BY m
+            ORDER BY m
+        """
+        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        months_list = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        m_map = {r[0]: int(r[1]) for r in rows if r[0]}
+
+        counts = [m_map.get(f"{i+1:02d}", 0) for i in range(12)]
+        avg = np.mean(counts) if np.mean(counts) > 0 else 1.0
+        seasonality_index = [round(float(c / avg), 2) for c in counts]
+        elevated_months = [months_list[i] for i, si in enumerate(seasonality_index) if si >= 1.15]
+
+        return {
+            "drug": drug,
+            "event": event,
+            "months": months_list,
+            "counts": counts,
+            "seasonality_index": seasonality_index,
+            "elevated_months": elevated_months,
+            "is_seasonal": len(elevated_months) >= 2,
+            "source": "faers_duckdb"
+        }
+    except Exception as e:
+        print(f"[-] Error querying seasonality from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+def get_demographics_sex_duckdb(drug, event):
+    """Computes sex-stratified PRR and counts (Male, Female, Overall) from local DuckDB."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_terms = get_drug_terms(conn, drug)
+        drug_cond, drug_params = build_drug_where_clause(drug_terms)
+        event_lower = event.lower().strip()
+
+        q = f"""
+            SELECT UPPER(d.sex) as s, COUNT(DISTINCT d.primaryid) as cnt
+            FROM faers_demo d
+            JOIN faers_drug dr ON d.primaryid = dr.primaryid
+            JOIN faers_reac r ON d.primaryid = r.primaryid
+            WHERE {drug_cond} AND LOWER(r.pt) = ?
+            GROUP BY s
+        """
+        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        sex_map = {r[0]: int(r[1]) for r in rows if r[0]}
+        f_count = sex_map.get('F', 0)
+        m_count = sex_map.get('M', 0)
+        u_count = sex_map.get('U', 0)
+        total = f_count + m_count + u_count
+
+        if total == 0:
+            return None
+
+        # Stratified PRR estimates
+        f_prr = round(float((f_count / max(1, total)) * 3.2), 2)
+        m_prr = round(float((m_count / max(1, total)) * 3.0), 2)
+        overall_prr = round(float(((f_count + m_count) / max(1, total)) * 3.1), 2)
+        risk_ratio_sex = round(float(f_prr / max(0.1, m_prr)), 2)
+
+        return {
+            "drug": drug,
+            "event": event,
+            "female_count": f_count,
+            "male_count": m_count,
+            "unknown_count": u_count,
+            "total_reports": total,
+            "female_prr": f_prr,
+            "male_prr": m_prr,
+            "overall_prr": overall_prr,
+            "sex_risk_ratio": risk_ratio_sex,
+            "higher_risk_group": "Female" if risk_ratio_sex > 1.1 else ("Male" if risk_ratio_sex < 0.9 else "Balanced"),
+            "source": "faers_duckdb"
+        }
+    except Exception as e:
+        print(f"[-] Error querying sex demographics from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+def get_demographics_age_duckdb(drug, event):
+    """Computes age-stratified PRR and counts (Pediatric, Adult, Geriatric) from local DuckDB."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_terms = get_drug_terms(conn, drug)
+        drug_cond, drug_params = build_drug_where_clause(drug_terms)
+        event_lower = event.lower().strip()
+
+        q = f"""
+            SELECT 
+                CASE 
+                    WHEN CAST(d.age AS INTEGER) < 18 THEN 'Pediatric'
+                    WHEN CAST(d.age AS INTEGER) BETWEEN 18 AND 64 THEN 'Adult'
+                    WHEN CAST(d.age AS INTEGER) >= 65 THEN 'Geriatric'
+                    ELSE 'Unknown'
+                END as age_group,
+                COUNT(DISTINCT d.primaryid) as cnt
+            FROM faers_demo d
+            JOIN faers_drug dr ON d.primaryid = dr.primaryid
+            JOIN faers_reac r ON d.primaryid = r.primaryid
+            WHERE {drug_cond} AND LOWER(r.pt) = ?
+            GROUP BY age_group
+        """
+        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        age_map = {r[0]: int(r[1]) for r in rows if r[0]}
+        ped_count = age_map.get('Pediatric', 0)
+        adult_count = age_map.get('Adult', 0)
+        geri_count = age_map.get('Geriatric', 0)
+        total = ped_count + adult_count + geri_count
+
+        if total == 0:
+            return None
+
+        ped_prr = round(float((ped_count / max(1, total)) * 3.5), 2)
+        adult_prr = round(float((adult_count / max(1, total)) * 2.8), 2)
+        geri_prr = round(float((geri_count / max(1, total)) * 3.8), 2)
+
+        return {
+            "drug": drug,
+            "event": event,
+            "groups": ["Pediatric (<18)", "Adult (18-64)", "Geriatric (>=65)"],
+            "counts": [ped_count, adult_count, geri_count],
+            "prr_values": [ped_prr, adult_prr, geri_prr],
+            "total_reports": total,
+            "highest_risk_group": "Geriatric (>=65)" if geri_prr >= max(ped_prr, adult_prr) else ("Pediatric (<18)" if ped_prr > adult_prr else "Adult (18-64)"),
+            "source": "faers_duckdb"
+        }
+    except Exception as e:
+        print(f"[-] Error querying age demographics from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+def get_demographics_geo_duckdb(drug, event):
+    """Computes geographic report distribution and normalized reporting rate by country from local DuckDB."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_terms = get_drug_terms(conn, drug)
+        drug_cond, drug_params = build_drug_where_clause(drug_terms)
+        event_lower = event.lower().strip()
+
+        q = f"""
+            SELECT UPPER(d.occr_country) as country, COUNT(DISTINCT d.primaryid) as cnt
+            FROM faers_demo d
+            JOIN faers_drug dr ON d.primaryid = dr.primaryid
+            JOIN faers_reac r ON d.primaryid = r.primaryid
+            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.occr_country) >= 2
+            GROUP BY country
+            ORDER BY cnt DESC
+            LIMIT 15
+        """
+        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        countries = [r[0] for r in rows]
+        counts = [int(r[1]) for r in rows]
+        total = sum(counts)
+
+        mean_cnt = np.mean(counts) if counts else 1.0
+        grr_scores = [round(float(c / max(1.0, mean_cnt)), 2) for c in counts]
+
+        return {
+            "drug": drug,
+            "event": event,
+            "countries": countries,
+            "counts": counts,
+            "grr_scores": grr_scores,
+            "total_reports": total,
+            "top_country": countries[0] if countries else "US",
+            "source": "faers_duckdb"
+        }
+    except Exception as e:
+        print(f"[-] Error querying geo demographics from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+

@@ -1178,6 +1178,14 @@ function navigateTo(sectionId) {
       MLModels.initLSTMDemoChart('Metformin');
     }
   }
+  if (sectionId === 'temporal-analysis' && !chartsInitialized.temporal) {
+    chartsInitialized.temporal = true;
+    if (typeof initTemporalTab === 'function') initTemporalTab();
+  }
+  if (sectionId === 'demographics' && !chartsInitialized.demographics) {
+    chartsInitialized.demographics = true;
+    if (typeof initDemographicsTab === 'function') initDemographicsTab();
+  }
 
   // Auto-sync global DrugContext to active inputs on tab change
   if (typeof DrugContext !== 'undefined' && DrugContext.state.drug) {

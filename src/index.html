@@ -86,7 +86,9 @@
             Sources</a></li>
         <li class="main-nav__item"><a href="#methodology" class="main-nav__link"
             data-section="methodology">Methodology</a></li>
-        <li class="main-nav__item"><a href="#about" class="main-nav__link" data-section="about">About</a></li>
+        <li class="main-nav__item"><a href="#temporal-analysis" class="main-nav__link" data-section="temporal-analysis">Temporal Analysis</a></li>
+        <li class="main-nav__item"><a href="#demographics" class="main-nav__link" data-section="demographics">Demographics</a></li>
+        <li class="main-nav__item"><a href="#research-guide" class="main-nav__link" data-section="research-guide" style="color: #f0c040;">Research Guide</a></li>
       </ul>
     </div>
   </nav>
@@ -1462,6 +1464,210 @@
       </div>
     </section>
 
+    <!-- ============================
+         SECTION: TEMPORAL ANALYSIS (PHASE 1)
+    ============================= -->
+    <section id="temporal-analysis" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--navy">
+        <div class="container">
+          <h1 class="section-hero__title">Temporal Pattern & Onset Analysis</h1>
+          <p class="section-hero__desc">Track reporting velocity spikes, Time-to-Onset (TTO) distributions, and 12-month seasonality trends.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        
+        <div class="alert-banner alert-banner--info" id="temporal-status-banner" style="display:none; margin-bottom:var(--space-6);"></div>
+
+        <!-- Search Controls -->
+        <div class="dashboard-card" style="margin-bottom: var(--space-6);">
+          <form id="temporal-search-form" style="display:flex; gap:var(--space-4); align-items:flex-end; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;">
+              <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Target Drug</label>
+              <input type="text" id="temporal-drug-input" class="guide-glossary-search" value="Metformin" style="max-width:none;" required />
+            </div>
+            <div style="flex:1; min-width:200px;">
+              <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Adverse Event</label>
+              <input type="text" id="temporal-event-input" class="guide-glossary-search" value="Nausea" style="max-width:none;" required />
+            </div>
+            <button type="submit" class="btn btn--primary" style="background:var(--cdc-blue); color:var(--white); border:none; padding:var(--space-3) var(--space-6); border-radius:var(--radius-md); font-weight:600; cursor:pointer;">Analyze Patterns</button>
+          </form>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="dashboard-grid dashboard-grid--thirds" style="margin-bottom: var(--space-6);">
+          <div id="temp-card-velocity"></div>
+          <div id="temp-card-tto"></div>
+          <div id="temp-card-season"></div>
+        </div>
+
+        <!-- Visualizations Grid -->
+        <div class="dashboard-grid" style="margin-bottom: var(--space-6);">
+          <div class="dashboard-card dashboard-card--wide">
+            <div class="card-header">
+              <h2 class="card-title">Reporting Velocity & Anomaly Spikes (FAERS)</h2>
+            </div>
+            <div class="chart-container" style="height:320px;">
+              <canvas id="temporal-velocity-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Time-to-Onset (TTO) Distribution</h2>
+            </div>
+            <div class="chart-container" style="height:280px;">
+              <canvas id="temporal-tto-chart"></canvas>
+            </div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">12-Month Seasonality Index</h2>
+            </div>
+            <div class="chart-container" style="height:280px;">
+              <canvas id="temporal-seasonality-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Source Verification Panel -->
+        <div class="dashboard-card dashboard-card--wide" style="margin-top: var(--space-6); background: var(--gray-50); border-left: 4px solid var(--cdc-blue);">
+          <div style="padding: var(--space-4);">
+            <h3 style="margin-bottom: var(--space-2); color: var(--cdc-blue); font-size: var(--font-size-md); font-weight: 700;">
+              🔬 Data Source & Verification Audit Trail
+            </h3>
+            <p style="font-size: var(--font-size-sm); color: var(--gray-700); margin-bottom: var(--space-3);">
+              All temporal trends, reporting velocity metrics, and onset intervals shown above are calculated directly from official public regulatory datasets. You can cross-verify these findings using the direct links below:
+            </p>
+            <div style="display: flex; gap: var(--space-4); flex-wrap: wrap;">
+              <a href="https://api.fda.gov/drug/event.json" target="_blank" class="guide-card-badge" style="text-decoration: none;">
+                🔗 openFDA Live API Query (api.fda.gov)
+              </a>
+              <a href="https://www.fda.gov/drugs/questions-and-answers-fdas-adverse-event-reporting-system-faers/fda-adverse-event-reporting-system-faers-latest-quarterly-data-files" target="_blank" class="guide-card-badge" style="text-decoration: none;">
+                📂 Official FDA FAERS Raw Quarterly Files
+              </a>
+              <a href="https://www.vigiaccess.org" target="_blank" class="guide-card-badge" style="text-decoration: none;">
+                🌐 WHO VigiAccess Global Database (UMC Sweden)
+              </a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION: DEMOGRAPHICS (PHASE 2)
+    ============================= -->
+    <section id="demographics" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--navy">
+        <div class="container">
+          <h1 class="section-hero__title">Patient Stratification & Demographics</h1>
+          <p class="section-hero__desc">Explore sex-stratified PRR, age subgroup distributions, and geographic reporting density across 100,000 FAERS records.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        
+        <div class="alert-banner alert-banner--info" id="demo-status-banner" style="display:none; margin-bottom:var(--space-6);"></div>
+
+        <!-- Search Controls -->
+        <div class="dashboard-card" style="margin-bottom: var(--space-6);">
+          <form id="demo-search-form" style="display:flex; gap:var(--space-4); align-items:flex-end; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;">
+              <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Target Drug</label>
+              <input type="text" id="demo-drug-input" class="guide-glossary-search" value="Metformin" style="max-width:none;" required />
+            </div>
+            <div style="flex:1; min-width:200px;">
+              <label style="font-weight:600; font-size:var(--font-size-sm); display:block; margin-bottom:var(--space-2);">Adverse Event</label>
+              <input type="text" id="demo-event-input" class="guide-glossary-search" value="Nausea" style="max-width:none;" required />
+            </div>
+            <button type="submit" class="btn btn--primary" style="background:var(--cdc-blue); color:var(--white); border:none; padding:var(--space-3) var(--space-6); border-radius:var(--radius-md); font-weight:600; cursor:pointer;">Analyze Stratification</button>
+          </form>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="dashboard-grid dashboard-grid--thirds" style="margin-bottom: var(--space-6);">
+          <div id="demo-card-sex"></div>
+          <div id="demo-card-age"></div>
+          <div id="demo-card-geo"></div>
+        </div>
+
+        <!-- Visualizations Grid -->
+        <div class="dashboard-grid">
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Sex Stratification (Male vs Female)</h2>
+            </div>
+            <div class="chart-container" style="height:300px;">
+              <canvas id="demo-sex-chart"></canvas>
+            </div>
+          </div>
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">Age Subgroup Distribution</h2>
+            </div>
+            <div class="chart-container" style="height:300px;">
+              <canvas id="demo-age-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid" style="margin-top: var(--space-6);">
+          <div class="dashboard-card dashboard-card--wide">
+            <div class="card-header">
+              <h2 class="card-title">Geographic Report Density by Country (FAERS)</h2>
+            </div>
+            <div class="chart-container" style="height:300px;">
+              <canvas id="demo-geo-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Source Verification Panel -->
+        <div class="dashboard-card dashboard-card--wide" style="margin-top: var(--space-6); background: var(--gray-50); border-left: 4px solid var(--cdc-blue);">
+          <div style="padding: var(--space-4);">
+            <h3 style="margin-bottom: var(--space-2); color: var(--cdc-blue); font-size: var(--font-size-md); font-weight: 700;">
+              🔬 Demographics Data Verification & Audit Trail
+            </h3>
+            <p style="font-size: var(--font-size-sm); color: var(--gray-700); margin-bottom: var(--space-3);">
+              Patient age, sex, and country stratification records are parsed from official FAERS <code>faers_demo</code> tables and openFDA primary source reporter metadata.
+            </p>
+            <div style="display: flex; gap: var(--space-4); flex-wrap: wrap;">
+              <a href="https://open.fda.gov/apis/drug/event/search-fields/#patient" target="_blank" class="guide-card-badge" style="text-decoration: none;">
+                📖 openFDA Patient Schema Field Docs
+              </a>
+              <a href="https://ipc.gov.in" target="_blank" class="guide-card-badge" style="text-decoration: none;">
+                🇮🇳 Indian Pharmacopoeia Commission (PvPI India Alerts)
+              </a>
+              <a href="https://www.fda.gov/drugs/drug-safety-and-availability" target="_blank" class="guide-card-badge" style="text-decoration: none;">
+                🏛 US FDA MedWatch Drug Safety Communications
+              </a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================
+         SECTION: RESEARCH GUIDE (PHASE 0)
+    ============================= -->
+    <section id="research-guide" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--navy">
+        <div class="container">
+          <h1 class="section-hero__title">Research Guide</h1>
+          <p class="section-hero__desc">Understand every metric, formula, and workflow in PharmaWatch. No jargon, just clear pharmacovigilance concepts.</p>
+        </div>
+      </div>
+      <div class="container section-body" id="research-guide-container">
+        <div id="guide-workflow-panel" style="margin-bottom: var(--space-8);"></div>
+        <div id="guide-flowchart-panel" style="margin-bottom: var(--space-8);"></div>
+        <div id="guide-metrics-panel" style="margin-bottom: var(--space-8);"></div>
+        <div id="guide-glossary-panel"></div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ===== FOOTER ===== -->
@@ -1509,6 +1715,9 @@
   <script src="/static/ml_models.js"></script>
   <script src="/static/distributed_storage.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/guide.js"></script>
+  <script src="/static/temporal.js"></script>
+  <script src="/static/demographics.js"></script>
 
 </body>
 

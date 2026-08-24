@@ -84,34 +84,57 @@ class ADEForecaster(nn.Module):
 
 
 # ── Data Fetching ────────────────────────────────────────────────────────────
-def fetch_fda_timeseries(drug, limit=365):
+def fetch_fda_timeseries(drug, limit=1000):
     """
-    Fetch daily adverse event counts from openFDA for a drug.
+    Fetch monthly adverse event counts from openFDA for a drug.
+    Bypasses the SQLite cache layer to always get live data.
     Returns list of (date_str, count) tuples sorted by date.
     """
-    url = (f'{FAERS_API}?search=patient.drug.openfda.generic_name:"{drug}"'
-           f'&count=receivedate&limit={limit}')
-    res = requests.get(url, timeout=15).json()
-    results = res.get("results", [])
+    drug_upper = drug.upper()
+    drug_lower = drug.lower()
+
+    # Build API key param if available
+    api_key_param = f"&api_key={FDA_API_KEY}" if FDA_API_KEY else ""
+
+    strategies = [
+        f'{FAERS_API}?search=patient.drug.medicinalproduct:"{drug_upper}"&count=receivedate&limit={limit}{api_key_param}',
+        f'{FAERS_API}?search=patient.drug.openfda.generic_name:"{drug_lower}"&count=receivedate&limit={limit}{api_key_param}',
+        f'{FAERS_API}?search=patient.drug.medicinalproduct:"{drug_lower}"&count=receivedate&limit={limit}{api_key_param}',
+    ]
+
+    results = []
+    for url in strategies:
+        try:
+            # Use original_requests to bypass the SQLite cache layer entirely
+            res = original_requests.get(url, timeout=25).json()
+            results = res.get("results", [])
+            if results:
+                label = url.split('search=')[1].split('&count')[0]
+                print(f"[LSTM] Got {len(results)} data points via: {label}")
+                break
+            else:
+                print(f"[LSTM] No results from: {url.split('search=')[1][:50]}")
+        except Exception as e:
+            print(f"[LSTM] Strategy failed ({e}), trying next...")
+            continue
 
     if not results:
-        # Fallback: try medicinalproduct field
-        url2 = (f'{FAERS_API}?search=patient.drug.medicinalproduct:"{drug}"'
-                f'&count=receivedate&limit={limit}')
-        res = requests.get(url2, timeout=15).json()
-        results = res.get("results", [])
+        print(f"[LSTM] All strategies returned empty for '{drug}'")
+        return []
 
-    # Sort by date chronologically
-    parsed = []
+    # Aggregate into monthly buckets (YYYYMM) for LSTM stability
+    monthly_map = {}
     for r in results:
         try:
-            d = r["time"]  # openFDA returns "time" for receivedate count
-            parsed.append((d, r["count"]))
-        except KeyError:
-            # Some records use different key format
-            parsed.append((str(len(parsed)), r["count"]))
+            time_str = str(r.get("time", r.get("receivedate", "")))
+            if len(time_str) >= 6:
+                ym = time_str[:6]
+                monthly_map[ym] = monthly_map.get(ym, 0) + r.get("count", 0)
+        except Exception:
+            pass
 
-    parsed.sort(key=lambda x: x[0])
+    parsed = sorted(monthly_map.items(), key=lambda x: x[0])
+    print(f"[LSTM] Built {len(parsed)} monthly buckets for '{drug}'")
     return parsed
 
 
@@ -212,7 +235,7 @@ def train_model(drug, epochs=100, seq_length=30, lr=0.001):
             "boxed_warning_date": warning_date
         }, f)
 
-    print(f"[LSTM] Model saved → {save_path}")
+    print(f"[LSTM] Model saved -> {save_path}")
     return lstm_model, None
 
 

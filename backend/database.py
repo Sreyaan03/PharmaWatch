@@ -90,6 +90,28 @@ def init_db():
             computed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_pair ON signals_cache(drug, event);
+
+        -- temporal_cache Table:
+        CREATE TABLE IF NOT EXISTS temporal_cache (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            drug        TEXT NOT NULL,
+            event       TEXT NOT NULL,
+            data_type   TEXT NOT NULL,
+            payload     TEXT NOT NULL,
+            cached_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_temporal ON temporal_cache(drug, event, data_type);
+
+        -- demographic_cache Table:
+        CREATE TABLE IF NOT EXISTS demographic_cache (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            drug        TEXT NOT NULL,
+            event       TEXT NOT NULL,
+            strata_type TEXT NOT NULL,
+            payload     TEXT NOT NULL,
+            cached_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_cache ON demographic_cache(drug, event, strata_type);
     """)
     conn.commit()
     conn.close()

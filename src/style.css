@@ -1889,3 +1889,280 @@ code {
   margin: 0;
   background: var(--gray-50);
 }
+
+
+/* ============================================================
+   RESEARCH GUIDE (PHASE 0) CSS
+   ============================================================ */
+
+/* Container and layout */
+#research-guide-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+}
+
+.guide-section-title {
+  font-size: var(--font-size-2xl);
+  color: var(--cdc-blue);
+  margin-bottom: var(--space-6);
+  border-bottom: 2px solid var(--gray-200);
+  padding-bottom: var(--space-3);
+}
+
+/* Metric Cards */
+.guide-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+
+.guide-metric-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+}
+.guide-metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.guide-metric-card-top {
+  height: 6px;
+  width: 100%;
+}
+.guide-metric-card-top.color-red { background: var(--cdc-red); }
+.guide-metric-card-top.color-amber { background: var(--cdc-amber); }
+.guide-metric-card-top.color-blue { background: var(--cdc-blue-light); }
+.guide-metric-card-top.color-green { background: var(--cdc-green); }
+
+.guide-metric-card-body {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.guide-metric-acronym {
+  font-size: var(--font-size-2xl);
+  font-weight: 800;
+  color: var(--gray-900);
+  line-height: 1;
+  margin-bottom: var(--space-1);
+}
+.guide-metric-name {
+  font-size: var(--font-size-sm);
+  color: var(--cdc-blue-light);
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+}
+
+.guide-formula-box {
+  background: var(--gray-100);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: var(--gray-800);
+  text-align: center;
+  border: 1px dashed var(--gray-300);
+}
+
+/* Glossary Cards */
+.guide-glossary-controls {
+  margin-bottom: var(--space-5);
+}
+.guide-glossary-search {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+}
+.guide-glossary-search:focus {
+  outline: none;
+  border-color: var(--cdc-blue-light);
+  box-shadow: 0 0 0 3px rgba(0,112,192,0.2);
+}
+
+.guide-glossary-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.guide-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-left: 4px solid var(--cdc-blue);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.guide-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-2);
+}
+.guide-card-title {
+  font-size: var(--font-size-lg);
+  color: var(--gray-900);
+  margin: 0;
+}
+.guide-card-badge {
+  background: var(--cdc-blue-pale);
+  color: var(--cdc-blue);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.guide-card-badge:hover {
+  background: #d0e3f7;
+}
+
+.guide-card-plain {
+  font-size: var(--font-size-base);
+  color: var(--gray-800);
+  margin-bottom: var(--space-3);
+  line-height: 1.5;
+}
+
+.guide-card-toggle {
+  background: none;
+  border: none;
+  color: var(--cdc-blue-light);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.guide-card-toggle::after {
+  content: '▼';
+  font-size: 0.7em;
+  transition: transform var(--transition-fast);
+}
+.guide-card.expanded .guide-card-toggle::after {
+  transform: rotate(180deg);
+}
+
+.guide-card-details {
+  display: none;
+  background: var(--gray-50);
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.guide-card-details p {
+  margin-bottom: var(--space-2);
+}
+.guide-card.expanded .guide-card-details {
+  display: block;
+}
+
+/* Workflow Personas */
+.guide-workflow-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  border-bottom: 2px solid var(--gray-200);
+  padding-bottom: 0;
+}
+.guide-persona-tab {
+  background: transparent;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all var(--transition-fast);
+}
+.guide-persona-tab:hover {
+  color: var(--cdc-blue);
+  background: rgba(0,61,124,0.05);
+}
+.guide-persona-tab.active {
+  color: var(--cdc-blue);
+  border-bottom-color: var(--cdc-blue);
+}
+
+.guide-stepper {
+  display: flex;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+@media (max-width: 768px) {
+  .guide-stepper { flex-direction: column; }
+}
+.guide-step {
+  flex: 1;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+.guide-step::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1rem;
+  width: 1rem;
+  height: 2px;
+  background: var(--gray-300);
+}
+.guide-step:last-child::after {
+  display: none;
+}
+@media (max-width: 768px) {
+  .guide-step::after {
+    top: auto;
+    bottom: -1rem;
+    left: 50%;
+    right: auto;
+    width: 2px;
+    height: 1rem;
+  }
+}
+.guide-step-icon {
+  font-size: 2rem;
+  margin-bottom: var(--space-3);
+}
+.guide-step-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--cdc-blue);
+  margin-bottom: var(--space-2);
+}
+.guide-step-desc {
+  font-size: var(--font-size-sm);
+  color: var(--gray-700);
+  margin-bottom: var(--space-4);
+  flex: 1;
+}
+

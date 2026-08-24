@@ -77,39 +77,67 @@ def local_stats():
 
 @dashboard_bp.route('/api/dashboard/signal-intensity', methods=['GET'])
 def dashboard_signal_intensity():
-    """Returns hourly signal counts for the last 24 hours, grouped by severity."""
+    """Returns hourly signal counts for the last 24 hours grouped by severity using real computed_at timestamps."""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         now = datetime.now(timezone.utc)
         hours = [(now - timedelta(hours=(23 - i))).strftime('%H:00') for i in range(24)]
-        
-        # Select all signals and group severity. 
-        # Since signals might be computed statically, we project them into a distribution
-        # using the signal severity counts from the SQLite DB.
-        rows = conn.execute(
-            "SELECT severity AS sev, COUNT(*) as cnt FROM signals_cache GROUP BY severity"
-        ).fetchall()
+
+        # Use real computed_at timestamps to aggregate per hour per severity
+        cutoff = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+        rows = conn.execute("""
+            SELECT strftime('%H:00', computed_at) AS hour, severity, COUNT(*) as cnt
+            FROM signals_cache
+            WHERE computed_at >= ?
+            GROUP BY hour, severity
+        """, (cutoff,)).fetchall()
         conn.close()
-        
-        counts = {r['sev']: r['cnt'] for r in rows}
-        
-        # Distribute based on a diurnal wave to simulate hourly variation of the active database signals
-        def hour_weight(i):
-            return 0.4 + 0.6 * math.sin(math.pi * max(0, min(i - 6, 12)) / 12)
-            
-        weights = [hour_weight(i) for i in range(24)]
-        w_sum = sum(weights) or 1
-        
-        def distribute(n):
-            return [round(n * w / w_sum) for w in weights]
-            
+
+        # Build hour → severity → count lookup from real data
+        hourly = {}
+        has_real_data = len(rows) > 0
+        for r in rows:
+            h = r['hour']
+            if h not in hourly:
+                hourly[h] = {'critical': 0, 'high': 0, 'moderate': 0}
+            sev = r['severity'] if r['severity'] in ('critical', 'high', 'moderate') else 'moderate'
+            hourly[h][sev] = hourly[h].get(sev, 0) + r['cnt']
+
+        # If real data exists, use it; otherwise fall back to total-count distribution
+        if has_real_data:
+            critical = [hourly.get(h, {}).get('critical', 0) for h in hours]
+            high     = [hourly.get(h, {}).get('high', 0)     for h in hours]
+            moderate = [hourly.get(h, {}).get('moderate', 0) for h in hours]
+            source = 'sqlite_real_timestamps'
+        else:
+            # Fallback: distribute today's total counts using diurnal weights
+            conn2 = sqlite3.connect(DB_PATH)
+            conn2.row_factory = sqlite3.Row
+            total_rows = conn2.execute(
+                "SELECT severity, COUNT(*) as cnt FROM signals_cache GROUP BY severity"
+            ).fetchall()
+            conn2.close()
+            counts = {r['severity']: r['cnt'] for r in total_rows} if total_rows else {}
+
+            def hour_weight(i):
+                return 0.4 + 0.6 * math.sin(math.pi * max(0, min(i - 6, 12)) / 12)
+            weights = [hour_weight(i) for i in range(24)]
+            w_sum = sum(weights) or 1
+            def distribute(n):
+                return [round(n * w / w_sum) for w in weights]
+
+            critical = distribute(counts.get('critical', 0))
+            high     = distribute(counts.get('high', 0))
+            moderate = distribute(counts.get('moderate', 0))
+            source = 'sqlite_distributed_fallback'
+
         return jsonify({
             'labels': hours,
-            'critical': distribute(counts.get('critical', 0)),
-            'high': distribute(counts.get('high', 0)),
-            'moderate': distribute(counts.get('moderate', 0)),
-            'source': 'sqlite_signals_cache'
+            'critical': critical,
+            'high': high,
+            'moderate': moderate,
+            'source': source
         })
     except Exception as e:
         now = datetime.now(timezone.utc)
