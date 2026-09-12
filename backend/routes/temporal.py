@@ -96,15 +96,19 @@ def api_temporal_velocity():
     except Exception as e:
         print(f"[TEMPORAL VELOCITY FDA FETCH WARN] {e}, falling back to synthetic trend")
 
-    # 3. Fallback if no counts from DuckDB or openFDA
+    # 3. No data found — return empty instead of synthetic data
     if not counts:
-        np.random.seed(abs(hash(drug + event)) % (2**32 - 1))
-        base_date = datetime.now() - timedelta(days=730)
-        months = [(base_date + timedelta(days=i*30)).strftime("%Y%m") for i in range(24)]
-        base_val = np.random.randint(15, 80)
-        counts = [int(base_val + np.random.normal(0, base_val * 0.2)) for _ in range(24)]
-        counts[18] = int(base_val * 2.8)
-        counts[19] = int(base_val * 2.1)
+        return jsonify({
+            "drug": drug,
+            "event": event,
+            "months": [],
+            "counts": [],
+            "spikes": [],
+            "z_scores": [],
+            "has_spike": False,
+            "source": "no_data",
+            "message": f"No FAERS reports found for '{drug}' + '{event}'. This drug-event pair may not exist in the database."
+        })
 
     spikes = []
     z_scores = []
@@ -158,39 +162,18 @@ def api_temporal_tto():
         set_cached_payload(drug, event, "tto", duck_res)
         return jsonify(duck_res)
 
-    # 2. Fallback mechanistic model
-    buckets = ["0-30 days", "31-60 days", "61-90 days", "91-180 days", "181-365 days", ">365 days"]
-    seed = abs(hash(drug + event + "tto")) % (2**32 - 1)
-    np.random.seed(seed)
-
-    profile_type = seed % 3
-    if profile_type == 0:
-        weights = [0.65, 0.18, 0.08, 0.05, 0.03, 0.01]
-        median_days = 8
-    elif profile_type == 1:
-        weights = [0.25, 0.40, 0.20, 0.10, 0.03, 0.02]
-        median_days = 42
-    else:
-        weights = [0.10, 0.15, 0.25, 0.30, 0.12, 0.08]
-        median_days = 115
-
-    total_est = np.random.randint(150, 1200)
-    counts = [int(total_est * w) for w in weights]
-    max_idx = int(np.argmax(counts))
-
-    payload = {
+    # 2. No data — return empty
+    return jsonify({
         "drug": drug,
         "event": event,
-        "buckets": buckets,
-        "counts": counts,
-        "total_reports": sum(counts),
-        "median_days": median_days,
-        "peak_bucket": buckets[max_idx],
-        "source": "modeled"
-    }
-
-    set_cached_payload(drug, event, "tto", payload)
-    return jsonify(payload)
+        "buckets": ["0-30 days", "31-60 days", "61-90 days", "91-180 days", "181-365 days", ">365 days"],
+        "counts": [0, 0, 0, 0, 0, 0],
+        "total_reports": 0,
+        "median_days": None,
+        "peak_bucket": None,
+        "source": "no_data",
+        "message": f"No FAERS reports found for '{drug}' + '{event}'."
+    })
 
 
 @temporal_bp.route("/api/temporal/seasonality", methods=["GET"])
@@ -212,29 +195,16 @@ def api_temporal_seasonality():
         set_cached_payload(drug, event, "seasonality", duck_res)
         return jsonify(duck_res)
 
-    # 2. Fallback model
+    # 2. No data — return empty
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    seed = abs(hash(drug + event + "season")) % (2**32 - 1)
-    np.random.seed(seed)
-
-    base = np.random.randint(40, 150)
-    counts = [int(base + base * 0.25 * np.sin(i * np.pi / 6) + np.random.normal(0, base * 0.08)) for i in range(12)]
-    counts = [max(5, c) for c in counts]
-
-    avg = np.mean(counts)
-    seasonality_index = [round(float(c / avg), 2) for c in counts]
-    elevated_months = [months[i] for i, si in enumerate(seasonality_index) if si >= 1.15]
-
-    payload = {
+    return jsonify({
         "drug": drug,
         "event": event,
         "months": months,
-        "counts": counts,
-        "seasonality_index": seasonality_index,
-        "elevated_months": elevated_months,
-        "is_seasonal": len(elevated_months) >= 2,
-        "source": "modeled"
-    }
-
-    set_cached_payload(drug, event, "seasonality", payload)
-    return jsonify(payload)
+        "counts": [0] * 12,
+        "seasonality_index": [0.0] * 12,
+        "elevated_months": [],
+        "is_seasonal": False,
+        "source": "no_data",
+        "message": f"No FAERS reports found for '{drug}' + '{event}'."
+    })

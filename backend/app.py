@@ -80,6 +80,7 @@ from routes.dashboard import dashboard_bp
 from routes.analytics import analytics_bp
 from routes.temporal import temporal_bp
 from routes.demographics import demographics_bp
+from routes.pipeline import pipeline_bp
 
 app.register_blueprint(general_bp)
 app.register_blueprint(signals_bp)
@@ -90,6 +91,7 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(analytics_bp)
 app.register_blueprint(temporal_bp)
 app.register_blueprint(demographics_bp)
+app.register_blueprint(pipeline_bp)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

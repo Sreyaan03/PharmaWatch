@@ -22,17 +22,20 @@ coverage.xml
 
 # Databases
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 backend/pharmawatch.db
+backend/pharmawatch.db-shm
+backend/pharmawatch.db-wal
 
 # Log files
 backend/app_err.txt
 backend/app_log.txt
 
-# Trained models and large binaries
-backend/trained_models/
-*.pt
-*.pth
+# Large binary model formats (keep project's trained models — they are small)
+# *.pt
+# *.pth
 *.h5
 
 # OS generated files
@@ -44,5 +47,17 @@ backend/trained_models/
 Thumbs.db
 .agent/
 
-# Data
-data/
+# Large data files (downloaded via setup.sh / setup.ps1 from Google Drive)
+# Do NOT ignore the whole data/ folder — keep small files like .gitkeep
+data/twosides.csv
+data/twosides.parquet
+data/drugbank_ddi.tsv
+data/pharmawatch_faers.duckdb
+data/faers_raw/
+data/faers_parquet/
+
+# Backend log files
+backend/app_err.log
+backend/app_out.log
+backend/app_err.txt
+backend/app_out.txt

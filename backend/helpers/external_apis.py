@@ -16,14 +16,17 @@ _hbase_last_check = 0.0
 _hbase_online_cached = True
 
 def _hbase_connect():
-    """Return a live happybase Connection or raise, using a circuit breaker to avoid repeated slow timeouts."""
+    """Return a live happybase Connection or None (HBase not deployed in Docker)."""
     global _hbase_last_check, _hbase_online_cached
-    import happybase
-    
+    try:
+        import happybase
+    except ImportError:
+        return None  # HBase not installed — silently skip
+
     now = time.time()
     if not _hbase_online_cached and (now - _hbase_last_check < 30):
         raise RuntimeError("HBase is offline (circuit breaker active)")
-        
+
     try:
         conn = happybase.Connection('127.0.0.1', port=9090, timeout=1000)
         conn.open()

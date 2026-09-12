@@ -376,8 +376,12 @@ def trigger_processing():
 
 @signals_bp.route("/api/system/start-bigdata", methods=["POST"])
 def start_bigdata():
-    """Starts the hbase-server Docker container and checks connections on 9090."""
-    import happybase
+    """HBase launcher — returns not-available when HBase is not deployed."""
+    try:
+        import happybase
+    except ImportError:
+        return jsonify({"status": "not_deployed", "message": "HBase is not installed in this environment. Kafka pipeline is handling real-time data ingestion."}), 200
+
     try:
         result = subprocess.run(
             ["docker", "start", "hbase-server"],
@@ -403,6 +407,8 @@ def bigdata_status():
     from helpers.external_apis import _hbase_connect
     try:
         conn = _hbase_connect()
+        if conn is None:
+            return jsonify({"status": "not_deployed", "message": "HBase not installed — Kafka pipeline active"})
         conn.tables()
         conn.close()
         return jsonify({"status": "online", "message": "HBase Thrift connection OK"})

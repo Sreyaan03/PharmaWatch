@@ -1,7 +1,12 @@
 """
 reddit_scraper.py — Scrapes drug-related posts from Reddit
+Note: praw is optional. If not installed, all functions return empty results.
 """
-import praw
+try:
+    import praw
+    PRAW_AVAILABLE = True
+except ImportError:
+    PRAW_AVAILABLE = False
 import time
 from database import insert_reddit_post, get_unprocessed_posts, mark_post_processed
 
@@ -24,6 +29,8 @@ DRUG_KEYWORDS = [
 ]
 
 def create_reddit_client():
+    if not PRAW_AVAILABLE:
+        return None
     return praw.Reddit(
         client_id=REDDIT_CLIENT_ID,
         client_secret=REDDIT_CLIENT_SECRET,
@@ -31,6 +38,8 @@ def create_reddit_client():
     )
 
 def scrape_subreddit(reddit, subreddit_name, limit=50):
+    if not PRAW_AVAILABLE or reddit is None:
+        return 0
     count = 0
     try:
         subreddit = reddit.subreddit(subreddit_name)
@@ -46,6 +55,9 @@ def scrape_subreddit(reddit, subreddit_name, limit=50):
     return count
 
 def scrape_all(limit_per_sub=50):
+    if not PRAW_AVAILABLE:
+        print("[Reddit] praw not installed — Reddit scraping disabled.")
+        return 0
     reddit = create_reddit_client()
     total = 0
     for sub in TARGET_SUBREDDITS:

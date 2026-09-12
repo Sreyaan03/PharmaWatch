@@ -1,15 +1,15 @@
-torch==2.2.0
+# torch is installed separately in Dockerfile via --index-url (CPU-only build)
+# to avoid conflict, do NOT list it here
 transformers==4.41.2
 flask==3.0.3
 flask-cors==4.0.1
 requests
 numpy<2
-praw
 python-dotenv
-pymupdf
-easyocr
 flask-limiter
 duckdb
 pandas
 pyarrow
 beautifulsoup4
+kafka-python==2.0.2
+feedparser==6.0.11

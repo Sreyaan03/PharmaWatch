@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.kafka — Lightweight image for Kafka producer & consumer
+# Used by both kafka-producer and kafka-consumer services in docker-compose.yml
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only what the producer/consumer need
+RUN pip install --no-cache-dir \
+    kafka-python==2.0.2 \
+    requests==2.31.0 \
+    feedparser==6.0.11 \
+    python-dotenv==1.0.1
+
+# Copy the scripts folder and backend folder (for database.py)
+COPY scripts/ ./scripts/
+COPY backend/database.py ./backend/database.py
+COPY backend/.env ./backend/.env
+
+ENV PYTHONPATH=/app

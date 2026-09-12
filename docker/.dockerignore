@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — Files excluded from the Docker build context
+#
+# Keeping the build context small speeds up `docker build` significantly.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Python virtual environment (do not ship local venv into image)
+venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+
+# Git and IDE metadata
+.git/
+.gitignore
+.vscode/
+.agent/
+.planning/
+
+# Large raw data files that are NOT loaded by the app at runtime
+data/twosides.csv
+data/faers_raw/
+
+# Backend log files
+backend/*.log
+backend/*.txt
+backend/app_err.*
+backend/app_out.*
+
+# Docs folder (not needed inside the container)
+docs/
+
+# Docker folder itself (no need to copy Dockerfile into the image)
+docker/
+
+# Node / package manager artifacts (if ever added)
+node_modules/
+npm-debug.log*
+
+# OS clutter
+Thumbs.db
+.DS_Store
+*.swp
