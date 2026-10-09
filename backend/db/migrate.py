@@ -9,6 +9,7 @@ import sys
 import argparse
 import logging
 import sqlite3
+import time
 import pymysql
 from pymysql.cursors import DictCursor
 
@@ -56,19 +57,27 @@ def split_sql_statements(sql_text):
 
 def run_migrations(args):
     log.info(f"Connecting to MySQL server at {args.host}:{args.port} as '{args.user}'...")
-    try:
-        server_conn = pymysql.connect(
-            host=args.host,
-            port=args.port,
-            user=args.user,
-            password=args.password,
-            charset="utf8mb4",
-            cursorclass=DictCursor,
-            connect_timeout=10,
-        )
-    except Exception as e:
-        log.error(f"Failed to connect to MySQL server: {e}")
-        return False
+    server_conn = None
+    max_retries = 5
+    for attempt in range(1, max_retries + 1):
+        try:
+            server_conn = pymysql.connect(
+                host=args.host,
+                port=args.port,
+                user=args.user,
+                password=args.password,
+                charset="utf8mb4",
+                cursorclass=DictCursor,
+                connect_timeout=10,
+            )
+            break
+        except Exception as e:
+            if attempt < max_retries:
+                log.warning(f"Connection attempt {attempt}/{max_retries} failed ({e}). Retrying in 3s...")
+                time.sleep(3)
+            else:
+                log.error(f"Failed to connect to MySQL server after {max_retries} attempts: {e}")
+                return False
 
     with server_conn:
         with server_conn.cursor() as cur:
