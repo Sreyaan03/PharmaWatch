@@ -27,7 +27,15 @@ let demoCharts = {
   geo: null
 };
 
+let demographicsInitialized = false;
+
 function initDemographicsTab() {
+  if (demographicsInitialized) {
+    runDemographicsAnalysis();
+    return;
+  }
+  demographicsInitialized = true;
+
   const form = document.getElementById("demo-search-form");
   const drugInput = document.getElementById("demo-drug-input");
   const eventInput = document.getElementById("demo-event-input");
@@ -112,24 +120,44 @@ async function runDemographicsAnalysis() {
   }
 
   try {
+    const fetchJson = async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`API HTTP ${res.status}`);
+      }
+      return res.json();
+    };
+
     const [sexRes, ageRes, geoRes] = await Promise.all([
-      fetch(`/api/demographics/sex?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`).then(r => r.json()),
-      fetch(`/api/demographics/age?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`).then(r => r.json()),
-      fetch(`/api/demographics/geo?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`).then(r => r.json())
+      fetchJson(`/api/demographics/sex?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`),
+      fetchJson(`/api/demographics/age?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`),
+      fetchJson(`/api/demographics/geo?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`)
     ]);
+
+    const totalReports = Math.max(
+      sexRes.total_reports || 0,
+      ageRes.total_reports || 0,
+      geoRes.total_reports || 0
+    );
+
+    if (totalReports === 0) {
+      if (statusEl) {
+        statusEl.innerHTML = `ℹ No FAERS reports found for <strong>${drug}</strong> + <strong>${event}</strong>. Try one of the quick presets below.`;
+        statusEl.className = "alert-banner alert-banner--warning";
+        statusEl.style.display = "block";
+      }
+    } else if (statusEl) {
+      statusEl.style.display = "none";
+    }
 
     renderSexChart(sexRes);
     renderAgeChart(ageRes);
     renderGeoChart(geoRes);
     renderDemographicsSummaryCards(sexRes, ageRes, geoRes);
-
-    if (statusEl) {
-      statusEl.style.display = "none";
-    }
   } catch (err) {
     console.error("[Demographics Error]", err);
     if (statusEl) {
-      statusEl.innerHTML = `Failed to load demographic data: ${err.message}`;
+      statusEl.innerHTML = `Failed to load demographic data: ${err.message}. Ensure the Flask backend is running at <strong>http://127.0.0.1:5000</strong>.`;
       statusEl.className = "alert-banner alert-banner--critical";
     }
   }

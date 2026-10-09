@@ -97,11 +97,12 @@ download_file "$DRUGBANK_FILE_ID" "data/drugbank_ddi.tsv"          "drugbank_ddi
 info "Checking backend/.env..."
 if [[ ! -f "backend/.env" ]]; then
   warn "backend/.env not found — creating a template."
-  cat > backend/.env <<EOF
-FDA_API_KEY=Rtfpkk33k8qYViDvlaO6p1ZFdZ72hcvnbyn0nCiX
+  cat > backend/.env.example <<EOF
+FDA_API_KEY=YOUR_API_KEY_HERE
 ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
 EOF
-  success "Created backend/.env with default values."
+  cp backend/.env.example backend/.env
+  warn "Created backend/.env. Please edit it to add your FDA_API_KEY!"
 else
   success "backend/.env found."
 fi

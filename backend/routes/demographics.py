@@ -76,9 +76,9 @@ def api_demographics_sex():
     if cached:
         return jsonify(cached)
 
-    # 1. Try DuckDB local FAERS dataset first
+    # 1. Try DuckDB local FAERS dataset first (only if sufficient data exists)
     duck_res = get_demographics_sex_duckdb(drug, event)
-    if duck_res and duck_res.get("total_reports", 0) > 0:
+    if duck_res and duck_res.get("total_reports", 0) >= 10 and (duck_res.get("female_count", 0) + duck_res.get("male_count", 0)) > 0:
         set_cached_payload(drug, event, "sex", duck_res)
         return jsonify(duck_res)
 
@@ -87,7 +87,7 @@ def api_demographics_sex():
         url = (f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"'
                f'+AND+patient.reaction.reactionmeddrapt:"{event}"'
                f'&count=patient.patientsex')
-        res = http_requests.get(url, timeout=6).json()
+        res = http_requests.get(url, timeout=15).json()
         results = res.get("results", [])
         if results:
             sex_map = {str(r.get("term", "")): r.get("count", 0) for r in results}
@@ -129,9 +129,9 @@ def api_demographics_age():
     if cached:
         return jsonify(cached)
 
-    # 1. Try DuckDB local FAERS dataset first
+    # 1. Try DuckDB local FAERS dataset first (only if sufficient data exists)
     duck_res = get_demographics_age_duckdb(drug, event)
-    if duck_res and duck_res.get("total_reports", 0) > 0:
+    if duck_res and duck_res.get("total_reports", 0) >= 10:
         set_cached_payload(drug, event, "age", duck_res)
         return jsonify(duck_res)
 
@@ -140,7 +140,7 @@ def api_demographics_age():
         url = (f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"'
                f'+AND+patient.reaction.reactionmeddrapt:"{event}"'
                f'&count=patient.patientonsetage')
-        res = http_requests.get(url, timeout=6).json()
+        res = http_requests.get(url, timeout=15).json()
         results = res.get("results", [])
         if results:
             # Bucket raw ages into groups
@@ -196,9 +196,9 @@ def api_demographics_geo():
     if cached:
         return jsonify(cached)
 
-    # 1. Try DuckDB local FAERS dataset first
+    # 1. Try DuckDB local FAERS dataset first (only if sufficient data exists)
     duck_res = get_demographics_geo_duckdb(drug, event)
-    if duck_res and duck_res.get("total_reports", 0) > 0:
+    if duck_res and duck_res.get("total_reports", 0) >= 10:
         set_cached_payload(drug, event, "geo", duck_res)
         return jsonify(duck_res)
 
@@ -206,8 +206,8 @@ def api_demographics_geo():
     try:
         url = (f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"'
                f'+AND+patient.reaction.reactionmeddrapt:"{event}"'
-               f'&count=primarysource.reportercountry.exact&limit=15')
-        res = http_requests.get(url, timeout=6).json()
+               f'&count=occurcountry.exact&limit=15')
+        res = http_requests.get(url, timeout=15).json()
         results = res.get("results", [])
         if results:
             countries = [r.get("term", "??") for r in results]
@@ -243,9 +243,9 @@ def api_demographics_overview():
     drug  = request.args.get("drug",  "Metformin").strip()
     event = request.args.get("event", "Nausea").strip()
 
-    sex_res = get_demographics_sex_duckdb(drug, event) or {}
-    age_res = get_demographics_age_duckdb(drug, event) or {}
-    geo_res = get_demographics_geo_duckdb(drug, event) or {}
+    sex_res = get_cached_payload(drug, event, "sex") or get_demographics_sex_duckdb(drug, event) or {}
+    age_res = get_cached_payload(drug, event, "age") or get_demographics_age_duckdb(drug, event) or {}
+    geo_res = get_cached_payload(drug, event, "geo") or get_demographics_geo_duckdb(drug, event) or {}
 
     return jsonify({"drug": drug, "event": event,
                     "sex": sex_res, "age": age_res, "geo": geo_res})

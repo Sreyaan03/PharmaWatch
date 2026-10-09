@@ -99,7 +99,8 @@ def _load_gnn():
     try:
         from train_gnn_model import GNN_Predictor
         import torch as _torch
-        m = GNN_Predictor(node_feature_dim=16, hidden_dim=64)
+        # Architecture: GINConv x3, hidden_dim=128, mean+max pooling
+        m = GNN_Predictor(node_feature_dim=16, hidden_dim=128)
         if os.path.exists(MODEL_PATH):
             m.load_state_dict(_torch.load(MODEL_PATH, map_location="cpu"))
             m.eval()

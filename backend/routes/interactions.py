@@ -123,52 +123,68 @@ def get_twosides_graph():
         return jsonify({"error": "Provide ?drug= parameter"}), 400
 
     try:
+        from thrift.transport.TTransport import TTransportException
+    except ImportError:
+        TTransportException = Exception
+
+    try:
         resolved = _resolve_drug(raw)
         if resolved is None:
             return jsonify({"found": False, "input": raw}), 200
         drug_name = resolved["name"].upper()
 
-        conn = _hbase_connect()
-        table = conn.table('interactions')
-        
-        prefix = f"{drug_name}_"
-        rows = table.scan(row_prefix=prefix.encode())
-        
-        nodes = []
-        links = []
-        
-        nodes.append({"id": drug_name, "group": 1})
-        added = {drug_name}
-        
-        for key, data in rows:
-            row_str = key.decode()
-            parts = row_str.split("_")
-            if len(parts) == 2:
-                other = parts[1]
-                side_effect = data.get(b'info:side_effect', b'').decode().strip()
-                severity = data.get(b'info:severity', b'high').decode().strip()
-                
-                if severity == "critical" or severity == "high":
-                    group = 2
-                elif severity == "moderate":
-                    group = 3
-                else:
-                    group = 4
-                    
-                if other not in added:
-                    nodes.append({"id": other, "group": group})
-                    added.add(other)
-                    
-                links.append({
-                    "source": drug_name,
-                    "target": other,
-                    "side_effect": side_effect,
-                    "severity": severity,
-                    "value": 3 if severity in ("critical", "high") else 1
-                })
-                
-        conn.close()
+        def _do_scan():
+            """Connect, scan, return (nodes, links). Raises on failure."""
+            conn = _hbase_connect()
+            if conn is None:
+                return [], []
+            table = conn.table('interactions')
+            prefix = f"{drug_name}_"
+            rows_iter = table.scan(row_prefix=prefix.encode())
+
+            _nodes = [{"id": drug_name, "group": 1}]
+            _links = []
+            added = {drug_name}
+
+            for key, data in rows_iter:
+                row_str = key.decode()
+                parts = row_str.split("_")
+                if len(parts) == 2:
+                    other = parts[1]
+                    side_effect = data.get(b'info:side_effect', b'').decode().strip()
+                    severity = data.get(b'info:severity', b'high').decode().strip()
+
+                    group = 2 if severity in ("critical", "high") else (3 if severity == "moderate" else 4)
+
+                    if other not in added:
+                        _nodes.append({"id": other, "group": group})
+                        added.add(other)
+
+                    _links.append({
+                        "source": drug_name,
+                        "target": other,
+                        "side_effect": side_effect,
+                        "severity": severity,
+                        "value": 3 if severity in ("critical", "high") else 1
+                    })
+
+            conn.close()
+            return _nodes, _links
+
+        # First attempt; retry once on stale-socket
+        try:
+            nodes, links = _do_scan()
+        except TTransportException:
+            nodes, links = _do_scan()
+
         return jsonify({"nodes": nodes, "links": links, "found": len(links) > 0})
+
+    except RuntimeError as e:
+        # Circuit breaker fired — HBase is genuinely offline
+        err = str(e)
+        if "circuit breaker" in err or "offline" in err.lower():
+            return jsonify({"error": err, "hbase_offline": True}), 503
+        return jsonify({"error": err}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

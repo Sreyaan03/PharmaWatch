@@ -374,9 +374,12 @@ function wireSlot(slot) {
       }
     }, 250);
 
-    // Resolve after 600ms pause
+    // Resolve after 900ms pause — require ≥4 chars so partial inputs like
+    // "Cl" (valid SMILES for chlorine) don't resolve before the full name is typed.
     clearTimeout(resolveTimer);
-    resolveTimer = setTimeout(() => resolveSlot(slot, q, badge), 600);
+    if (q.length >= 4) {
+      resolveTimer = setTimeout(() => resolveSlot(slot, q, badge), 900);
+    }
   });
 
   suggs.addEventListener('click', e => {

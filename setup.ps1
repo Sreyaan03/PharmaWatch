@@ -100,10 +100,11 @@ Info "Checking backend\.env..."
 if (-not (Test-Path "backend\.env")) {
     Warn "backend\.env not found — creating a template."
     @"
-FDA_API_KEY=Rtfpkk33k8qYViDvlaO6p1ZFdZ72hcvnbyn0nCiX
+FDA_API_KEY=YOUR_API_KEY_HERE
 ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
-"@ | Set-Content "backend\.env"
-    Success "Created backend\.env with default values."
+"@ | Set-Content "backend\.env.example"
+    Copy-Item -Path "backend\.env.example" -Destination "backend\.env"
+    Warn "Created backend\.env. Please edit it to add your FDA_API_KEY!"
 } else {
     Success "backend\.env found."
 }

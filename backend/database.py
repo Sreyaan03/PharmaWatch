@@ -85,10 +85,16 @@ def init_db():
             c            INTEGER,  -- event only
             d            INTEGER,  -- neither
             prr          REAL,
+            prr_ci_low   REAL,
+            prr_ci_high  REAL,
             ror          REAL,
+            ror_ci_low   REAL,
+            ror_ci_high  REAL,
+            chi2         REAL,
             bcpnn_ic     REAL,
+            ic025        REAL,
             n_reports    INTEGER,
-            severity     TEXT,
+            signal_strength TEXT,
             source       TEXT DEFAULT 'faers',
             computed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -454,27 +460,42 @@ def cache_fda_response(url, response_json):
 
 # ── signals_cache Helpers ─────────────────────────────────────────────────────
 
-def upsert_signal(drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source='faers'):
+def upsert_signal(drug, event, metrics, source='faers'):
     """Upsert a computed signal into signals_cache table."""
     conn = get_db()
     # Try inserting. If unique index conflicts, update the values.
     # Note: SQLite supports ON CONFLICT from version 3.24.0
     conn.execute("""
-        INSERT INTO signals_cache (drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO signals_cache (
+            drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, 
+            chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(drug, event) DO UPDATE SET
             a = excluded.a,
             b = excluded.b,
             c = excluded.c,
             d = excluded.d,
             prr = excluded.prr,
+            prr_ci_low = excluded.prr_ci_low,
+            prr_ci_high = excluded.prr_ci_high,
             ror = excluded.ror,
+            ror_ci_low = excluded.ror_ci_low,
+            ror_ci_high = excluded.ror_ci_high,
+            chi2 = excluded.chi2,
             bcpnn_ic = excluded.bcpnn_ic,
+            ic025 = excluded.ic025,
             n_reports = excluded.n_reports,
-            severity = excluded.severity,
+            signal_strength = excluded.signal_strength,
             source = excluded.source,
             computed_at = CURRENT_TIMESTAMP
-    """, (drug.lower(), event.lower(), a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source))
+    """, (
+        drug.lower(), event.lower(), metrics['a'], metrics['b'], metrics['c'], metrics['d'],
+        metrics['prr'], metrics['prr_ci_low'], metrics['prr_ci_high'],
+        metrics['ror'], metrics['ror_ci_low'], metrics['ror_ci_high'],
+        metrics['chi2'], metrics['bcpnn_ic'], metrics['ic025'],
+        metrics['n_reports'], metrics['signal_strength'], source
+    ))
     conn.commit()
     conn.close()
 
@@ -483,7 +504,7 @@ def get_cached_signals(limit=100):
     """Fetch all cached signals from signals_cache."""
     conn = get_db()
     rows = conn.execute("""
-        SELECT drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at
+        SELECT drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
           FROM signals_cache
          ORDER BY prr DESC
          LIMIT ?
@@ -496,7 +517,7 @@ def get_signal(drug, event):
     """Fetch a single cached signal."""
     conn = get_db()
     row = conn.execute("""
-        SELECT drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at
+        SELECT drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
           FROM signals_cache
          WHERE drug = ? AND event = ?
     """, (drug.lower(), event.lower())).fetchone()

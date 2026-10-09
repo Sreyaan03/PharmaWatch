@@ -76,7 +76,7 @@ async function fetchAndRenderSignals(forceRefresh = false) {
         bcpnn_ic: s.bcpnn_ic,
         reports: s.n_reports,
         source: s.source,
-        sev: s.severity,
+        sev: s.signal_strength,
         a: s.a, b: s.b, c: s.c, d: s.d
       }));
       filterSignals();
@@ -114,13 +114,25 @@ function renderSignalsTable(data) {
       srcLabel = 'Clinical NER';
     }
     
+    // Clean formatting for high scores resulting from c=0 small cohort Haldane correction
+    const prrDisplay = s.prr !== undefined
+      ? (s.prr > 500
+          ? `<span title="Single-cohort exclusive signal (c=0). Haldane-Anscombe (+0.5) correction applied.">&gt; 500.00*</span>`
+          : s.prr.toFixed(2))
+      : 'N/A';
+    const rorDisplay = s.ror !== undefined
+      ? (s.ror > 500
+          ? `<span title="Single-cohort exclusive signal (c=0). Haldane-Anscombe (+0.5) correction applied.">&gt; 500.00*</span>`
+          : s.ror.toFixed(2))
+      : 'N/A';
+
     return `
       <tr data-rank="${s.rank}" class="signal-row" style="cursor: pointer;">
         <td><strong>${s.rank}</strong></td>
         <td><strong>${escHtml(s.drug)}</strong></td>
         <td><span class="illness-hover" data-illness="${escHtml(s.event)}" style="cursor:help; border-bottom:1px dashed #bbb;">${escHtml(s.event)}</span></td>
-        <td class="${s.sev === 'critical' ? 'prr-critical' : s.sev === 'high' ? 'prr-high' : 'prr-moderate'}">${s.prr !== undefined ? s.prr.toFixed(2) : 'N/A'}</td>
-        <td>${s.ror !== undefined ? s.ror.toFixed(2) : 'N/A'}</td>
+        <td class="${s.sev === 'critical' ? 'prr-critical' : s.sev === 'high' ? 'prr-high' : 'prr-moderate'}">${prrDisplay}</td>
+        <td>${rorDisplay}</td>
         <td>${s.bcpnn_ic !== undefined ? s.bcpnn_ic.toFixed(2) : 'N/A'}</td>
         <td>${s.reports.toLocaleString()}</td>
         <td><span class="source-chip source-chip--${srcClass}">${srcLabel}</span></td>
@@ -182,7 +194,8 @@ function renderGauge(canvasId, value, minVal, maxVal, title, color, existingChar
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(value.toFixed(2), left + width / 2, top + height * 0.85);
+        const displayVal = value > 100 ? '> 100.0' : value.toFixed(2);
+        ctx.fillText(displayVal, left + width / 2, top + height * 0.85);
         ctx.restore();
       }
     }]
@@ -212,8 +225,8 @@ function showSignalDetail(signal) {
 
   body.innerHTML = `
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-bottom:1rem;">
-      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr !== undefined ? signal.prr.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">PRR Score</div></div>
-      <div class="stat-mini"><div class="stat-mini__val" style="color: #8b5cf6;">${signal.ror !== undefined ? signal.ror.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">ROR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr !== undefined ? (signal.prr > 500 ? '> 500.00*' : signal.prr.toFixed(2)) : 'N/A'}</div><div class="stat-mini__lbl">PRR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val" style="color: #8b5cf6;">${signal.ror !== undefined ? (signal.ror > 500 ? '> 500.00*' : signal.ror.toFixed(2)) : 'N/A'}</div><div class="stat-mini__lbl">ROR Score</div></div>
       <div class="stat-mini"><div class="stat-mini__val" style="color: #10b981;">${signal.bcpnn_ic !== undefined ? signal.bcpnn_ic.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">BCPNN IC Score</div></div>
       <div class="stat-mini"><div class="stat-mini__val">${signal.reports.toLocaleString()}</div><div class="stat-mini__lbl">Reports (n)</div></div>
     </div>
@@ -251,6 +264,10 @@ function showSignalDetail(signal) {
           </tr>
         </tbody>
       </table>
+      ${(signal.c === 0 || signal.prr > 500) ? `
+        <div style="margin-top:0.75rem; padding:0.5rem 0.75rem; background:rgba(59,130,246,0.12); border-left:3px solid #3b82f6; border-radius:4px; font-size:0.8rem; color:#93c5fd; line-height:1.4;">
+          <strong>* Exclusive Local Cohort Signal:</strong> Zero background reports were recorded for other drugs in this local cohort (c = 0). Haldane-Anscombe continuity correction (+0.5) was applied to prevent division-by-zero, resulting in asymptotic disproportionality values.
+        </div>` : ''}
     </div>
   `;
 
@@ -915,11 +932,11 @@ function animateMeters() {
 
 /* ──────────────── PIPELINE METRICS ────────────────────────── */
 function updatePipelineMetrics() {
-  // Kafka/Spark/HDFS/HBase are not running locally — metrics below are
-  // simulated placeholders. Only LSTM and NLP are fetched from real sources.
+  // Kafka metrics are updated live by distributed_storage.js (startKafkaMetricBar).
+  // Spark metrics are driven by distributed_storage.js (startSparkSimulation).
+  // HDFS metrics below provide architectural simulation.
+  // LSTM and NLP are fetched from real backend sources.
   const metrics = [
-    { id: 'kafka-metric', vals: ['32,486 msg/s', '31,940 msg/s', '33,120 msg/s'] },
-    { id: 'spark-metric', vals: ['28.4k events/s', '27.9k events/s', '29.1k events/s'] },
     { id: 'hdfs-metric',  vals: ['4.2 TB stored', '4.21 TB stored', '4.19 TB stored'] },
   ];
   metrics.forEach(m => {
@@ -991,7 +1008,7 @@ async function renderRecentAlerts() {
     }
 
     list.innerHTML = topSignals.map(s => {
-      const sev = s.severity || 'moderate';
+      const sev = s.signal_strength || 'moderate';
       return `
         <li class="alert-item alert-item--${sev}">
           <div class="alert-item__icon">${sev === 'critical' ? '🚨' : sev === 'high' ? '⚠️' : 'ℹ️'}</div>
@@ -1054,7 +1071,7 @@ function initPRRCalculator() {
 
       if (data.error) {
         result.style.background = '#fdecea';
-        result.innerHTML = `Error: ${data.error}`;
+        result.innerHTML = `Error: ${escHtml(data.error)}`;
         return;
       }
 
@@ -1071,7 +1088,7 @@ function initPRRCalculator() {
       const sig = data.prr > 5 ? 'CRITICAL' : data.prr > 3 ? 'HIGH' : data.prr > 2 ? 'MODERATE' : data.prr > 1 ? 'LOW' : 'NONE';
       const col = data.prr > 3 ? '#fdecea' : data.prr > 2 ? '#fff8e1' : '#e8f5e9';
       result.style.background = col;
-      result.innerHTML = `PRR = <strong>${data.prr.toFixed(4)}</strong> &nbsp;|&nbsp; Signal Level: <strong>${sig}</strong><br><small style="opacity:0.7;">Drug: ${data.drug} | Event: ${data.event} | Source: openFDA FAERS (live)</small>`;
+      result.innerHTML = `PRR = <strong>${data.prr.toFixed(4)}</strong> &nbsp;|&nbsp; Signal Level: <strong>${sig}</strong><br><small style="opacity:0.7;">Drug: ${escHtml(data.drug)} | Event: ${escHtml(data.event)} | Source: openFDA FAERS (live)</small>`;
 
       // ── ClinicalTrials Corroboration Panel (Option B) ──────────────────────
       let ctPanel = document.getElementById('prr-ct-corroboration');
@@ -1498,7 +1515,7 @@ function initNerPanel() {
       return `
         <div class="dashboard-card" style="margin: 0; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); background: rgba(15, 23, 42, 0.3);">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-            <span class="status-pill status-pill--${s.severity === 'critical' ? 'active' : s.severity === 'high' ? 'review' : 'closed'}">${s.severity.toUpperCase()}</span>
+            <span class="status-pill status-pill--${s.signal_strength === 'critical' ? 'active' : s.signal_strength === 'high' ? 'review' : 'closed'}">${s.signal_strength.toUpperCase()}</span>
             <span style="font-size: 0.75rem; color: var(--text-muted);">Source: EHR NER</span>
           </div>
           <h4 style="font-size: 1rem; font-weight: 700; margin: 0.2rem 0;">${escHtml(s.drug)}</h4>
@@ -1656,7 +1673,7 @@ async function loadBoxedWarningAnalysis(drugName) {
         </div>
       </div>`;
 
-    document.getElementById('bw-warning-text').innerHTML = warningRes.warning_text
+    document.getElementById('bw-warning-text').innerHTML = escHtml(warningRes.warning_text)
       .replace(/WARNING/g, '<strong>WARNING</strong>')
       .replace(/BOXED WARNING/g, '<strong style="color:#c0392b;">BOXED WARNING</strong>');
 

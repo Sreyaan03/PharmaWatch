@@ -20,6 +20,7 @@ All project documentation is organised here. Start with the file that matches wh
 | [`definitive_ml_guide.md`](./definitive_ml_guide.md) | Master ML guide — all models end-to-end |
 | [`ml_models_implementation_guide.md`](./ml_models_implementation_guide.md) | LSTM + GNN implementation details |
 | [`twosides_ml_guide.md`](./twosides_ml_guide.md) | TWOSIDES drug-interaction model specifically |
+| [`GNN_METHODOLOGY_AND_LABEL_CALIBRATION.md`](./GNN_METHODOLOGY_AND_LABEL_CALIBRATION.md) | GNN soft-label derivation (13.19% DrugBank density) |
 | [`biobert_ner_guide.md`](./biobert_ner_guide.md) | BioBERT NER model — named entity recognition |
 
 ---

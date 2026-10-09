@@ -91,6 +91,7 @@ const DistributedStorage = {
       this._updateIngestionCounters();
       this._updateKafkaLagChart();
       this._updateTopicRateNodes();
+      this._updateKafkaMetric();
 
     } catch (e) {
       // silently fail — Kafka may not be running
@@ -279,19 +280,22 @@ const DistributedStorage = {
   ══════════════════════════════════════════════════════════════ */
 
   startKafkaMetricBar() {
-    const update = () => {
-      const el = document.getElementById('kafka-metric');
-      if (!el) return;
-      const total = Object.values(this.kafka.topics).reduce((s, t) => s + (t.total || 0), 0);
-      if (total > 0) {
-        const recentAll = Object.values(this.kafka.topics).reduce((s, t) => s + (t.recent || 0), 0);
-        el.textContent = `${total.toLocaleString()} msgs total · ${recentAll}/10min`;
-      } else {
-        el.textContent = 'Waiting for first Kafka events...';
-      }
-    };
-    update();
-    setInterval(update, 10000);
+    this._updateKafkaMetric();
+    setInterval(() => this._updateKafkaMetric(), 5000);
+  },
+
+  _updateKafkaMetric() {
+    const el = document.getElementById('kafka-metric');
+    if (!el) return;
+    const total = Object.values(this.kafka.topics).reduce((s, t) => s + (t.total || 0), 0);
+    if (total > 0) {
+      const recentAll = Object.values(this.kafka.topics).reduce((s, t) => s + (t.recent || 0), 0);
+      el.textContent = `${total.toLocaleString()} msgs total · ${recentAll}/10min`;
+    } else if (this.kafka.running) {
+      el.textContent = 'Kafka online · Listening for events';
+    } else {
+      el.textContent = 'Kafka pipeline idle';
+    }
   },
 
   /* ══════════════════════════════════════════════════════════════

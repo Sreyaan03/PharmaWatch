@@ -20,9 +20,8 @@ import time
 import logging
 import datetime
 import requests
-import feedparser
 from kafka import KafkaProducer
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import KafkaError
 from dotenv import load_dotenv
 
 # ── Load environment ──────────────────────────────────────────────────────────
@@ -63,7 +62,7 @@ def create_producer(retries=10, delay=5):
             )
             log.info(f"✅ Connected to Kafka at {KAFKA_SERVERS}")
             return producer
-        except NoBrokersAvailable:
+        except KafkaError:
             log.warning(f"Kafka not ready (attempt {attempt}/{retries}), retrying in {delay}s...")
             time.sleep(delay)
     log.error("❌ Could not connect to Kafka after all retries. Exiting.")
@@ -145,7 +144,7 @@ def poll_pubmed(producer):
         "drug interaction safety signal[Title/Abstract]",
     ]
 
-    seven_days_ago = (datetime.datetime.utcnow() - datetime.timedelta(days=7)).strftime("%Y/%m/%d")
+    thirty_days_ago = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).strftime("%Y/%m/%d")
     today = datetime.datetime.utcnow().strftime("%Y/%m/%d")
 
     for query in queries:
@@ -154,8 +153,8 @@ def poll_pubmed(producer):
             search_url = (
                 f"{base}/esearch.fcgi?db=pubmed"
                 f"&term={requests.utils.quote(query)}"
-                f"&mindate={seven_days_ago}&maxdate={today}"
-                f"&datetype=pdat&retmax=10&retmode=json{api_suffix}"
+                f"&mindate={thirty_days_ago}&maxdate={today}"
+                f"&datetype=pdat&retmax=25&retmode=json{api_suffix}"
             )
             search_resp = requests.get(search_url, timeout=10)
             if search_resp.status_code != 200:
@@ -212,12 +211,12 @@ def poll_clinical_trials(producer):
     base = "https://clinicaltrials.gov/api/v2/studies"
     published = 0
 
-    for drug in WATCHLIST[:8]:   # limit to 8 drugs per cycle to avoid flooding
+    for drug in WATCHLIST:   # query all drugs in watchlist
         try:
             params = {
                 "query.intr": drug,
                 "filter.overallStatus": "RECRUITING,ACTIVE_NOT_RECRUITING",
-                "pageSize": 5,
+                "pageSize": 10,
                 "format": "json",
             }
             resp = requests.get(base, params=params, timeout=10)
@@ -263,45 +262,50 @@ def poll_clinical_trials(producer):
 # Topic: fda-alerts
 # Polls every 30 minutes — real FDA safety communications
 # ══════════════════════════════════════════════════════════════════════════════
-def poll_fda_rss(producer):
-    log.info("=== Polling FDA Safety Alerts RSS ===")
-    feeds = [
-        "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/medwatch-safety-alerts/rss.xml",
-        "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls-market-withdrawals-and-safety-alerts/rss.xml",
-    ]
+def poll_fda_alerts(producer):
+    """Poll FDA drug enforcement (recalls/safety) via openFDA API."""
+    log.info("=== Polling FDA Safety Alerts (openFDA enforcement) ===")
+    base = "https://api.fda.gov/drug/enforcement.json"
+    api_suffix = f"&api_key={FDA_API_KEY}" if FDA_API_KEY else ""
     published = 0
 
-    for feed_url in feeds:
-        try:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:10]:   # last 10 entries per feed
-                title   = entry.get("title", "")
-                link    = entry.get("link", "")
-                summary = entry.get("summary", "")[:500]
-                pub     = entry.get("published", "")
+    # Fetch the 20 most recent drug enforcement actions (recalls, market withdrawals)
+    try:
+        url = f"{base}?sort=report_date:desc&limit=20{api_suffix}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            for item in results:
+                recall_num  = item.get("recall_number", "")
+                title       = item.get("reason_for_recall", "")[:200]
+                product     = item.get("product_description", "")[:200]
+                status      = item.get("status", "")
+                report_date = item.get("report_date", "")
+                recall_init = item.get("recalling_firm", "")
+                class_num   = item.get("classification", "")
 
-                if not title:
+                if not recall_num:
                     continue
 
-                # Generate a stable key from the link URL
-                key = link.split("/")[-1] or title[:40]
-
                 message = {
-                    "source":    "fda_rss",
-                    "title":     title,
-                    "link":      link,
-                    "summary":   summary,
-                    "published": pub,
-                    "feed_url":  feed_url,
-                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                    "source":      "fda_enforcement",
+                    "recall_num":  recall_num,
+                    "title":       title,
+                    "product":     product,
+                    "status":      status,
+                    "report_date": report_date,
+                    "firm":        recall_init,
+                    "class":       class_num,
+                    "timestamp":   datetime.datetime.utcnow().isoformat(),
                 }
-                publish(producer, "fda-alerts", key, message)
+                publish(producer, "fda-alerts", recall_num, message)
                 published += 1
+        else:
+            log.warning(f"FDA enforcement API returned {resp.status_code}")
+    except Exception as e:
+        log.error(f"FDA enforcement API error: {e}")
 
-        except Exception as e:
-            log.error(f"FDA RSS error for {feed_url}: {e}")
-
-    log.info(f"FDA RSS poll done — {published} messages published")
+    log.info(f"FDA alerts poll done — {published} messages published")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -320,7 +324,7 @@ def main():
     FAERS_INTERVAL   = 10 * 60
     PUBMED_INTERVAL  = 60 * 60
     TRIALS_INTERVAL  = 60 * 60
-    RSS_INTERVAL     = 30 * 60
+    RSS_INTERVAL     = 20 * 60   # every 20 minutes (was 30)
 
     log.info("✅ Producer running. Topics: faers-raw | pubmed-stream | clinical-trials | fda-alerts")
 
@@ -332,7 +336,7 @@ def main():
             last_faers = time.time()
 
         if now - last_rss >= RSS_INTERVAL:
-            poll_fda_rss(producer)
+            poll_fda_alerts(producer)
             last_rss = time.time()
 
         if now - last_trials >= TRIALS_INTERVAL:

@@ -11,10 +11,37 @@ const ApiLayer = {
 
   /* ----------------------------------------------------------
      API KEY — read from the utility-bar input the user types
+     or saved from localStorage, with fallback default
   ---------------------------------------------------------- */
   getFdaApiKey() {
-    // Hardcoded Option B
+    const input = document.getElementById('fda-api-key');
+    if (input && input.value.trim()) {
+      return input.value.trim();
+    }
+    const saved = localStorage.getItem('openfda_api_key');
+    if (saved && saved.trim()) {
+      return saved.trim();
+    }
+    // Fallback default openFDA key
     return 'Rtfpkk33k8qYViDvlaO6p1ZFdZ72hcvnbyn0nCiX';
+  },
+
+  initApiKeySync() {
+    const input = document.getElementById('fda-api-key');
+    if (!input || input._synced) return;
+    input._synced = true;
+    const saved = localStorage.getItem('openfda_api_key');
+    if (saved) {
+      input.value = saved;
+    }
+    input.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (val) {
+        localStorage.setItem('openfda_api_key', val);
+      } else {
+        localStorage.removeItem('openfda_api_key');
+      }
+    });
   },
 
   buildFdaUrl(endpoint, queryParams) {
@@ -281,5 +308,15 @@ const ApiLayer = {
     document.addEventListener('mouseover', this._tooltipOver);
     document.addEventListener('mouseout', this._tooltipOut);
     document.addEventListener('mousemove', this._tooltipMove);
+
+    this.initApiKeySync();
   }
 };
+
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => ApiLayer.initApiKeySync());
+  } else {
+    ApiLayer.initApiKeySync();
+  }
+}

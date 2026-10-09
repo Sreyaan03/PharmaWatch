@@ -24,6 +24,7 @@ coverage.xml
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
 *.sqlite3
 backend/pharmawatch.db
 backend/pharmawatch.db-shm

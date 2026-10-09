@@ -87,10 +87,10 @@ def dashboard_signal_intensity():
         # Use real computed_at timestamps to aggregate per hour per severity
         cutoff = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
         rows = conn.execute("""
-            SELECT strftime('%H:00', computed_at) AS hour, severity, COUNT(*) as cnt
+            SELECT strftime('%H:00', computed_at) AS hour, signal_strength as severity, COUNT(*) as cnt
             FROM signals_cache
             WHERE computed_at >= ?
-            GROUP BY hour, severity
+            GROUP BY hour, signal_strength
         """, (cutoff,)).fetchall()
         conn.close()
 
@@ -115,7 +115,7 @@ def dashboard_signal_intensity():
             conn2 = sqlite3.connect(DB_PATH)
             conn2.row_factory = sqlite3.Row
             total_rows = conn2.execute(
-                "SELECT severity, COUNT(*) as cnt FROM signals_cache GROUP BY severity"
+                "SELECT signal_strength as severity, COUNT(*) as cnt FROM signals_cache GROUP BY signal_strength"
             ).fetchall()
             conn2.close()
             counts = {r['severity']: r['cnt'] for r in total_rows} if total_rows else {}

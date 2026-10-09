@@ -27,7 +27,7 @@ def compute_disproportionality_helper(drug, event, source=None):
         try:
             from faers.analytics import compute_prr_duckdb
             duck_res = compute_prr_duckdb(drug, event)
-            if duck_res is not None and duck_res.get("a", 0) > 0:
+            if duck_res is not None:
                 duck_res["source"] = "faers_local"
                 return duck_res
             # If explicit duckdb source requested but no data found, return what we got or None
@@ -41,66 +41,29 @@ def compute_disproportionality_helper(drug, event, source=None):
     # 2. Fall back to openFDA
     FDA_BASE = "https://api.fda.gov/drug/event.json"
     try:
-        url_a = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"+AND+patient.reaction.reactionmeddrapt:"{event}"&limit=1'
-        res_a = http_requests.get(url_a).json()
-        a = res_a.get("meta", {}).get("results", {}).get("total", 0)
+        def fetch_count(query_str):
+            res = http_requests.get(FDA_BASE, params={"search": query_str, "limit": 1}, timeout=10)
+            if res.status_code == 404:
+                return 0
+            res.raise_for_status()
+            data = res.json()
+            if "meta" in data and "results" in data["meta"]:
+                return data["meta"]["results"]["total"]
+            return 0
 
-        url_ab = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"&limit=1'
-        res_ab = http_requests.get(url_ab).json()
-        ab = res_ab.get("meta", {}).get("results", {}).get("total", 1)
+        a = fetch_count(f'patient.drug.medicinalproduct:"{drug}" AND patient.reaction.reactionmeddrapt:"{event}"')
+        ab = fetch_count(f'patient.drug.medicinalproduct:"{drug}"')
+        ac = fetch_count(f'patient.reaction.reactionmeddrapt:"{event}"')
+        total = fetch_count('_exists_:patient')
 
-        url_ac = f'{FDA_BASE}?search=patient.reaction.reactionmeddrapt:"{event}"&limit=1'
-        res_ac = http_requests.get(url_ac).json()
-        ac = res_ac.get("meta", {}).get("results", {}).get("total", 1)
+        b = max(ab - a, 0)
+        c = max(ac - a, 0)
+        d = max(total - a - b - c, 0)
 
-        url_total = f'{FDA_BASE}?search=_exists_:patient&limit=1'
-        res_total = http_requests.get(url_total).json()
-        total = res_total.get("meta", {}).get("results", {}).get("total", 1)
-
-        b = ab - a
-        c = ac - a
-        d = total - a - b - c
-
-        if (a + b) == 0 or (c + d) == 0 or c == 0 or (a + c) == 0 or total == 0:
-            return None
-
-        prr = (a / (a + b)) / (c / (c + d))
-
-        denominator_ror = b * c
-        ror = (a * d) / denominator_ror if denominator_ror != 0 else 0.0
-
-        numerator_ic = a * total
-        denominator_ic = (a + b) * (a + c)
-        bcpnn_ic = 0.0
-        if denominator_ic != 0 and numerator_ic > 0:
-            ratio = numerator_ic / denominator_ic
-            if ratio > 0:
-                bcpnn_ic = np.log2(ratio)
-
-        flags = 0
-        if prr > 2.0 and a >= 3:
-            flags += 1
-        if ror > 2.0 and a >= 3:
-            flags += 1
-        if bcpnn_ic > 1.5:
-            flags += 1
-
-        if flags >= 2 or prr > 4.0 or ror > 4.0:
-            severity = "critical"
-        elif flags == 1 or prr > 2.0 or ror > 2.0:
-            severity = "high"
-        else:
-            severity = "moderate"
-
-        return {
-            "a": a, "b": b, "c": c, "d": d,
-            "prr": round(float(prr), 4),
-            "ror": round(float(ror), 4),
-            "bcpnn_ic": round(float(bcpnn_ic), 4),
-            "n_reports": a,
-            "severity": severity,
-            "source": "openfda"
-        }
+        from faers.disproportionality import compute_metrics
+        res = compute_metrics(a, b, c, d)
+        res["source"] = "openfda"
+        return res
     except Exception as e:
         print(f"[DISPROPORTIONALITY ERROR] {drug} + {event}: {e}")
         return None
@@ -149,20 +112,10 @@ def get_signals():
             metrics = compute_disproportionality_helper(drug, event, source=source)
             if metrics:
                 metric_source = metrics.get("source", "openfda")
-                upsert_signal(drug, event, metrics["a"], metrics["b"], metrics["c"], metrics["d"],
-                              metrics["prr"], metrics["ror"], metrics["bcpnn_ic"], metrics["n_reports"],
-                              metrics["severity"], source=metric_source)
-                signals.append({
-                    "drug": drug,
-                    "event": event,
-                    "a": metrics["a"], "b": metrics["b"], "c": metrics["c"], "d": metrics["d"],
-                    "prr": metrics["prr"],
-                    "ror": metrics["ror"],
-                    "bcpnn_ic": metrics["bcpnn_ic"],
-                    "n_reports": metrics["n_reports"],
-                    "severity": metrics["severity"],
-                    "source": metric_source
-                })
+                upsert_signal(drug, event, metrics, source=metric_source)
+                signal_data = metrics.copy()
+                signal_data.update({"drug": drug, "event": event, "source": metric_source})
+                signals.append(signal_data)
 
     watchlist_keys = {(d.lower(), e.lower()) for d, e in WATCHLIST}
     for s in cached_list:
@@ -271,21 +224,11 @@ def stream_ner_task(task_id):
                 
                 metrics = compute_disproportionality_helper(drug, event)
                 if metrics:
-                    upsert_signal(drug, event, metrics["a"], metrics["b"], metrics["c"], metrics["d"],
-                                  metrics["prr"], metrics["ror"], metrics["bcpnn_ic"], metrics["n_reports"],
-                                  metrics["severity"], source="ner_clinical")
+                    upsert_signal(drug, event, metrics, source="ner_clinical")
                     insert_drug_event(drug, event, source="biobert", confidence=p["confidence"], raw_text=text[:500])
-                    computed_signals.append({
-                        "drug": drug,
-                        "event": event,
-                        "a": metrics["a"], "b": metrics["b"], "c": metrics["c"], "d": metrics["d"],
-                        "prr": metrics["prr"],
-                        "ror": metrics["ror"],
-                        "bcpnn_ic": metrics["bcpnn_ic"],
-                        "n_reports": metrics["n_reports"],
-                        "severity": metrics["severity"],
-                        "source": "ner_clinical"
-                    })
+                    signal_data = metrics.copy()
+                    signal_data.update({"drug": drug, "event": event, "source": "ner_clinical"})
+                    computed_signals.append(signal_data)
                     
             yield f"event: done\ndata: {json.dumps({'signals': computed_signals, 'entities': entities})}\n\n"
             

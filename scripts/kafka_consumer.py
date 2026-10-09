@@ -25,7 +25,7 @@ import sqlite3
 import logging
 import datetime
 from kafka import KafkaConsumer
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import KafkaError
 from dotenv import load_dotenv
 
 # ── Load environment ──────────────────────────────────────────────────────────
@@ -136,75 +136,108 @@ def record_pipeline_stat(topic, offset=None):
 # Computes PRR from FAERS co-occurrence counts and upserts into signals_cache
 # ══════════════════════════════════════════════════════════════════════════════
 def compute_prr(a, ab, ac, total):
-    """Compute PRR, ROR, BCPNN IC from a 2×2 contingency table."""
+    """
+    Compute PRR, ROR, BCPNN IC from a 2×2 contingency table.
+    Applies Haldane-Anscombe continuity correction (+0.5 to all cells)
+    when zero-cell counts (b=0 or c=0) are encountered to eliminate
+    division-by-zero artifacts (e.g., scores in trillions) while
+    preserving asymptotic properties.
+    """
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
+    from faers.disproportionality import compute_metrics
+    
     b = max(ab - a, 0)
     c = max(ac - a, 0)
     d = max(total - ab - ac + a, 0)
-    prr = (a / max(a + b, 1)) / max(c / max(c + d, 1), 1e-9)
-    ror = (a * d) / max(b * c, 1e-9)
-    # BCPNN Information Component
-    p_drug  = (a + b) / max(total, 1)
-    p_event = (a + c) / max(total, 1)
-    p_joint = a / max(total, 1)
-    ic = math.log2(max(p_joint, 1e-9) / max(p_drug * p_event, 1e-9))
-    return prr, ror, ic
+    
+    return compute_metrics(a, b, c, d)
 
 
 def handle_faers(msg, conn):
     """Process a faers-raw message → write to drug_events and signals_cache."""
     drug    = msg.get("drug", "").lower().strip()
     event   = msg.get("event", "").lower().strip()
-    count   = int(msg.get("count", 1))
+    count   = int(msg.get("count", 1))   # ← real FAERS co-occurrence count from API
 
     if not drug or not event:
         return
 
-    # Insert into drug_events (raw pairs)
+    # ── Upsert into drug_events using the REAL count from the FAERS aggregation
+    # We store ONE row per (drug, event) pair with the actual report count.
+    # Using INSERT OR REPLACE so repeated polls just refresh the count, not
+    # accumulate thousands of duplicate rows (which inflated PRR to >500).
     conn.execute("""
-        INSERT INTO drug_events (drug, event, source, confidence)
+        CREATE TABLE IF NOT EXISTS drug_events_agg (
+            drug       TEXT NOT NULL,
+            event      TEXT NOT NULL,
+            count      INTEGER DEFAULT 0,
+            source     TEXT DEFAULT 'kafka_faers',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (drug, event)
+        )
+    """)
+    conn.execute("""
+        INSERT INTO drug_events_agg (drug, event, count, source, updated_at)
+        VALUES (?, ?, ?, 'kafka_faers', CURRENT_TIMESTAMP)
+        ON CONFLICT(drug, event) DO UPDATE SET
+            count = excluded.count,
+            updated_at = CURRENT_TIMESTAMP
+    """, (drug, event, count))
+
+    # Also keep one row in drug_events for legacy compatibility
+    conn.execute("""
+        INSERT OR IGNORE INTO drug_events (drug, event, source, confidence)
         VALUES (?, ?, 'kafka_faers', 1.0)
     """, (drug, event))
 
-    # Count co-occurrences for PRR from drug_events table
-    a  = conn.execute("SELECT COUNT(*) FROM drug_events WHERE drug=? AND event=?",
-                      (drug, event)).fetchone()[0]
-    ab = conn.execute("SELECT COUNT(*) FROM drug_events WHERE drug=?",
-                      (drug,)).fetchone()[0]
-    ac = conn.execute("SELECT COUNT(*) FROM drug_events WHERE event=?",
-                      (event,)).fetchone()[0]
-    total = conn.execute("SELECT COUNT(*) FROM drug_events").fetchone()[0]
+    # ── Compute PRR from aggregated counts (not row counts)
+    # a  = reports for this drug AND this event
+    # ab = all reports for this drug (across all events)
+    # ac = all reports for this event (across all drugs)
+    # total = all reports in the dataset
+    a  = conn.execute(
+        "SELECT COALESCE(count, 0) FROM drug_events_agg WHERE drug=? AND event=?",
+        (drug, event)).fetchone()
+    a  = a[0] if a else 0
+
+    ab = conn.execute(
+        "SELECT COALESCE(SUM(count), 0) FROM drug_events_agg WHERE drug=?",
+        (drug,)).fetchone()[0]
+
+    ac = conn.execute(
+        "SELECT COALESCE(SUM(count), 0) FROM drug_events_agg WHERE event=?",
+        (event,)).fetchone()[0]
+
+    total = conn.execute(
+        "SELECT COALESCE(SUM(count), 0) FROM drug_events_agg").fetchone()[0]
 
     if a < 3 or total < 10:
         return   # not enough data for meaningful PRR
 
-    prr, ror, ic = compute_prr(a, ab, ac, total)
-    b = ab - a
-    c = ac - a
-    d = total - ab - ac + a
-    n_reports = a
-
-    # Classify severity
-    if prr >= 4.0 and ic > 1.0:
-        severity = "critical"
-    elif prr >= 2.0 and ic > 0:
-        severity = "high"
-    elif prr >= 1.5:
-        severity = "moderate"
-    else:
-        severity = "low"
+    metrics = compute_prr(a, ab, ac, total)
 
     conn.execute("""
-        INSERT INTO signals_cache
-          (drug, event, a, b, c, d, prr, ror, bcpnn_ic, n_reports, severity, source, computed_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,'kafka_faers',CURRENT_TIMESTAMP)
+        INSERT INTO signals_cache (
+            drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, 
+            chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
+        )
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'kafka_faers',CURRENT_TIMESTAMP)
         ON CONFLICT(drug, event) DO UPDATE SET
             a=excluded.a, b=excluded.b, c=excluded.c, d=excluded.d,
-            prr=excluded.prr, ror=excluded.ror, bcpnn_ic=excluded.bcpnn_ic,
-            n_reports=excluded.n_reports, severity=excluded.severity,
+            prr=excluded.prr, prr_ci_low=excluded.prr_ci_low, prr_ci_high=excluded.prr_ci_high,
+            ror=excluded.ror, ror_ci_low=excluded.ror_ci_low, ror_ci_high=excluded.ror_ci_high,
+            chi2=excluded.chi2, bcpnn_ic=excluded.bcpnn_ic, ic025=excluded.ic025,
+            n_reports=excluded.n_reports, signal_strength=excluded.signal_strength,
             source=excluded.source, computed_at=CURRENT_TIMESTAMP
-    """, (drug, event, a, b, c, d,
-          round(prr, 4), round(ror, 4), round(ic, 4),
-          n_reports, severity))
+    """, (
+        drug, event, metrics['a'], metrics['b'], metrics['c'], metrics['d'],
+        metrics['prr'], metrics['prr_ci_low'], metrics['prr_ci_high'],
+        metrics['ror'], metrics['ror_ci_low'], metrics['ror_ci_high'],
+        metrics['chi2'], metrics['bcpnn_ic'], metrics['ic025'],
+        metrics['n_reports'], metrics['signal_strength']
+    ))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -249,14 +282,27 @@ def handle_trials(msg, conn):
 # HANDLER 4: fda-alerts
 # ══════════════════════════════════════════════════════════════════════════════
 def handle_alerts(msg, conn):
-    key     = msg.get("title", "")[:80]
-    title   = msg.get("title", "")
-    link    = msg.get("link", "")
-    summary = msg.get("summary", "")
-    pub     = msg.get("published", "")
-    feed    = msg.get("feed_url", "")
+    """Handle fda-alerts messages — supports both openFDA enforcement and legacy RSS formats."""
+    source = msg.get("source", "")
 
-    if not title:
+    if source == "fda_enforcement":
+        # openFDA drug enforcement / recall API format
+        key     = msg.get("recall_num", "")
+        title   = msg.get("title", "")           # reason_for_recall
+        link    = ""                              # no direct URL from API
+        summary = msg.get("product", "")         # product_description
+        pub     = msg.get("report_date", "")
+        feed    = f"class:{msg.get('class','')} firm:{msg.get('firm','')}"
+    else:
+        # Legacy RSS format (fallback)
+        key     = msg.get("title", "")[:80]
+        title   = msg.get("title", "")
+        link    = msg.get("link", "")
+        summary = msg.get("summary", "")
+        pub     = msg.get("published", "")
+        feed    = msg.get("feed_url", "")
+
+    if not title or not key:
         return
 
     conn.execute("""
@@ -293,7 +339,7 @@ def create_consumer(retries=10, delay=5):
             log.info(f"✅ Consumer connected to Kafka at {KAFKA_SERVERS}")
             log.info(f"   Subscribed topics: {list(TOPIC_HANDLERS.keys())}")
             return consumer
-        except NoBrokersAvailable:
+        except KafkaError:
             log.warning(f"Kafka not ready (attempt {attempt}/{retries}), retrying in {delay}s...")
             import time; import time as t; t.sleep(delay)
     log.error("❌ Could not connect to Kafka. Exiting.")

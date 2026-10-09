@@ -60,10 +60,12 @@ def build_drug_where_clause(terms):
         # Exact match
         conditions.append("LOWER(drugname) = ?")
         params.append(term)
-        # Prefix/substring match (e.g. 'metformin hcl')
-        conditions.append("LOWER(drugname) LIKE ?")
-        params.append(f"%{term}%")
-    return " ( " + " OR ".join(conditions) + " ) ", params
+        # Word boundary match (e.g. 'metformin hcl')
+        conditions.append("regexp_matches(LOWER(drugname), ?)")
+        params.append(f"(^|[^a-z]){term}([^a-z]|$)")
+    
+    drug_cond = " ( " + " OR ".join(conditions) + " ) "
+    return f" ( {drug_cond} AND role_cod IN ('PS', 'SS') ) ", params
 
 def compute_prr_duckdb(drug, event):
     """
@@ -112,57 +114,15 @@ def compute_prr_duckdb(drug, event):
         
         conn.close()
         
-        b = ab - a
-        c = ac - a
-        d = total - a - b - c
+        b = max(ab - a, 0)
+        c = max(ac - a, 0)
+        d = max(total - a - b - c, 0)
         
-        # Prevent division by zero
-        if (a + b) == 0 or (c + d) == 0 or c == 0 or (a + c) == 0 or total == 0:
-            return {
-                "a": a, "b": b, "c": c, "d": d,
-                "prr": 0.0, "ror": 0.0, "bcpnn_ic": 0.0,
-                "n_reports": a, "severity": "moderate",
-                "source": "faers_local"
-            }
-            
-        prr = (a / (a + b)) / (c / (c + d))
-        
-        denominator_ror = b * c
-        ror = (a * d) / denominator_ror if denominator_ror != 0 else 0.0
-        
-        numerator_ic = a * total
-        denominator_ic = (a + b) * (a + c)
-        bcpnn_ic = 0.0
-        if denominator_ic != 0 and numerator_ic > 0:
-            ratio = numerator_ic / denominator_ic
-            if ratio > 0:
-                bcpnn_ic = np.log2(ratio)
-                
-        # Signal Classification Severity
-        flags = 0
-        if prr > 2.0 and a >= 3:
-            flags += 1
-        if ror > 2.0 and a >= 3:
-            flags += 1
-        if bcpnn_ic > 1.5:
-            flags += 1
-            
-        if flags >= 2 or prr > 4.0 or ror > 4.0:
-            severity = "critical"
-        elif flags == 1 or prr > 2.0 or ror > 2.0:
-            severity = "high"
-        else:
-            severity = "moderate"
-            
-        return {
-            "a": int(a), "b": int(b), "c": int(c), "d": int(d),
-            "prr": round(float(prr), 4),
-            "ror": round(float(ror), 4),
-            "bcpnn_ic": round(float(bcpnn_ic), 4),
-            "n_reports": int(a),
-            "severity": severity,
-            "source": "faers_local"
-        }
+        from .disproportionality import compute_metrics
+        res = compute_metrics(a, b, c, d)
+        res["source"] = "faers_local"
+        return res
+
         
     except Exception as e:
         print(f"[-] Error computing disproportionality in DuckDB: {e}")
@@ -533,9 +493,9 @@ def get_demographics_age_duckdb(drug, event):
         q = f"""
             SELECT 
                 CASE 
-                    WHEN CAST(d.age AS INTEGER) < 18 THEN 'Pediatric'
-                    WHEN CAST(d.age AS INTEGER) BETWEEN 18 AND 64 THEN 'Adult'
-                    WHEN CAST(d.age AS INTEGER) >= 65 THEN 'Geriatric'
+                    WHEN TRY_CAST(d.age AS DOUBLE) < 18 THEN 'Pediatric'
+                    WHEN TRY_CAST(d.age AS DOUBLE) BETWEEN 18 AND 64 THEN 'Adult'
+                    WHEN TRY_CAST(d.age AS DOUBLE) >= 65 THEN 'Geriatric'
                     ELSE 'Unknown'
                 END as age_group,
                 COUNT(DISTINCT d.primaryid) as cnt
