@@ -11,12 +11,21 @@ import pymysql
 from pymysql.cursors import DictCursor
 from dbutils.pooled_db import PooledDB
 
+from dotenv import load_dotenv
+
 log = logging.getLogger("pharmawatch.db")
 
 _POOL = None
 
-def get_db_config():
+def get_db_config(load_env=True):
     """Retrieve MySQL credentials from environment variables."""
+    if load_env:
+        env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+        if os.path.exists(env_path):
+            load_dotenv(env_path, override=False)
+        else:
+            load_dotenv(override=False)
+
     return {
         "host": os.getenv("MYSQL_HOST", "localhost"),
         "port": int(os.getenv("MYSQL_PORT", 3306)),

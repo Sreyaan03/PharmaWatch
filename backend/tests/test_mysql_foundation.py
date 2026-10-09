@@ -86,7 +86,7 @@ def test_get_db_config_defaults(monkeypatch):
     monkeypatch.delenv("MYSQL_PASSWORD", raising=False)
     monkeypatch.delenv("MYSQL_DATABASE", raising=False)
     
-    cfg = get_db_config()
+    cfg = get_db_config(load_env=False)
     assert cfg["host"] == "localhost"
     assert cfg["port"] == 3306
     assert cfg["user"] == "root"
