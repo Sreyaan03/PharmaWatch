@@ -191,3 +191,10 @@ CREATE TABLE IF NOT EXISTS kafka_pipeline_stats (
     INDEX idx_pipe_topic_recorded (topic, recorded_at),
     INDEX idx_pipe_recorded (recorded_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 14. Global FAERS Adverse Event Background Counts (Epidemiological Reference)
+CREATE TABLE IF NOT EXISTS faers_background_events (
+    event VARCHAR(191) PRIMARY KEY,
+    global_count BIGINT NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

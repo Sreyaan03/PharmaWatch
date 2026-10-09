@@ -30,9 +30,10 @@ EXPECTED_TABLES = [
     "kafka_trials",
     "kafka_alerts",
     "kafka_pipeline_stats",
+    "faers_background_events",
 ]
 
-def test_schema_sql_contains_all_13_tables():
+def test_schema_sql_contains_all_14_tables():
     schema_path = os.path.join(BASE_DIR, "db", "schema.sql")
     assert os.path.exists(schema_path), f"schema.sql not found at {schema_path}"
     with open(schema_path, "r", encoding="utf-8") as f:
@@ -47,7 +48,7 @@ def test_split_sql_statements():
         content = f.read()
     
     statements = split_sql_statements(content)
-    assert len(statements) == 13, f"Expected 13 CREATE TABLE statements, got {len(statements)}"
+    assert len(statements) == 14, f"Expected 14 CREATE TABLE statements, got {len(statements)}"
     for stmt in statements:
         assert stmt.strip().upper().startswith("CREATE TABLE"), f"Statement does not start with CREATE TABLE: {stmt[:40]}"
 

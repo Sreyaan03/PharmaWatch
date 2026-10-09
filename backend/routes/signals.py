@@ -319,7 +319,7 @@ def trigger_processing():
 
 @signals_bp.route("/api/system/start-bigdata", methods=["POST"])
 def start_bigdata():
-    """HBase launcher — returns not-available when HBase is not deployed."""
+    """HBase launcher — verifies or starts hbase-server and connects to Thrift."""
     admin_key = os.getenv("ADMIN_API_KEY", "").strip()
     if not admin_key:
         return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
@@ -330,15 +330,25 @@ def start_bigdata():
     try:
         import happybase
     except ImportError:
-        return jsonify({"status": "not_deployed", "message": "HBase is not installed in this environment. Kafka pipeline is handling real-time data ingestion."}), 200
+        return jsonify({"status": "not_deployed", "hbase_ready": False, "message": "happybase is not installed."}), 200
+
+    # Quick check if already online
+    try:
+        conn = happybase.Connection('127.0.0.1', port=9090, timeout=1500)
+        conn.open()
+        conn.tables()
+        conn.close()
+        return jsonify({"status": "ready", "hbase_ready": True, "message": "HBase is online"}), 200
+    except Exception:
+        pass
 
     try:
-        result = subprocess.run(
+        subprocess.run(
             ["docker", "start", "hbase-server"],
             capture_output=True, text=True, timeout=15
         )
     except Exception as e:
-        return jsonify({"status": "error", "message": f"docker start failed: {e}"}), 500
+        return jsonify({"status": "error", "hbase_ready": False, "message": f"docker start failed: {e}"}), 500
 
     deadline = time.time() + 30
     while time.time() < deadline:
@@ -347,10 +357,10 @@ def start_bigdata():
             conn.open()
             conn.tables()
             conn.close()
-            return jsonify({"status": "ready", "message": "HBase is online"})
+            return jsonify({"status": "ready", "hbase_ready": True, "message": "HBase is online"}), 200
         except Exception:
             time.sleep(2)
-    return jsonify({"status": "timeout", "message": "HBase Thrift ready timeout."}), 202
+    return jsonify({"status": "timeout", "hbase_ready": False, "message": "HBase Thrift ready timeout."}), 202
 
 @signals_bp.route("/api/system/bigdata-status", methods=["GET"])
 def bigdata_status():
@@ -358,12 +368,17 @@ def bigdata_status():
     try:
         conn = _hbase_connect()
         if conn is None:
-            return jsonify({"status": "not_deployed", "message": "HBase not installed — Kafka pipeline active"})
-        conn.tables()
+            return jsonify({"status": "not_deployed", "hbase_ready": False, "message": "HBase not installed — Kafka pipeline active"})
+        tables = conn.tables()
         conn.close()
-        return jsonify({"status": "online", "message": "HBase Thrift connection OK"})
+        return jsonify({
+            "status": "online",
+            "hbase_ready": True,
+            "tables": [t.decode('utf-8', errors='ignore') if isinstance(t, bytes) else str(t) for t in tables],
+            "message": "HBase Thrift connection OK"
+        })
     except Exception as e:
-        return jsonify({"status": "offline", "message": str(e)})
+        return jsonify({"status": "offline", "hbase_ready": False, "message": str(e)})
 
 @signals_bp.route("/api/prr", methods=["GET"])
 def get_prr():

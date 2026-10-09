@@ -34,9 +34,16 @@ def _hbase_connect():
     global _hbase_last_check, _hbase_online_cached
     try:
         import happybase
+    except ImportError:
+        return None  # happybase not installed
+
+    try:
         from thrift.transport.TTransport import TTransportException
     except ImportError:
-        return None  # HBase / thrift not installed — silently skip
+        try:
+            from thriftpy2.transport.base import TTransportException
+        except ImportError:
+            TTransportException = Exception
 
     now = time.time()
     if not _hbase_online_cached and (now - _hbase_last_check < 30):

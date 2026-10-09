@@ -24,6 +24,16 @@ volumes:
 
 services:
 
+  # ── 0. HBASE SERVER (TWOSIDES Drug Interactions Store) ─────────────────────
+  hbase:
+    image: dajobe/hbase:latest
+    container_name: hbase-server
+    networks: [pharmawatch-net]
+    ports:
+      - "9090:9090"        # Thrift API port
+      - "8085:8085"        # HBase web UI
+    restart: unless-stopped
+
   # ── 1. ZOOKEEPER (required by Kafka) ───────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0

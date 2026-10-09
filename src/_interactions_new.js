@@ -7,7 +7,7 @@ async function checkBigdataStatus() {
   try {
     const r = await fetch('/api/system/bigdata-status');
     const d = await r.json();
-    return d.hbase_ready === true;
+    return d.hbase_ready === true || d.status === 'online';
   } catch { return false; }
 }
 

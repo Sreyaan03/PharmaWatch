@@ -25,8 +25,16 @@ SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "schema.sql")
 LEGACY_SQLITE_PATH = os.path.join(BASE_DIR, "pharmawatch.db")
 
 def parse_args():
+    env_file = os.path.join(BASE_DIR, ".env")
+    if os.path.exists(env_file):
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(env_file, override=False)
+        except ImportError:
+            pass
+
     parser = argparse.ArgumentParser(description="PharmaWatch MySQL Schema Migration Runner")
-    parser.add_argument("--host", default=os.getenv("MYSQL_HOST", "localhost"), help="MySQL Host")
+    parser.add_argument("--host", default=os.getenv("MYSQL_HOST", "127.0.0.1"), help="MySQL Host")
     parser.add_argument("--port", type=int, default=int(os.getenv("MYSQL_PORT", 3306)), help="MySQL Port")
     parser.add_argument("--user", default=os.getenv("MYSQL_USER", "root"), help="MySQL User")
     parser.add_argument("--password", default=os.getenv("MYSQL_PASSWORD", ""), help="MySQL Password")

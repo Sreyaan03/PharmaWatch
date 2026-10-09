@@ -114,17 +114,9 @@ function renderSignalsTable(data) {
       srcLabel = 'Clinical NER';
     }
     
-    // Clean formatting for high scores resulting from c=0 small cohort Haldane correction
-    const prrDisplay = s.prr !== undefined
-      ? (s.prr > 500
-          ? `<span title="Single-cohort exclusive signal (c=0). Haldane-Anscombe (+0.5) correction applied.">&gt; 500.00*</span>`
-          : s.prr.toFixed(2))
-      : 'N/A';
-    const rorDisplay = s.ror !== undefined
-      ? (s.ror > 500
-          ? `<span title="Single-cohort exclusive signal (c=0). Haldane-Anscombe (+0.5) correction applied.">&gt; 500.00*</span>`
-          : s.ror.toFixed(2))
-      : 'N/A';
+    // Clean formatting for disproportionality metrics
+    const prrDisplay = s.prr !== undefined ? s.prr.toFixed(2) : 'N/A';
+    const rorDisplay = s.ror !== undefined ? s.ror.toFixed(2) : 'N/A';
 
     return `
       <tr data-rank="${s.rank}" class="signal-row" style="cursor: pointer;">
@@ -225,8 +217,8 @@ function showSignalDetail(signal) {
 
   body.innerHTML = `
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-bottom:1rem;">
-      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr !== undefined ? (signal.prr > 500 ? '> 500.00*' : signal.prr.toFixed(2)) : 'N/A'}</div><div class="stat-mini__lbl">PRR Score</div></div>
-      <div class="stat-mini"><div class="stat-mini__val" style="color: #8b5cf6;">${signal.ror !== undefined ? (signal.ror > 500 ? '> 500.00*' : signal.ror.toFixed(2)) : 'N/A'}</div><div class="stat-mini__lbl">ROR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr !== undefined ? signal.prr.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">PRR Score</div></div>
+      <div class="stat-mini"><div class="stat-mini__val" style="color: #8b5cf6;">${signal.ror !== undefined ? signal.ror.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">ROR Score</div></div>
       <div class="stat-mini"><div class="stat-mini__val" style="color: #10b981;">${signal.bcpnn_ic !== undefined ? signal.bcpnn_ic.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">BCPNN IC Score</div></div>
       <div class="stat-mini"><div class="stat-mini__val">${signal.reports.toLocaleString()}</div><div class="stat-mini__lbl">Reports (n)</div></div>
     </div>

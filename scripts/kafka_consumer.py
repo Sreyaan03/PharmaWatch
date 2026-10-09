@@ -28,7 +28,7 @@ if backend_dir not in sys.path:
 load_dotenv(os.path.join(backend_dir, ".env"))
 
 from db.mysql import query, query_one, execute, ping
-from faers.disproportionality import compute_metrics
+from faers.disproportionality import compute_metrics, get_global_event_count, TOTAL_FAERS_POPULATION
 
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
@@ -116,19 +116,20 @@ def handle_faers(msg):
     """
     execute(sql_events, (drug, event, raw_hash))
 
-    # 3. Compute disproportionality from aggregated counts (explicit int casting)
+    # 3. Compute disproportionality from aggregated counts with true global background reference
     row_a = query_one("SELECT COALESCE(report_count, 0) AS cnt FROM drug_events_agg WHERE drug = %s AND event = %s", (drug, event))
     row_ab = query_one("SELECT COALESCE(SUM(report_count), 0) AS cnt FROM drug_events_agg WHERE drug = %s", (drug,))
-    row_ac = query_one("SELECT COALESCE(SUM(report_count), 0) AS cnt FROM drug_events_agg WHERE event = %s", (event,))
-    row_tot = query_one("SELECT COALESCE(SUM(report_count), 0) AS cnt FROM drug_events_agg")
 
     a = int(row_a["cnt"]) if row_a and row_a.get("cnt") else 0
     ab = int(row_ab["cnt"]) if row_ab and row_ab.get("cnt") else 0
-    ac = int(row_ac["cnt"]) if row_ac and row_ac.get("cnt") else 0
-    total = int(row_tot["cnt"]) if row_tot and row_tot.get("cnt") else 0
 
-    if a < 3 or total < 10:
+    if a < 3 or ab < 3:
         return
+
+    # Obtain the true global FAERS background count for this event across all drugs
+    global_ac = get_global_event_count(event)
+    ac = max(global_ac, a + 10)
+    total = TOTAL_FAERS_POPULATION
 
     metrics = compute_prr(a, ab, ac, total)
 
