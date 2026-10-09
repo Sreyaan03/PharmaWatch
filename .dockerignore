@@ -1,0 +1,73 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — Files excluded from the Docker build context
+# Placed at the repository root to ensure Docker builds evaluate it properly.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Secrets & Environment Configurations (CRITICAL: Pass only at runtime via env_file)
+.env
+.env.*
+backend/.env
+backend/.env.*
+*.env
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Bytecode & Caches
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Databases (CRITICAL: Do not bake local SQLite DBs into images)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+backend/*.db
+backend/*.sqlite
+backend/pharmawatch.db*
+backend/http_cache.sqlite*
+
+# Git and Editor Metadata
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+.agent/
+.planning/
+
+# Large Raw Datasets (Downloaded on host or mounted as volumes)
+data/twosides.csv
+data/faers_raw/
+data/faers_parquet/
+
+# Application Logs & Diagnostics
+backend/*.log
+backend/*.txt
+backend/app_err.*
+backend/app_out.*
+*.log
+
+# Documentation & Specifications (Not needed inside container)
+docs/
+formulation/
+
+# Node / Package Manager Clutter
+node_modules/
+npm-debug.log*
+
+# OS-Specific Metadata
+Thumbs.db
+.DS_Store
+*.swp
+*~

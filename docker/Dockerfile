@@ -1,18 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # PharmaWatch — Dockerfile
-# Builds a single container that serves BOTH the Flask backend (port 5000)
-# and the static frontend from the /src directory.
-#
-# Usage (from the repo root):
-#   docker build -f docker/Dockerfile -t pharmawatch .
-#   docker run -p 5000:5000 --env-file backend/.env pharmawatch
+# Builds a production container serving the Flask API backend via Gunicorn
+# and static assets from /src.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Stage 1: base image ──────────────────────────────────────────────────────
-# Use a slim Python 3.11 image to keep the final image as small as possible.
+# ── Stage 1: Base Image ──────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-# ── System dependencies ───────────────────────────────────────────────────────
+# ── System Dependencies ───────────────────────────────────────────────────────
 # libgomp1  → required by PyTorch (OpenMP runtime)
 # libglib2.0-0, libsm6, libxext6, libxrender-dev → required by EasyOCR / cv2
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,45 +16,46 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsm6 \
         libxext6 \
         libxrender-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Working directory ─────────────────────────────────────────────────────────
+# ── Working Directory ─────────────────────────────────────────────────────────
 WORKDIR /app
 
-# ── Python dependencies ───────────────────────────────────────────────────────
-# Copy requirements first so Docker can cache this layer independently from
-# the source code — rebuilds are much faster this way.
+# ── Python Dependencies ───────────────────────────────────────────────────────
 COPY backend/requirements.txt /app/requirements.txt
 
-# Install CPU-only PyTorch first (saves ~1 GB vs the default CUDA build)
+# Install CPU-only PyTorch first (saves ~1 GB vs default CUDA build)
 # then install the rest of the project requirements.
 RUN pip install --no-cache-dir \
         "torch==2.2.0+cpu" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r /app/requirements.txt
 
-# ── Application source ────────────────────────────────────────────────────────
-# Copy the backend Python code
+# ── Application Source ────────────────────────────────────────────────────────
+# Copy backend Python application
 COPY backend/ /app/backend/
 
-# Copy the frontend static files (served by Flask via send_from_directory)
+# Copy scripts folder (required by helpers/models.py for GNN model classes)
+COPY scripts/ /app/scripts/
+
+# Copy frontend static files (served by Caddy or Flask send_from_directory)
 COPY src/ /app/src/
 
-# Copy data files needed at runtime (SQLite DB, parquet files, DuckDB)
-# NOTE: twosides.csv is 677 MB — only copy what the app actually loads.
+# Copy read-only local datasets if present in build context
 COPY data/pharmawatch_faers.duckdb /app/data/pharmawatch_faers.duckdb
 COPY data/twosides.parquet         /app/data/twosides.parquet
 COPY data/drugbank_ddi.tsv         /app/data/drugbank_ddi.tsv
 
-# ── Environment defaults ──────────────────────────────────────────────────────
-# These can be overridden with --env or --env-file at runtime.
+# ── Environment Defaults ──────────────────────────────────────────────────────
 ENV FLASK_ENV=production \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app:/app/backend
 
-# ── Expose port ───────────────────────────────────────────────────────────────
+# ── Expose Port ───────────────────────────────────────────────────────────────
 EXPOSE 5000
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
-# Run from the backend directory so relative imports work correctly.
 WORKDIR /app/backend
-CMD ["python", "app.py"]
+# Gunicorn with 1 worker and 8 threads to prevent OOM with large PyTorch models
+CMD ["gunicorn", "--workers=1", "--threads=8", "--bind=0.0.0.0:5000", "--timeout=120", "--access-logfile=-", "--error-logfile=-", "app:app"]

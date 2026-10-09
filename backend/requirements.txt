@@ -1,15 +1,49 @@
-# torch is installed separately in Dockerfile via --index-url (CPU-only build)
-# to avoid conflict, do NOT list it here
-transformers==4.41.2
+# ─────────────────────────────────────────────────────────────────────────────
+# PharmaWatch Backend Dependencies
+# Note: torch is installed separately in Dockerfile via --index-url (CPU-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Web Framework & Production WSGI
 flask==3.0.3
 flask-cors==4.0.1
-requests
-numpy<2
-python-dotenv
-flask-limiter
-duckdb
-pandas
-pyarrow
-beautifulsoup4
-kafka-python==2.0.2
-feedparser==6.0.11
+flask-limiter==4.1.1
+gunicorn==22.0.0
+
+# Database Engine & Connection Pooling (MySQL 8.0)
+PyMySQL==1.1.1
+cryptography==42.0.8
+DBUtils==3.1.0
+duckdb==1.5.3
+
+# Data Processing & Storage
+numpy==1.26.4
+pandas==3.0.3
+pyarrow==24.0.0
+scipy>=1.12.0
+scikit-learn>=1.4.0
+
+# HTTP & External APIs
+requests==2.33.1
+requests-cache==1.3.3
+python-dotenv==1.2.2
+beautifulsoup4==4.14.3
+feedparser==6.0.14
+
+# Machine Learning & NLP
+transformers==4.41.2
+torch-geometric==2.7.0
+rdkit==2026.3.2
+easyocr==1.7.2
+PyMuPDF==1.27.2.3
+
+# Streaming & Social Scraping
+kafka-python==3.0.11
+praw==7.8.1
+fuzzywuzzy==0.18.0
+
+# Optional Big Data Connectors (used in scripts / HBase mock)
+happybase==1.3.0
+thriftpy2==0.6.0
+
+# Testing & Quality
+pytest>=8.2.0
