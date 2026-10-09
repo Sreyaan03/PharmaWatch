@@ -27,10 +27,17 @@ ml_bp = Blueprint("ml", __name__)
 @ml_bp.route("/api/lstm/train", methods=["POST"])
 def train_lstm():
     """Train a real PyTorch LSTM on openFDA historical data for a given drug."""
+    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
+    if not admin_key:
+        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
+    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
+    if not provided or provided.strip() != admin_key:
+        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
+
     if not LSTM_AVAILABLE:
         return jsonify({"error": "lstm_model.py not loaded"}), 500
     drug = request.args.get('drug', 'Metformin')
-    epochs = int(request.args.get('epochs', 100))
+    epochs = min(int(request.args.get('epochs', 30)), 50)  # Capped at 50 to prevent DoS
     try:
         _, error = lstm_train(drug, epochs=epochs)
         if error:

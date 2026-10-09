@@ -320,6 +320,13 @@ def trigger_processing():
 @signals_bp.route("/api/system/start-bigdata", methods=["POST"])
 def start_bigdata():
     """HBase launcher — returns not-available when HBase is not deployed."""
+    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
+    if not admin_key:
+        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
+    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
+    if not provided or provided.strip() != admin_key:
+        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
+
     try:
         import happybase
     except ImportError:

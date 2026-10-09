@@ -11,7 +11,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 
-from database import get_db
+from db.mysql import query_one, execute
 from helpers.http_client import http_requests
 from faers.analytics import (
     get_temporal_velocity_duckdb,
@@ -24,30 +24,30 @@ temporal_bp = Blueprint("temporal", __name__)
 def get_cached_payload(drug, event, data_type):
     """Retrieve cached payload from temporal_cache if less than 24 hours old."""
     try:
-        conn = get_db()
-        row = conn.execute(
-            "SELECT payload, cached_at FROM temporal_cache WHERE drug=? AND event=? AND data_type=?",
-            (drug.lower(), event.lower(), data_type)
-        ).fetchone()
-        conn.close()
-        if row:
-            cached_at = datetime.strptime(row['cached_at'][:19], "%Y-%m-%d %H:%M:%S")
+        sql = "SELECT payload, cached_at FROM temporal_cache WHERE drug = %s AND event = %s AND data_type = %s LIMIT 1"
+        row = query_one(sql, (drug.lower(), event.lower(), data_type))
+        if row and row.get("payload"):
+            cached_at = row["cached_at"]
+            if isinstance(cached_at, str):
+                try:
+                    cached_at = datetime.fromisoformat(cached_at.rstrip("Z"))
+                except ValueError:
+                    cached_at = datetime.strptime(cached_at[:19], "%Y-%m-%d %H:%M:%S")
             if datetime.now() - cached_at < timedelta(hours=24):
-                return json.loads(row['payload'])
+                return json.loads(row["payload"])
     except Exception as e:
         print(f"[TEMPORAL CACHE ERROR] {e}")
     return None
 
 def set_cached_payload(drug, event, data_type, payload):
-    """Cache payload in SQLite."""
+    """Cache payload in MySQL."""
     try:
-        conn = get_db()
-        conn.execute(
-            "INSERT OR REPLACE INTO temporal_cache (drug, event, data_type, payload) VALUES (?, ?, ?, ?)",
-            (drug.lower(), event.lower(), data_type, json.dumps(payload))
-        )
-        conn.commit()
-        conn.close()
+        sql = """
+            INSERT INTO temporal_cache (drug, event, data_type, payload, cached_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE payload = VALUES(payload), cached_at = NOW()
+        """
+        execute(sql, (drug.lower(), event.lower(), data_type, json.dumps(payload)))
     except Exception as e:
         print(f"[TEMPORAL CACHE SAVE ERROR] {e}")
 

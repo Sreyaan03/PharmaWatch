@@ -4,7 +4,9 @@
 
 const BioBERT = {
 
-    API_URL: 'http://localhost:5000',
+    API_URL: (typeof window !== 'undefined' && window.location && (window.location.port === '5000' || window.location.protocol === 'https:' || window.location.port === ''))
+        ? ''
+        : 'http://localhost:5000',
 
     /**
      * Check whether the Python server is running.

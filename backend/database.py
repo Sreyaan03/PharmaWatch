@@ -1,184 +1,125 @@
 """
-database.py — SQLite storage for PharmaWatch
-Stores drug-event pairs, Reddit posts, and boxed warning violations.
-
-A 'boxed_warning_violation' = a FAERS adverse event report received AFTER the
-FDA boxed warning effective_time for that drug+event pair.  Each row represents
-evidence that prescriptions/use continued despite the black box flag.
+database.py — Production MySQL Database Adapter for PharmaWatch
+Provides thread-safe access to drug events, Reddit posts, boxed warnings,
+GNN predictions, openFDA caching, and disproportionality signals.
 """
-import sqlite3
+
 import os
-from datetime import datetime
+import json
+import hashlib
+import logging
+from datetime import datetime, timedelta
+from db.mysql import query, query_one, execute, execute_many, get_db, ping, clean_row
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "pharmawatch.db")
+log = logging.getLogger("pharmawatch.database")
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    # WAL mode allows concurrent reads (Flask) while Kafka consumer writes
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=10000")
-    return conn
 
 def init_db():
-    conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS drug_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            drug TEXT NOT NULL,
-            event TEXT NOT NULL,
-            source TEXT DEFAULT 'unknown',
-            confidence REAL DEFAULT 1.0,
-            raw_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_drug ON drug_events(drug);
-        CREATE INDEX IF NOT EXISTS idx_event ON drug_events(event);
-        CREATE INDEX IF NOT EXISTS idx_source ON drug_events(source);
+    """
+    Verifies MySQL connectivity on application startup.
+    Detailed DDL migrations are handled idempotently via backend/db/migrate.py.
+    """
+    try:
+        status = ping()
+        log.info(f"[DB] Connected to MySQL database '{status['database']}' ({status['table_count']} tables present).")
+    except Exception as e:
+        log.warning(f"[DB] MySQL connection check: {e}. If MySQL is not running yet, start the container or configure .env.")
 
-        CREATE TABLE IF NOT EXISTS reddit_posts (
-            id TEXT PRIMARY KEY,
-            subreddit TEXT,
-            title TEXT,
-            body TEXT,
-            score INTEGER,
-            processed INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- Boxed Warning Violations:
-        -- Each row = post-warning FAERS reports for a warned adverse event.
-        -- faers_count_post_warning: number of FAERS reports for this event
-        --   received AFTER the warning effective_time (= "violations").
-        -- faers_count_pre_warning: reports BEFORE the warning (baseline).
-        CREATE TABLE IF NOT EXISTS boxed_warning_violations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            drug TEXT NOT NULL,
-            adverse_event TEXT NOT NULL,
-            faers_count_post_warning INTEGER NOT NULL DEFAULT 0,
-            faers_count_pre_warning  INTEGER NOT NULL DEFAULT 0,
-            percentage_of_total REAL  NOT NULL DEFAULT 0,
-            warning_effective_date TEXT,
-            warning_text_snippet TEXT,
-            detection_method TEXT DEFAULT 'post_warning_faers',
-            queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_viol_drug
-            ON boxed_warning_violations(drug);
-        CREATE INDEX IF NOT EXISTS idx_viol_event
-            ON boxed_warning_violations(adverse_event);
-
-        -- openFDA Cache Table:
-        CREATE TABLE IF NOT EXISTS fda_cache (
-            url TEXT PRIMARY KEY,
-            response_json TEXT NOT NULL,
-            cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- signals_cache Table:
-        CREATE TABLE IF NOT EXISTS signals_cache (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            drug         TEXT NOT NULL,
-            event        TEXT NOT NULL,
-            a            INTEGER,  -- co-reports (drug+event)
-            b            INTEGER,  -- drug only
-            c            INTEGER,  -- event only
-            d            INTEGER,  -- neither
-            prr          REAL,
-            prr_ci_low   REAL,
-            prr_ci_high  REAL,
-            ror          REAL,
-            ror_ci_low   REAL,
-            ror_ci_high  REAL,
-            chi2         REAL,
-            bcpnn_ic     REAL,
-            ic025        REAL,
-            n_reports    INTEGER,
-            signal_strength TEXT,
-            source       TEXT DEFAULT 'faers',
-            computed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_pair ON signals_cache(drug, event);
-
-        -- temporal_cache Table:
-        CREATE TABLE IF NOT EXISTS temporal_cache (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            drug        TEXT NOT NULL,
-            event       TEXT NOT NULL,
-            data_type   TEXT NOT NULL,
-            payload     TEXT NOT NULL,
-            cached_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_temporal ON temporal_cache(drug, event, data_type);
-
-        -- demographic_cache Table:
-        CREATE TABLE IF NOT EXISTS demographic_cache (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            drug        TEXT NOT NULL,
-            event       TEXT NOT NULL,
-            strata_type TEXT NOT NULL,
-            payload     TEXT NOT NULL,
-            cached_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_cache ON demographic_cache(drug, event, strata_type);
-    """)
-    conn.commit()
-    conn.close()
-    print(f"[DB] Initialized at {DB_PATH}")
 
 def insert_drug_event(drug, event, source="manual", confidence=1.0, raw_text=None):
-    conn = get_db()
-    conn.execute(
-        "INSERT INTO drug_events (drug, event, source, confidence, raw_text) VALUES (?,?,?,?,?)",
-        (drug.lower(), event.lower(), source, confidence, raw_text)
-    )
-    conn.commit()
-    conn.close()
+    """Insert a raw drug-adverse event pair."""
+    raw_hash = hashlib.md5(raw_text.encode("utf-8")).hexdigest() if raw_text else None
+    sql = """
+        INSERT INTO drug_events (drug, event, source, confidence, raw_hash, raw_text, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE confidence = VALUES(confidence)
+    """
+    try:
+        execute(sql, (drug.strip().lower(), event.strip().lower(), source, float(confidence), raw_hash, raw_text))
+    except Exception as e:
+        log.error(f"[DB] insert_drug_event failed: {e}")
+
 
 def get_drug_event_counts(drug, limit=10):
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT event, COUNT(*) as count
-        FROM drug_events WHERE drug = ?
-        GROUP BY event ORDER BY count DESC LIMIT ?
-    """, (drug.lower(), limit)).fetchall()
-    conn.close()
-    return [{"event": r["event"], "count": r["count"]} for r in rows]
+    """Return top adverse events and occurrence counts for a drug."""
+    sql = """
+        SELECT event, COUNT(*) AS count
+        FROM drug_events
+        WHERE drug = %s
+        GROUP BY event
+        ORDER BY count DESC
+        LIMIT %s
+    """
+    try:
+        return query(sql, (drug.strip().lower(), int(limit)))
+    except Exception as e:
+        log.error(f"[DB] get_drug_event_counts failed: {e}")
+        return []
+
 
 def get_prr_data(drug, event):
-    conn = get_db()
-    a = conn.execute("SELECT COUNT(*) FROM drug_events WHERE drug=? AND event=?",
-                     (drug.lower(), event.lower())).fetchone()[0]
-    ab = conn.execute("SELECT COUNT(*) FROM drug_events WHERE drug=?",
-                      (drug.lower(),)).fetchone()[0]
-    ac = conn.execute("SELECT COUNT(*) FROM drug_events WHERE event=?",
-                      (event.lower(),)).fetchone()[0]
-    total = conn.execute("SELECT COUNT(*) FROM drug_events").fetchone()[0]
-    conn.close()
-    return {"a": a, "b": ab - a, "c": ac - a, "d": total - ab - ac + a}
+    """
+    Compute 2x2 contingency table counts from drug_events:
+      a  = drug + event
+      b  = drug only
+      c  = event only
+      d  = all other reports
+    """
+    d_clean = drug.strip().lower()
+    e_clean = event.strip().lower()
+    try:
+        row_a = query_one("SELECT COUNT(*) AS cnt FROM drug_events WHERE drug = %s AND event = %s", (d_clean, e_clean))
+        row_ab = query_one("SELECT COUNT(*) AS cnt FROM drug_events WHERE drug = %s", (d_clean,))
+        row_ac = query_one("SELECT COUNT(*) AS cnt FROM drug_events WHERE event = %s", (e_clean,))
+        row_tot = query_one("SELECT COUNT(*) AS cnt FROM drug_events")
+
+        a = int(row_a["cnt"]) if row_a else 0
+        ab = int(row_ab["cnt"]) if row_ab else 0
+        ac = int(row_ac["cnt"]) if row_ac else 0
+        total = int(row_tot["cnt"]) if row_tot else 0
+
+        return {
+            "a": a,
+            "b": max(0, ab - a),
+            "c": max(0, ac - a),
+            "d": max(0, total - ab - ac + a)
+        }
+    except Exception as e:
+        log.error(f"[DB] get_prr_data failed: {e}")
+        return {"a": 0, "b": 0, "c": 0, "d": 0}
+
+
+# ── Reddit Mining Helpers ───────────────────────────────────────────────────
 
 def insert_reddit_post(post_id, subreddit, title, body, score):
-    conn = get_db()
-    conn.execute(
-        "INSERT OR IGNORE INTO reddit_posts (id, subreddit, title, body, score) VALUES (?,?,?,?,?)",
-        (post_id, subreddit, title, body, score)
-    )
-    conn.commit()
-    conn.close()
+    """Insert a Reddit post if not already processed."""
+    sql = """
+        INSERT IGNORE INTO reddit_posts (id, subreddit, title, body, score, processed, created_at)
+        VALUES (%s, %s, %s, %s, %s, 0, NOW())
+    """
+    try:
+        execute(sql, (post_id, subreddit, title, body, int(score or 0)))
+    except Exception as e:
+        log.error(f"[DB] insert_reddit_post failed: {e}")
+
 
 def get_unprocessed_posts(limit=50):
-    conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM reddit_posts WHERE processed=0 LIMIT ?", (limit,)
-    ).fetchall()
-    conn.close()
-    return rows
+    """Fetch unprocessed Reddit posts for NER extraction."""
+    sql = "SELECT * FROM reddit_posts WHERE processed = 0 LIMIT %s"
+    try:
+        return query(sql, (int(limit),))
+    except Exception as e:
+        log.error(f"[DB] get_unprocessed_posts failed: {e}")
+        return []
+
 
 def mark_post_processed(post_id):
-    conn = get_db()
-    conn.execute("UPDATE reddit_posts SET processed=1 WHERE id=?", (post_id,))
-    conn.commit()
-    conn.close()
+    """Mark a Reddit post as processed."""
+    sql = "UPDATE reddit_posts SET processed = 1 WHERE id = %s"
+    try:
+        execute(sql, (post_id,))
+    except Exception as e:
+        log.error(f"[DB] mark_post_processed failed: {e}")
 
 
 # ── Boxed Warning Violations ─────────────────────────────────────────────────
@@ -187,143 +128,76 @@ def insert_violation(drug, adverse_event, faers_count_post_warning,
                      faers_count_pre_warning, percentage_of_total,
                      warning_effective_date=None, warning_text_snippet=None,
                      detection_method="post_warning_faers"):
+    """Upsert a post-warning violation record into MySQL."""
+    sql = """
+        INSERT INTO boxed_warning_violations
+          (drug, adverse_event, faers_count_post_warning, faers_count_pre_warning,
+           percentage_of_total, warning_effective_date, warning_text_snippet, detection_method, queried_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+          faers_count_post_warning = VALUES(faers_count_post_warning),
+          faers_count_pre_warning  = VALUES(faers_count_pre_warning),
+          percentage_of_total      = VALUES(percentage_of_total),
+          warning_effective_date   = VALUES(warning_effective_date),
+          warning_text_snippet     = VALUES(warning_text_snippet),
+          detection_method         = VALUES(detection_method),
+          queried_at               = NOW()
     """
-    Upsert a violation record.  If the drug+event pair already exists,
-    update the counts (newer query wins — keeps data fresh).
-    """
-    conn = get_db()
-    existing = conn.execute(
-        "SELECT id FROM boxed_warning_violations WHERE drug=? AND adverse_event=?",
-        (drug.lower(), adverse_event.lower())
-    ).fetchone()
-
-    if existing:
-        conn.execute("""
-            UPDATE boxed_warning_violations
-               SET faers_count_post_warning = ?,
-                   faers_count_pre_warning  = ?,
-                   percentage_of_total      = ?,
-                   warning_effective_date   = ?,
-                   warning_text_snippet     = ?,
-                   detection_method         = ?,
-                   queried_at               = CURRENT_TIMESTAMP
-             WHERE id = ?
-        """, (faers_count_post_warning, faers_count_pre_warning,
-               percentage_of_total, warning_effective_date,
-               warning_text_snippet, detection_method, existing["id"]))
-    else:
-        conn.execute("""
-            INSERT INTO boxed_warning_violations
-              (drug, adverse_event, faers_count_post_warning,
-               faers_count_pre_warning, percentage_of_total,
-               warning_effective_date, warning_text_snippet, detection_method)
-            VALUES (?,?,?,?,?,?,?,?)
-        """, (drug.lower(), adverse_event.lower(),
-               faers_count_post_warning, faers_count_pre_warning,
-               percentage_of_total, warning_effective_date,
-               warning_text_snippet, detection_method))
-    conn.commit()
-    conn.close()
+    try:
+        execute(sql, (
+            drug.strip().lower(), adverse_event.strip().lower(),
+            int(faers_count_post_warning or 0), int(faers_count_pre_warning or 0),
+            float(percentage_of_total or 0.0), warning_effective_date,
+            warning_text_snippet, detection_method
+        ))
+    except Exception as e:
+        log.error(f"[DB] insert_violation failed: {e}")
 
 
 def get_violations(drug):
-    """Return all stored violations for a specific drug (most recent first)."""
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT drug, adverse_event, faers_count_post_warning,
-               faers_count_pre_warning, percentage_of_total,
-               warning_effective_date, warning_text_snippet,
+    """Return all stored violations for a drug, highest violation count first."""
+    sql = """
+        SELECT drug, adverse_event, faers_count_post_warning, faers_count_pre_warning,
+               percentage_of_total, warning_effective_date, warning_text_snippet,
                detection_method, queried_at
-          FROM boxed_warning_violations
-         WHERE drug = ?
-         ORDER BY faers_count_post_warning DESC
-    """, (drug.lower(),)).fetchall()
-    conn.close()
-    return [
-        {
-            "drug":                    r["drug"],
-            "adverse_event":           r["adverse_event"],
-            "faers_count_post_warning":r["faers_count_post_warning"],
-            "faers_count_pre_warning": r["faers_count_pre_warning"],
-            "percentage_of_total":     r["percentage_of_total"],
-            "warning_effective_date":  r["warning_effective_date"],
-            "warning_text_snippet":    r["warning_text_snippet"],
-            "detection_method":        r["detection_method"],
-            "queried_at":              r["queried_at"],
-        }
-        for r in rows
-    ]
+        FROM boxed_warning_violations
+        WHERE drug = %s
+        ORDER BY faers_count_post_warning DESC
+    """
+    try:
+        return query(sql, (drug.strip().lower(),))
+    except Exception as e:
+        log.error(f"[DB] get_violations failed: {e}")
+        return []
 
 
 def get_all_violations(limit=200):
     """Return the most recent violations across all drugs."""
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT drug, adverse_event, faers_count_post_warning,
-               faers_count_pre_warning, percentage_of_total,
-               warning_effective_date, queried_at
-          FROM boxed_warning_violations
-         ORDER BY queried_at DESC, faers_count_post_warning DESC
-         LIMIT ?
-    """, (limit,)).fetchall()
-    conn.close()
-    return [
-        {
-            "drug":                    r["drug"],
-            "adverse_event":           r["adverse_event"],
-            "faers_count_post_warning":r["faers_count_post_warning"],
-            "faers_count_pre_warning": r["faers_count_pre_warning"],
-            "percentage_of_total":     r["percentage_of_total"],
-            "warning_effective_date":  r["warning_effective_date"],
-            "queried_at":              r["queried_at"],
-        }
-        for r in rows
-    ]
-
-
-init_db()
-
-
-# ── Interaction Predictions ───────────────────────────────────────────────────
-
-def init_interaction_predictions_table():
+    sql = """
+        SELECT drug, adverse_event, faers_count_post_warning, faers_count_pre_warning,
+               percentage_of_total, warning_effective_date, queried_at
+        FROM boxed_warning_violations
+        ORDER BY queried_at DESC, faers_count_post_warning DESC
+        LIMIT %s
     """
-    Creates the interaction_predictions table for caching GNN results locally.
-    Pairs are stored alphabetically (drug_a <= drug_b) so (A,B) == (B,A).
-    """
-    conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS interaction_predictions (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            drug_a           TEXT NOT NULL,
-            drug_b           TEXT NOT NULL,
-            smiles_a         TEXT,
-            smiles_b         TEXT,
-            cid_a            TEXT,
-            cid_b            TEXT,
-            is_harmful       INTEGER NOT NULL DEFAULT 0,
-            confidence       REAL    NOT NULL DEFAULT 0.0,
-            top_side_effect  TEXT,
-            all_side_effects TEXT,
-            source           TEXT    NOT NULL DEFAULT 'gnn',
-            queried_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_pred_pair
-            ON interaction_predictions(drug_a, drug_b);
-        CREATE INDEX IF NOT EXISTS idx_pred_drug_a
-            ON interaction_predictions(drug_a);
-        CREATE INDEX IF NOT EXISTS idx_pred_drug_b
-            ON interaction_predictions(drug_b);
-    """)
-    conn.commit()
-    conn.close()
-    print("[DB] interaction_predictions table ready")
+    try:
+        return query(sql, (int(limit),))
+    except Exception as e:
+        log.error(f"[DB] get_all_violations failed: {e}")
+        return []
 
+
+# ── Interaction Predictions (GNN Cache) ──────────────────────────────────────
 
 def _normalize_pair(drug_a, drug_b):
-    """Return (a, b) sorted alphabetically so pair order is always consistent."""
+    """Normalize drug pair alphabetically so (A, B) == (B, A)."""
     a, b = drug_a.strip().lower(), drug_b.strip().lower()
     return (a, b) if a <= b else (b, a)
+
+
+def init_interaction_predictions_table():
+    """Retained for backward compatibility. Schema managed via migrate.py."""
+    pass
 
 
 def upsert_prediction(drug_a, drug_b, is_harmful, confidence,
@@ -331,14 +205,8 @@ def upsert_prediction(drug_a, drug_b, is_harmful, confidence,
                       cid_a=None, cid_b=None,
                       top_side_effect=None, all_side_effects=None,
                       source='gnn'):
-    """
-    Insert or update a GNN prediction for a drug pair.
-    Pair is stored alphabetically so (Warfarin, Aspirin) == (Aspirin, Warfarin).
-    all_side_effects should be a list or JSON string.
-    """
-    import json
+    """Upsert GNN prediction results for a normalized drug pair."""
     da, db = _normalize_pair(drug_a, drug_b)
-    # Keep smiles/cid aligned with the normalized order
     if drug_a.strip().lower() != da:
         smiles_a, smiles_b = smiles_b, smiles_a
         cid_a, cid_b = cid_b, cid_a
@@ -346,181 +214,158 @@ def upsert_prediction(drug_a, drug_b, is_harmful, confidence,
     if isinstance(all_side_effects, list):
         all_side_effects = json.dumps(all_side_effects)
 
-    conn = get_db()
-    existing = conn.execute(
-        "SELECT id FROM interaction_predictions WHERE drug_a=? AND drug_b=?",
-        (da, db)
-    ).fetchone()
-
-    if existing:
-        conn.execute("""
-            UPDATE interaction_predictions
-               SET smiles_a=?, smiles_b=?, cid_a=?, cid_b=?,
-                   is_harmful=?, confidence=?, top_side_effect=?,
-                   all_side_effects=?, source=?,
-                   queried_at=CURRENT_TIMESTAMP
-             WHERE id=?
-        """, (smiles_a, smiles_b, cid_a, cid_b,
-              int(is_harmful), float(confidence),
-              top_side_effect, all_side_effects, source,
-              existing["id"]))
-    else:
-        conn.execute("""
-            INSERT INTO interaction_predictions
-              (drug_a, drug_b, smiles_a, smiles_b, cid_a, cid_b,
-               is_harmful, confidence, top_side_effect, all_side_effects, source)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """, (da, db, smiles_a, smiles_b, cid_a, cid_b,
-              int(is_harmful), float(confidence),
-              top_side_effect, all_side_effects, source))
-    conn.commit()
-    conn.close()
+    sql = """
+        INSERT INTO interaction_predictions
+          (drug_a, drug_b, smiles_a, smiles_b, cid_a, cid_b,
+           is_harmful, confidence, top_side_effect, all_side_effects, source, queried_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+          smiles_a = VALUES(smiles_a),
+          smiles_b = VALUES(smiles_b),
+          cid_a = VALUES(cid_a),
+          cid_b = VALUES(cid_b),
+          is_harmful = VALUES(is_harmful),
+          confidence = VALUES(confidence),
+          top_side_effect = VALUES(top_side_effect),
+          all_side_effects = VALUES(all_side_effects),
+          source = VALUES(source),
+          queried_at = NOW()
+    """
+    try:
+        execute(sql, (
+            da, db, smiles_a, smiles_b, str(cid_a) if cid_a else None,
+            str(cid_b) if cid_b else None, int(bool(is_harmful)),
+            float(confidence or 0.0), top_side_effect, all_side_effects, source
+        ))
+    except Exception as e:
+        log.error(f"[DB] upsert_prediction failed: {e}")
 
 
 def get_prediction(drug_a, drug_b):
-    """
-    Fetch a cached prediction for a drug pair (order-insensitive).
-    Returns a dict or None if not cached.
-    """
-    import json
+    """Retrieve cached GNN prediction for a drug pair (order-insensitive)."""
     da, db = _normalize_pair(drug_a, drug_b)
-    conn = get_db()
-    row = conn.execute(
-        "SELECT * FROM interaction_predictions WHERE drug_a=? AND drug_b=?",
-        (da, db)
-    ).fetchone()
-    conn.close()
-    if not row:
+    sql = "SELECT * FROM interaction_predictions WHERE drug_a = %s AND drug_b = %s"
+    try:
+        row = query_one(sql, (da, db))
+        if row and row.get("all_side_effects"):
+            try:
+                row["all_side_effects"] = json.loads(row["all_side_effects"])
+            except Exception:
+                row["all_side_effects"] = []
+        return row
+    except Exception as e:
+        log.error(f"[DB] get_prediction failed: {e}")
         return None
-    result = dict(row)
-    if result.get("all_side_effects"):
-        try:
-            result["all_side_effects"] = json.loads(result["all_side_effects"])
-        except Exception:
-            result["all_side_effects"] = []
-    return result
 
 
 def get_recent_predictions(limit=20):
-    """Return the most recently queried predictions across all drug pairs."""
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT drug_a, drug_b, is_harmful, confidence,
-               top_side_effect, source, queried_at
-          FROM interaction_predictions
-         ORDER BY queried_at DESC
-         LIMIT ?
-    """, (limit,)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-# Initialise the new table on import
-init_interaction_predictions_table()
+    """Return recently queried GNN interaction predictions."""
+    sql = """
+        SELECT drug_a, drug_b, is_harmful, confidence, top_side_effect, source, queried_at
+        FROM interaction_predictions
+        ORDER BY queried_at DESC
+        LIMIT %s
+    """
+    try:
+        return query(sql, (int(limit),))
+    except Exception as e:
+        log.error(f"[DB] get_recent_predictions failed: {e}")
+        return []
 
 
 # ── openFDA Cache Helpers ─────────────────────────────────────────────────────
 
 def get_cached_fda_response(url):
-    """Retrieve cached JSON response for a URL if it is less than 7 days old."""
-    import json
-    from datetime import datetime
-    conn = get_db()
-    row = conn.execute("""
-        SELECT response_json, cached_at 
-          FROM fda_cache 
-         WHERE url = ?
-    """, (url,)).fetchone()
-    conn.close()
-    if row:
-        try:
-            cached_time = datetime.strptime(row["cached_at"], "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            try:
-                cached_time = datetime.fromisoformat(row["cached_at"].rstrip("Z"))
-            except ValueError:
-                return None
-        delta = datetime.utcnow() - cached_time
-        if delta.days < 7:
-            return json.loads(row["response_json"])
+    """Retrieve cached openFDA JSON response if less than 7 days old."""
+    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    sql = "SELECT response_json, cached_at FROM fda_cache WHERE url_hash = %s LIMIT 1"
+    try:
+        row = query_one(sql, (url_hash,))
+        if row:
+            cached_at = row["cached_at"]
+            if isinstance(cached_at, str):
+                try:
+                    cached_at = datetime.fromisoformat(cached_at.rstrip("Z"))
+                except ValueError:
+                    cached_at = datetime.strptime(cached_at[:19], "%Y-%m-%d %H:%M:%S")
+            if datetime.now() - cached_at < timedelta(days=7):
+                return json.loads(row["response_json"])
+    except Exception as e:
+        log.error(f"[DB] get_cached_fda_response failed: {e}")
     return None
 
+
 def cache_fda_response(url, response_json):
-    """Upsert response_json into fda_cache table."""
-    import json
-    conn = get_db()
-    response_str = json.dumps(response_json)
-    conn.execute("""
-        INSERT OR REPLACE INTO fda_cache (url, response_json, cached_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-    """, (url, response_str))
-    conn.commit()
-    conn.close()
+    """Persist openFDA API response in MySQL cache with 7-day TTL."""
+    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    sql = """
+        INSERT INTO fda_cache (url_hash, url, response_json, cached_at)
+        VALUES (%s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+          response_json = VALUES(response_json),
+          cached_at = NOW()
+    """
+    try:
+        execute(sql, (url_hash, url, json.dumps(response_json)))
+    except Exception as e:
+        log.error(f"[DB] cache_fda_response failed: {e}")
 
 
-# ── signals_cache Helpers ─────────────────────────────────────────────────────
+# ── Disproportionality Signals Cache Helpers ─────────────────────────────────
 
-def upsert_signal(drug, event, metrics, source='faers'):
-    """Upsert a computed signal into signals_cache table."""
-    conn = get_db()
-    # Try inserting. If unique index conflicts, update the values.
-    # Note: SQLite supports ON CONFLICT from version 3.24.0
-    conn.execute("""
+def upsert_signal(drug, event, metrics, source="faers"):
+    """Upsert computed disproportionality metrics into signals_cache."""
+    sql = """
         INSERT INTO signals_cache (
-            drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, 
+            drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high,
             chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(drug, event) DO UPDATE SET
-            a = excluded.a,
-            b = excluded.b,
-            c = excluded.c,
-            d = excluded.d,
-            prr = excluded.prr,
-            prr_ci_low = excluded.prr_ci_low,
-            prr_ci_high = excluded.prr_ci_high,
-            ror = excluded.ror,
-            ror_ci_low = excluded.ror_ci_low,
-            ror_ci_high = excluded.ror_ci_high,
-            chi2 = excluded.chi2,
-            bcpnn_ic = excluded.bcpnn_ic,
-            ic025 = excluded.ic025,
-            n_reports = excluded.n_reports,
-            signal_strength = excluded.signal_strength,
-            source = excluded.source,
-            computed_at = CURRENT_TIMESTAMP
-    """, (
-        drug.lower(), event.lower(), metrics['a'], metrics['b'], metrics['c'], metrics['d'],
-        metrics['prr'], metrics['prr_ci_low'], metrics['prr_ci_high'],
-        metrics['ror'], metrics['ror_ci_low'], metrics['ror_ci_high'],
-        metrics['chi2'], metrics['bcpnn_ic'], metrics['ic025'],
-        metrics['n_reports'], metrics['signal_strength'], source
-    ))
-    conn.commit()
-    conn.close()
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+            a = VALUES(a), b = VALUES(b), c = VALUES(c), d = VALUES(d),
+            prr = VALUES(prr), prr_ci_low = VALUES(prr_ci_low), prr_ci_high = VALUES(prr_ci_high),
+            ror = VALUES(ror), ror_ci_low = VALUES(ror_ci_low), ror_ci_high = VALUES(ror_ci_high),
+            chi2 = VALUES(chi2), bcpnn_ic = VALUES(bcpnn_ic), ic025 = VALUES(ic025),
+            n_reports = VALUES(n_reports), signal_strength = VALUES(signal_strength),
+            source = VALUES(source), computed_at = NOW()
+    """
+    try:
+        execute(sql, (
+            drug.strip().lower(), event.strip().lower(),
+            int(metrics.get("a", 0)), int(metrics.get("b", 0)),
+            int(metrics.get("c", 0)), int(metrics.get("d", 0)),
+            float(metrics["prr"]) if metrics.get("prr") is not None else None,
+            float(metrics["prr_ci_low"]) if metrics.get("prr_ci_low") is not None else None,
+            float(metrics["prr_ci_high"]) if metrics.get("prr_ci_high") is not None else None,
+            float(metrics["ror"]) if metrics.get("ror") is not None else None,
+            float(metrics["ror_ci_low"]) if metrics.get("ror_ci_low") is not None else None,
+            float(metrics["ror_ci_high"]) if metrics.get("ror_ci_high") is not None else None,
+            float(metrics["chi2"]) if metrics.get("chi2") is not None else None,
+            float(metrics["bcpnn_ic"]) if metrics.get("bcpnn_ic") is not None else None,
+            float(metrics["ic025"]) if metrics.get("ic025") is not None else None,
+            int(metrics.get("n_reports", 0)),
+            metrics.get("signal_strength", "None"),
+            source
+        ))
+    except Exception as e:
+        log.error(f"[DB] upsert_signal failed: {e}")
 
 
 def get_cached_signals(limit=100):
-    """Fetch all cached signals from signals_cache."""
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
-          FROM signals_cache
-         ORDER BY prr DESC
-         LIMIT ?
-    """, (limit,)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    """Retrieve top cached disproportionality signals sorted by PRR."""
+    sql = "SELECT * FROM signals_cache ORDER BY prr DESC LIMIT %s"
+    try:
+        return query(sql, (int(limit),))
+    except Exception as e:
+        log.error(f"[DB] get_cached_signals failed: {e}")
+        return []
 
 
 def get_signal(drug, event):
-    """Fetch a single cached signal."""
-    conn = get_db()
-    row = conn.execute("""
-        SELECT drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
-          FROM signals_cache
-         WHERE drug = ? AND event = ?
-    """, (drug.lower(), event.lower())).fetchone()
-    conn.close()
-    return dict(row) if row else None
-
+    """Retrieve cached signal for a specific drug and event pair."""
+    sql = "SELECT * FROM signals_cache WHERE drug = %s AND event = %s LIMIT 1"
+    try:
+        return query_one(sql, (drug.strip().lower(), event.strip().lower()))
+    except Exception as e:
+        log.error(f"[DB] get_signal failed: {e}")
+        return None
