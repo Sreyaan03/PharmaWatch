@@ -323,17 +323,19 @@ def get_signal_network():
     clean_links = [l for l in links if l.get("source") in node_ids and l.get("target") in node_ids]
 
     payload = {"nodes": nodes, "links": clean_links}
-    if len(_SIGNAL_NETWORK_CACHE) < 250:
-        _SIGNAL_NETWORK_CACHE[cache_key] = payload
+    if len(_SIGNAL_NETWORK_CACHE) >= 250:
+        _SIGNAL_NETWORK_CACHE.pop(next(iter(_SIGNAL_NETWORK_CACHE)), None)
+    _SIGNAL_NETWORK_CACHE[cache_key] = payload
     return jsonify(payload)
 
 @signals_bp.route("/api/reddit/scrape", methods=["POST"])
 def trigger_scrape():
     admin_key = os.getenv("ADMIN_API_KEY", "").strip()
-    if admin_key:
-        provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
-        if not provided or provided.strip() != admin_key:
-            return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
+    if not admin_key:
+        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
+    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
+    if not provided or provided.strip() != admin_key:
+        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
 
     count = scrape_all(limit_per_sub=25)
     return jsonify({"status": "ok", "posts_scraped": count})
@@ -341,10 +343,11 @@ def trigger_scrape():
 @signals_bp.route("/api/reddit/process", methods=["POST"])
 def trigger_processing():
     admin_key = os.getenv("ADMIN_API_KEY", "").strip()
-    if admin_key:
-        provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
-        if not provided or provided.strip() != admin_key:
-            return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
+    if not admin_key:
+        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
+    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
+    if not provided or provided.strip() != admin_key:
+        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
 
     process_posts_with_ner(run_ner)
     return jsonify({"status": "ok"})

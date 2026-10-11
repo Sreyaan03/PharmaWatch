@@ -111,10 +111,19 @@ def test_admin_endpoints_require_auth(client, monkeypatch):
     r_bigdata = client.post("/api/system/start-bigdata")
     assert r_bigdata.status_code == 403
 
+    r_scrape = client.post("/api/reddit/scrape")
+    assert r_scrape.status_code == 403
+
+    r_proc = client.post("/api/reddit/process")
+    assert r_proc.status_code == 403
+
     # 2. When ADMIN_API_KEY is set, reject bad key with 401
     monkeypatch.setenv("ADMIN_API_KEY", "super_secret_test_key")
     r_bad = client.post("/api/lstm/train?admin_key=wrong_key")
     assert r_bad.status_code == 401
+
+    r_bad_scrape = client.post("/api/reddit/scrape?admin_key=wrong_key")
+    assert r_bad_scrape.status_code == 401
 
 
 def test_biobert_js_url_relative():
