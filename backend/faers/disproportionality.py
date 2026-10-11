@@ -54,6 +54,7 @@ def get_global_event_count(event):
     """
     event_clean = event.lower().strip()
 
+    execute = None
     # 1. Check MySQL cache
     try:
         from db.mysql import query_one, execute
