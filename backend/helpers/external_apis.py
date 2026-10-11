@@ -51,7 +51,9 @@ def _hbase_connect():
 
     def _open_fresh():
         """Open a brand-new Thrift connection with a short timeout."""
-        c = happybase.Connection('127.0.0.1', port=9090, timeout=3000)
+        host = os.getenv("HBASE_HOST", "127.0.0.1")
+        port = int(os.getenv("HBASE_PORT", 9090))
+        c = happybase.Connection(host, port=port, timeout=3000)
         c.open()
         return c
 
