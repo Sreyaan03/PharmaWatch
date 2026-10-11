@@ -138,38 +138,43 @@ def get_twosides_graph():
             conn = _hbase_connect()
             if conn is None:
                 return [], []
-            table = conn.table('interactions')
-            prefix = f"{drug_name}_"
-            rows_iter = table.scan(row_prefix=prefix.encode())
+            try:
+                table = conn.table('interactions')
+                prefix = f"{drug_name}_"
+                rows_iter = table.scan(row_prefix=prefix.encode())
 
-            _nodes = [{"id": drug_name, "group": 1}]
-            _links = []
-            added = {drug_name}
+                _nodes = [{"id": drug_name, "group": 1}]
+                _links = []
+                added = {drug_name}
 
-            for key, data in rows_iter:
-                row_str = key.decode()
-                parts = row_str.split("_")
-                if len(parts) == 2:
-                    other = parts[1]
-                    side_effect = data.get(b'info:side_effect', b'').decode().strip()
-                    severity = data.get(b'info:severity', b'high').decode().strip()
+                for key, data in rows_iter:
+                    row_str = key.decode()
+                    parts = row_str.split("_")
+                    if len(parts) == 2:
+                        other = parts[1]
+                        side_effect = data.get(b'info:side_effect', b'').decode().strip()
+                        severity = data.get(b'info:severity', b'high').decode().strip()
 
-                    group = 2 if severity in ("critical", "high") else (3 if severity == "moderate" else 4)
+                        group = 2 if severity in ("critical", "high") else (3 if severity == "moderate" else 4)
 
-                    if other not in added:
-                        _nodes.append({"id": other, "group": group})
-                        added.add(other)
+                        if other not in added:
+                            _nodes.append({"id": other, "group": group})
+                            added.add(other)
 
-                    _links.append({
-                        "source": drug_name,
-                        "target": other,
-                        "side_effect": side_effect,
-                        "severity": severity,
-                        "value": 3 if severity in ("critical", "high") else 1
-                    })
+                        _links.append({
+                            "source": drug_name,
+                            "target": other,
+                            "side_effect": side_effect,
+                            "severity": severity,
+                            "value": 3 if severity in ("critical", "high") else 1
+                        })
 
-            conn.close()
-            return _nodes, _links
+                return _nodes, _links
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         # First attempt; retry once on stale-socket
         try:
@@ -314,18 +319,23 @@ def polypharmacy_analysis():
                 try:
                     conn = _hbase_connect()
                     if conn:
-                        table = conn.table('interactions')
-                        for key_candidate in [
-                            f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
-                            f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
-                        ]:
-                            row = table.row(key_candidate)
-                            if row:
-                                se = row.get(b'info:side_effect', b'').decode().strip()
-                                if se:
-                                    side_effects.append(se)
-                                break
-                        conn.close()
+                        try:
+                            table = conn.table('interactions')
+                            for key_candidate in [
+                                f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
+                                f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
+                            ]:
+                                row = table.row(key_candidate)
+                                if row:
+                                    se = row.get(b'info:side_effect', b'').decode().strip()
+                                    if se:
+                                        side_effects.append(se)
+                                    break
+                        finally:
+                            try:
+                                conn.close()
+                            except Exception:
+                                pass
                 except Exception:
                     pass
 
@@ -426,15 +436,21 @@ def uncharted_interactions():
         in_twosides = False
         try:
             conn = _hbase_connect()
-            table = conn.table("interactions")
-            for key in [
-                f"{name_a.upper()}_{name_b.upper()}".encode(),
-                f"{name_b.upper()}_{name_a.upper()}".encode()
-            ]:
-                if table.row(key):
-                    in_twosides = True
-                    break
-            conn.close()
+            if conn:
+                try:
+                    table = conn.table("interactions")
+                    for key in [
+                        f"{name_a.upper()}_{name_b.upper()}".encode(),
+                        f"{name_b.upper()}_{name_a.upper()}".encode()
+                    ]:
+                        if table.row(key):
+                            in_twosides = True
+                            break
+                finally:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
         except Exception:
             pass
 
