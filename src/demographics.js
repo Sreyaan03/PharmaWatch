@@ -157,7 +157,7 @@ async function runDemographicsAnalysis() {
   } catch (err) {
     console.error("[Demographics Error]", err);
     if (statusEl) {
-      statusEl.innerHTML = `Failed to load demographic data: ${err.message}. Ensure the Flask backend is running at <strong>http://127.0.0.1:5000</strong>.`;
+      statusEl.innerHTML = `Failed to load demographic data: ${err.message}. Please check backend connection.`;
       statusEl.className = "alert-banner alert-banner--critical";
     }
   }
