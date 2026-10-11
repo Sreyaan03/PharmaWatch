@@ -135,8 +135,15 @@ def register_ner_task():
     file_bytes = None
     filename = None
     if uploaded_file:
+        filename = uploaded_file.filename or ""
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        allowed_extensions = {"pdf", "txt", "png", "jpg", "jpeg"}
+        if ext and ext not in allowed_extensions:
+            return jsonify({"error": f"Unsupported file format '.{ext}'. Allowed formats: {', '.join(sorted(allowed_extensions))}"}), 400
+            
         file_bytes = uploaded_file.read()
-        filename = uploaded_file.filename
+        if len(file_bytes) > 10 * 1024 * 1024:
+            return jsonify({"error": "File exceeds maximum upload size (10 MB)"}), 413
         
     MINING_TASKS[task_id] = {
         "text": text,
@@ -240,6 +247,8 @@ def stream_ner_task(task_id):
             
     return Response(generator(), mimetype="text/event-stream")
 
+_SIGNAL_NETWORK_CACHE = {}
+
 @signals_bp.route("/api/signals/network", methods=["GET"])
 def get_signal_network():
     """Generates 1-hop D3 force-directed network data for drug + event."""
@@ -247,6 +256,10 @@ def get_signal_network():
     event = request.args.get('event', '').strip()
     if not drug or not event:
         return jsonify({"error": "Parameters 'drug' and 'event' are required."}), 400
+
+    cache_key = (drug.lower(), event.lower())
+    if cache_key in _SIGNAL_NETWORK_CACHE:
+        return jsonify(_SIGNAL_NETWORK_CACHE[cache_key])
 
     FDA_BASE = "https://api.fda.gov/drug/event.json"
     nodes = []
@@ -304,16 +317,35 @@ def get_signal_network():
     except Exception as e:
         print(f"[NETWORK ERROR] {drug} + {event}: {e}")
         pass
-        
-    return jsonify({"nodes": nodes, "links": links})
+
+    # Strict referential integrity: every link must connect nodes that actually exist in the node list
+    node_ids = {n["id"] for n in nodes}
+    clean_links = [l for l in links if l.get("source") in node_ids and l.get("target") in node_ids]
+
+    payload = {"nodes": nodes, "links": clean_links}
+    if len(_SIGNAL_NETWORK_CACHE) < 250:
+        _SIGNAL_NETWORK_CACHE[cache_key] = payload
+    return jsonify(payload)
 
 @signals_bp.route("/api/reddit/scrape", methods=["POST"])
 def trigger_scrape():
+    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
+    if admin_key:
+        provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
+        if not provided or provided.strip() != admin_key:
+            return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
+
     count = scrape_all(limit_per_sub=25)
     return jsonify({"status": "ok", "posts_scraped": count})
 
 @signals_bp.route("/api/reddit/process", methods=["POST"])
 def trigger_processing():
+    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
+    if admin_key:
+        provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
+        if not provided or provided.strip() != admin_key:
+            return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
+
     process_posts_with_ner(run_ner)
     return jsonify({"status": "ok"})
 

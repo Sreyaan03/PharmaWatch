@@ -1,0 +1,214 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PharmaWatch — Production Docker Compose (Hardened Cloud Architecture)
+#
+# Production Features:
+#   - Caddy Reverse Proxy on ports 80 and 443 (Auto Let's Encrypt TLS)
+#   - Zero exposed database or broker ports (MySQL 3306 & Kafka 9092 are private)
+#   - Gunicorn multi-threaded WSGI application server
+#   - Persistent named Docker volumes for MySQL and TLS certs
+#   - Automated health checks and restart policies
+#
+# Launch command on VM:
+#   docker compose -f docker/docker-compose.prod.yml up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  pharmawatch-net:
+    driver: bridge
+    name: pharmawatch-net
+
+volumes:
+  mysql_data:
+    name: pharmawatch_mysql_data
+  caddy_data:
+    name: pharmawatch_caddy_data
+  caddy_config:
+    name: pharmawatch_caddy_config
+
+services:
+
+  # ── 1. CADDY REVERSE PROXY & TLS EDGE ──────────────────────────────────────
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: pharmawatch-caddy
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../src:/app/src:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      pharmawatch:
+        condition: service_healthy
+
+  # ── 2. MYSQL 8.0 PRODUCTION DATABASE ───────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: pharmawatch-mysql
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    # Port 3306 is internal to pharmawatch-net (NOT exposed to the public internet)
+    expose:
+      - "3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pharmawatch}
+      MYSQL_USER: ${MYSQL_USER:-pharmawatch_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pharmawatch_pass}
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../backend/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=150
+      - --innodb_buffer_pool_size=512M
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD:-root} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # ── 3. ZOOKEEPER COORDINATION ──────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: pharmawatch-zookeeper
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    expose:
+      - "2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 4. KAFKA BROKER ────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: pharmawatch-kafka
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    # Port 29092 is internal only (NOT exposed to the public internet)
+    expose:
+      - "29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_MESSAGE_MAX_BYTES: 5242880
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+
+  # ── 5. KAFKA PRODUCER (Data Ingestion Scheduler) ───────────────────────────
+  kafka-producer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kafka
+    container_name: pharmawatch-producer
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - KAFKA_ROLE=producer
+      - PYTHONUNBUFFERED=1
+    command: ["python", "scripts/kafka_producer.py"]
+
+  # ── 6. KAFKA CONSUMER (Real-Time Pipeline Worker) ──────────────────────────
+  kafka-consumer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kafka
+    container_name: pharmawatch-consumer
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - KAFKA_ROLE=consumer
+      - PYTHONUNBUFFERED=1
+    command: ["python", "scripts/kafka_consumer.py"]
+
+  # ── 7. PHARMAWATCH APPLICATION (Gunicorn + Flask) ──────────────────────────
+  pharmawatch:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: pharmawatch-app
+    restart: unless-stopped
+    networks:
+      - pharmawatch-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    expose:
+      - "5000"
+    env_file:
+      - ../backend/.env
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    volumes:
+      - ../data/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
+      - ../data/twosides.parquet:/app/data/twosides.parquet:ro
+      - ../data/drugbank_ddi.tsv:/app/data/drugbank_ddi.tsv:ro
+      - ../backend/trained_models:/app/backend/trained_models:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s

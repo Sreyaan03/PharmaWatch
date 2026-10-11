@@ -321,6 +321,13 @@ async function renderSignalNetworkGraph(drug, event) {
     const width = container.clientWidth || 600;
     const height = container.clientHeight || 380;
     
+    const nodeMap = new Set((data.nodes || []).map(n => n.id));
+    const safeLinks = (data.links || []).filter(l => {
+      const src = typeof l.source === 'object' ? l.source.id : l.source;
+      const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+      return nodeMap.has(src) && nodeMap.has(tgt);
+    });
+
     const svg = d3.select(container)
       .append('svg')
       .attr('width', '100%')
@@ -329,14 +336,14 @@ async function renderSignalNetworkGraph(drug, event) {
       .attr('style', 'max-width: 100%; height: auto;');
       
     const simulation = d3.forceSimulation(data.nodes)
-      .force('link', d3.forceLink(data.links).id(d => d.id).distance(90))
+      .force('link', d3.forceLink(safeLinks).id(d => d.id).distance(90))
       .force('charge', d3.forceManyBody().strength(-150))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide().radius(d => d.val + 8));
       
     const link = svg.append('g')
       .selectAll('line')
-      .data(data.links)
+      .data(safeLinks)
       .enter()
       .append('line')
       .attr('stroke', d => {
@@ -400,10 +407,10 @@ async function renderSignalNetworkGraph(drug, event) {
       
     simulation.on('tick', () => {
       link
-        .attr('x1', d => d.source.x)
-        .attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x)
-        .attr('y2', d => d.target.y);
+        .attr('x1', d => (d.source && d.source.x != null) ? d.source.x : 0)
+        .attr('y1', d => (d.source && d.source.y != null) ? d.source.y : 0)
+        .attr('x2', d => (d.target && d.target.x != null) ? d.target.x : 0)
+        .attr('y2', d => (d.target && d.target.y != null) ? d.target.y : 0);
         
       node
         .attr('transform', d => {

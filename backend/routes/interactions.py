@@ -252,8 +252,8 @@ def resolve_drug_endpoint():
     if not raw:
         return jsonify({"error": "Provide ?drug= or ?input= parameter"}), 400
 
-    if _resolve_drug(raw) is not None:
-        resolved = _resolve_drug(raw)
+    resolved = _resolve_drug(raw)
+    if resolved is not None:
         return jsonify({"found": True, **resolved})
     else:
         return jsonify({"found": False, "input": raw}), 200
@@ -313,18 +313,19 @@ def polypharmacy_analysis():
             if is_harmful:
                 try:
                     conn = _hbase_connect()
-                    table = conn.table('interactions')
-                    for key_candidate in [
-                        f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
-                        f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
-                    ]:
-                        row = table.row(key_candidate)
-                        if row:
-                            se = row.get(b'info:side_effect', b'').decode().strip()
-                            if se:
-                                side_effects.append(se)
-                            break
-                    conn.close()
+                    if conn:
+                        table = conn.table('interactions')
+                        for key_candidate in [
+                            f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
+                            f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
+                        ]:
+                            row = table.row(key_candidate)
+                            if row:
+                                se = row.get(b'info:side_effect', b'').decode().strip()
+                                if se:
+                                    side_effects.append(se)
+                                break
+                        conn.close()
                 except Exception:
                     pass
 

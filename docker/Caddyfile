@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PharmaWatch — Production Caddyfile
+# Automatic HTTPS, Reverse Proxy, and High-Performance Static Asset Server
+# ─────────────────────────────────────────────────────────────────────────────
+
+{$DOMAIN_NAME:localhost} {
+    # Modern compression
+    encode gzip zstd
+
+    # Production security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Route 1: API requests forwarded to Gunicorn application server
+    handle /api/* {
+        reverse_proxy pharmawatch:5000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            transport http {
+                response_header_timeout 120s
+            }
+        }
+    }
+
+    # Route 2: Static assets requested via /static/*
+    handle_path /static/* {
+        root * /app/src
+        file_server {
+            hide .*
+        }
+    }
+
+    # Route 3: Frontend web application & root HTML
+    handle {
+        root * /app/src
+        file_server {
+            hide .*
+        }
+        try_files {path} {path}/ /index.html
+    }
+
+    # Health check for Caddy itself
+    handle /caddy-health {
+        respond "OK" 200
+    }
+}
