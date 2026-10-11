@@ -43,7 +43,7 @@ jobs:
 
       - name: Python Syntax & Lint Check
         run: |
-          ruff check backend/ scripts/ --select=E9,F63,F7,F82 --show-source
+          ruff check backend/ scripts/ --select=E9,F63,F7,F82
 
       - name: Run MySQL Migrations
         env:
