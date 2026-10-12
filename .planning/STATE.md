@@ -3,18 +3,19 @@
 ## Project Reference
 
 See: PROJECT_DEFINITION.md and FEATURE_AUDIT.md (updated 2026-10-11)
+See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidence and target architecture
 
 **Core value:** Real-time pharmacovigilance dashboard using live FDA data, NLP, and graph-theoretic analysis — no fake data
-**Current focus:** Phase 4 — DDI Prediction Model Rigor
+**Current focus:** Milestone 2 — University Pilot Release (Phases 5–11)
 
 ## Current Position
 
-Phase: 4 of 4 (DDI Prediction Model Rigor)
-Plan: 0 of 4 in current phase
-Status: Ready to execute Phase 4
-Last activity: 2026-10-11 — Phase 3 complete; Phase 4 planned with 4 executable plans (`04-01` to `04-04`).
+Phase: 5 of 11 (Baseline & Clean Architecture) — not started
+Plan: 0 of 3 in current phase
+Status: Milestone 2 planned. No code changed yet. Phase 4 work is still uncommitted.
+Last activity: 2026-10-12 — Full audit of the codebase; Milestone 2 roadmap, requirements and context written.
 
-Progress: [████████░░] 75% (Phases 1, 2, and 3 complete)
+Progress: [████░░░░░░░] 4 of 11 phases complete
 
 ## Accumulated Context
 
@@ -28,28 +29,40 @@ Progress: [████████░░] 75% (Phases 1, 2, and 3 complete)
 - [Phase 2]: Table names in backend queries corrected from 'signals' to 'signals_cache' and 'predictions' to 'interaction_predictions'
 - [Phase 2]: Column name in backend signal intensity query corrected from 'sev' to 'severity'
 - [Phase 2]: Pipeline Health disclaimer badge added to HTML front-page
-- [Phase 3]: Modularized `backend/app.py` into 7 Flask blueprints (`auth`, `analytics`, `interactions`, `monitoring`, `reports`, `health`, `frontend`)
-- [Phase 3]: Migrated database access to MySQL 8.0 with DBUtils connection pooling and SQLite fallbacks
+- [Phase 3]: Modularized `backend/app.py` into 10 Flask blueprints (`general`, `signals`, `interactions`, `boxed_warnings`, `ml`, `dashboard`, `analytics`, `temporal`, `demographics`, `pipeline`)
+- [Phase 3]: Migrated database access to MySQL 8.0 with DBUtils connection pooling
 - [Phase 3]: Production Docker stack with Caddy reverse proxy, rate-limiting, and CI/CD workflow
-- [Phase 4 Plan]: TDC DrugBank DDI dataset (~1,706 approved drugs) with RDKit sanitization and unparseable molecule logging
-- [Phase 4 Plan]: Drug-level splits (75% train, 10% val, 15% test) with hard zero-leakage assertions and S0, S1, S2 evaluation sets
-- [Phase 4 Plan]: Siamese GINEConv encoder with 22-d node features, 10-d edge features, multi-pooling (mean+max+sum), toggleable Morgan FP branch, and symmetric pair head $[a+b, a \odot b, |a-b|]$
-- [Phase 4 Plan]: BCEWithLogitsLoss with hard 0/1 binary labels and dynamic 1:1 negative resampling per epoch
-- [Phase 4 Plan]: Multi-seed training (5 seeds) with early stopping on S1 validation AUPRC
-- [Phase 4 Plan]: Temperature scaling calibration with ECE and reliability diagrams; outputs labeled "interaction likelihood score"
-- [Phase 4 Plan]: XGBoost, Logistic Regression, and Nearest-Neighbor Tanimoto baselines benchmarked across S0, S1, S2
-- [Phase 4 Plan]: 3-tier API response (`documented`, `model_predicted`, `no_evidence_found`), canonically sorted MySQL pair caching, and research disclaimers
+- [Phase 4]: TDC DrugBank DDI dataset (~1,706 approved drugs) with RDKit sanitization and unparseable molecule logging
+- [Phase 4]: Drug-level splits (75% train, 10% val, 15% test) with hard zero-leakage assertions and S0, S1, S2 evaluation sets
+- [Phase 4]: Siamese GINEConv encoder with 22-d node features, 10-d edge features, multi-pooling (mean+max+sum), toggleable Morgan FP branch, and symmetric pair head $[a+b, a \odot b, |a-b|]$
+- [Phase 4]: BCEWithLogitsLoss with hard 0/1 binary labels and dynamic 1:1 negative resampling per epoch
+- [Phase 4]: Multi-seed training (5 seeds) with early stopping on S1 validation AUPRC
+- [Phase 4]: Temperature scaling calibration with ECE and reliability diagrams; outputs labeled "interaction likelihood score"
+- [Phase 4]: XGBoost, Logistic Regression, and Nearest-Neighbor Tanimoto baselines benchmarked across S0, S1, S2
+- [Phase 4]: 3-tier API response (`documented`, `model_predicted`, `no_evidence_found`), canonically sorted MySQL pair caching, and research disclaimers
+- [Milestone 2]: Load the 20 most recent real FAERS quarters (expected 2021Q3–2026Q2)
+- [Milestone 2]: Prescription extraction uses a cloud vision model (Claude API) behind a swappable interface; EasyOCR is the offline fallback
+- [Milestone 2]: Host locally with Docker Compose now; portable to a server by configuration only
+- [Milestone 2]: Keep every feature; fix or relabel unsound ones; do not alter working features
+- [Milestone 2]: Kafka ingests evidence and triggers recomputation; it never computes statistics
+- [Milestone 2]: Synthetic prescriptions only until ethics approval
+- [Milestone 2]: Claim "benchmarked against published reference standards", never "medically validated"
 
 ### Key Technical State
 
-- Backend modularized into clean blueprints
+- Backend is 10 blueprints under `backend/routes/`, with business logic still inside route files
 - PyTorch 2.2.0+cpu and PyG 2.7.0 installed in venv
-- All 13 existing backend unit tests pass cleanly
-- CI/CD passes on GitHub Actions
-- Plan artifacts generated in `.planning/phases/04-ddi-prediction-model-rigor/`
+- 26 backend tests pass (verified 2026-10-12)
+- Local FAERS database holds a 3,800-report openFDA sample; `data/faers_raw/` holds mock zips
+- Phase 4 files are untracked in git
+- Deployed DDI model (GINE) is outperformed by the XGBoost baseline in S0, S1 and S2
+
+### Known defects carried into Milestone 2
+
+Listed with file references in `.planning/MILESTONE-2-CONTEXT.md` section 4.
 
 ## Session Continuity
 
-Last session: 2026-10-11
-Stopped at: Phase 4 planned. Ready to execute `/gsd-execute-phase 04`.
-Resume file: None
+Last session: 2026-10-12
+Stopped at: Milestone 2 planned. Next step is to commit Phase 4, then plan and execute Phase 5.
+Resume file: `.planning/MILESTONE-2-CONTEXT.md`

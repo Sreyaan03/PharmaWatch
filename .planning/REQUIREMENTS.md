@@ -104,6 +104,72 @@ Add `from dotenv import load_dotenv; load_dotenv()` at top of app.py. Read `FLAS
 - Cache predictions in MySQL table `interaction_predictions` keyed on canonically sorted drug pair tuples `(drugA, drugB)`.
 - Include mandatory "Research use only, not clinical advice" disclaimer in API metadata.
 
+## Milestone 2 — University Pilot Release (Phases 5–11)
+
+Context, evidence and architecture: `.planning/MILESTONE-2-CONTEXT.md`.
+
+### Clean Architecture (Phase 5)
+
+- **CLEAN-01: Layered structure.** Code is organised as `core/`, `routes/`, `services/`, `faers/`, `clients/`, `ml/`, `ingest/`, `validation/`, `db/`. Routes hold HTTP handling only.
+- **CLEAN-02: No behaviour change.** Every endpoint returns the same status and top-level keys as before the move, proven by a route-inventory test.
+- **CLEAN-03: One copy of each helper.** Admin-key check, cache helper, z-score spike detection, HBase pair lookup and the openFDA HTTP wrapper each exist once.
+- **CLEAN-04: Dead code removed.** Everything in the Phase 5 removal table of the context document is deleted.
+- **CLEAN-05: Clean imports.** No module modifies `sys.path`; DDI model definitions live in `backend/ml/`.
+
+### Data Foundation (Phase 6)
+
+- **DATA-01: Real FAERS.** The 20 most recently released quarterly ASCII files are loaded. Mock generation exists only in test fixtures and the loader rejects mock files.
+- **DATA-02: Case de-duplication.** `caseid` and `caseversion` are kept and only the latest version of each case is counted.
+- **DATA-03: Complete fields.** `age_cod` normalises age to years; THER (therapy dates) and OUTC (outcomes) are loaded.
+- **DATA-04: Quarter registry.** A table records each loaded quarter, its row counts, checksum and load time, and supplies `data_version`.
+- **DATA-05: Identity.** Drugs resolve to an RxNorm ingredient through RxNav with a local cache. Events are validated against the Preferred Terms present in the loaded data. The watchlist uses valid terms.
+- **DATA-06: Single statistics path.** All 2×2 counts come from `faers/`. openFDA is a labelled fallback restricted to suspect drugs.
+
+### Statistical Correctness (Phase 7)
+
+- **STAT-01: Tested metrics.** `compute_metrics` is covered by golden tests against hand-worked tables, including zero cells.
+- **STAT-02: Real time-to-onset.** Computed from therapy start and event dates; reports the count of usable cases.
+- **STAT-03: Real stratified PRR.** Sex and age strata each use their own 2×2 table.
+- **STAT-04: Honest classes.** A `none` class exists; only pairs meeting the criteria count as signals.
+- **STAT-05: No invented numbers.** All fallbacks that synthesise values are removed; empty data returns `no_data`. Every response carries `evidence`, `data_version` and, where relevant, `model_version`.
+- **STAT-06: Descriptive wording.** Boxed-warning and forecast outputs describe reporting patterns only. The forecast uses share of total reports and an out-of-sample baseline. The unverified warning-year table is removed.
+
+### Validation (Phase 8)
+
+- **VAL-01: Signal benchmark.** AUC, sensitivity and specificity on the OMOP and EU-ADR reference sets, with committed mappings.
+- **VAL-02: NER benchmark.** Precision, recall and F1 per entity type on the ADE corpus; model named correctly.
+- **VAL-03: DDI model.** Mini-batch training, separately trained ablations, calibration fitted and scored on separate folds, Precision@k, best S1 model deployed, `is_harmful` renamed, `calibrated` reported truthfully.
+- **VAL-04: Reproducible report.** One command reruns all benchmarks and regenerates the Methods & Validation page.
+- **VAL-05: Regression gate.** CI runs a reduced benchmark and fails on a drop below the recorded baseline.
+
+### Prescription Review (Phase 9)
+
+- **RX-01: Extraction.** A swappable extractor returns drug, strength, dose, route, frequency and duration with confidences. Default is the cloud vision model; local OCR is the fallback.
+- **RX-02: Confirmation.** The user confirms or corrects the list before analysis.
+- **RX-03: Report.** Interactions in three tiers with evidence, boxed warnings, duplicate therapy, top labelled reactions, active signals, versions, research-use statement.
+- **RX-04: Export.** The report is available as PDF.
+- **RX-05: Privacy.** Images are not stored by default, identifiers are kept out of logs and analysis calls, cloud use is disclosed.
+- **RX-06: Measured accuracy.** Field-level accuracy on a synthetic prescription set appears on the validation page.
+
+### Coherence and Kafka (Phase 10)
+
+- **COH-01: Navigation.** Seven areas; every existing feature reachable.
+- **COH-02: Drug profile.** One page per drug combining all evidence.
+- **COH-03: Evidence badges.** Every result shows measured, modelled or simulated, and the data version.
+- **KAF-01: Ingest only.** The consumer computes no statistics; the hard-coded background table and its helpers are removed.
+- **KAF-02: Release trigger.** A `faers-release` event starts the batch recompute.
+- **KAF-03: Linked evidence.** Alerts, papers and trials attach to drug identities; consumers are idempotent.
+
+### Platform (Phase 11)
+
+- **PLAT-01: Accounts and roles.** Viewer, analyst, admin, behind a replaceable auth interface.
+- **PLAT-02: Audit log.** Append-only record of user, action, inputs and versions.
+- **PLAT-03: Feedback.** Stored, exportable feedback on every result.
+- **PLAT-04: Security.** Header-only admin key, upload limits, safe model loading, no raw exception text, persistent job state.
+- **PLAT-05: Portable deployment.** Environment-driven configuration, Compose profiles, data and models as volumes, `DATA_DIR` outside synced folders.
+- **PLAT-06: CI/CD.** Lint, unit, statistics and benchmark jobs; image built without data files; validation report published; deploy job unchanged.
+- **PLAT-07: Documentation.** Accurate README, LICENSE, methods document, pilot guide.
+
 ## GNN Training (Phase 1 — COMPLETE)
 
 ### GNN-01: Balanced dataset — DONE (commit 25d9a7d)
