@@ -10,10 +10,11 @@ from transformers import AutoTokenizer, AutoModelForTokenClassification, pipelin
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_PATH = os.path.join(BACKEND_DIR, "trained_models", "twosides_gnn_model.pth")
+MODEL_PATH = os.path.join(BACKEND_DIR, "trained_models", "drugbank_gine_model.pth")
+CALIBRATION_PATH = os.path.join(BACKEND_DIR, "trained_models", "model_calibration.json")
 SCRIPTS_DIR = os.path.join(BACKEND_DIR, "..", "scripts")
 
-# Insert scripts folder to sys.path dynamically for train_gnn_model imports
+# Insert scripts folder to sys.path dynamically for DDI model imports
 if os.path.abspath(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, os.path.abspath(SCRIPTS_DIR))
 
@@ -88,24 +89,44 @@ def run_ner(text: str):
             })
     return entities
 
-# ── GNN Model Lazy Loader ─────────────────────────────────────────────────────
-_gnn_model   = None
-_gnn_loaded  = False
+# ── GNN Model Lazy Loader & Temperature Scaling ───────────────────────────────
+_gnn_model       = None
+_gnn_loaded      = False
+_gnn_temperature = 1.0
+
+def get_gnn_temperature() -> float:
+    global _gnn_temperature
+    if os.path.exists(CALIBRATION_PATH):
+        try:
+            import json as _json
+            with open(CALIBRATION_PATH, 'r') as f:
+                data = _json.load(f)
+                _gnn_temperature = float(data.get("optimal_temperature", 1.0))
+        except Exception:
+            _gnn_temperature = 1.0
+    return _gnn_temperature
 
 def _load_gnn():
     global _gnn_model, _gnn_loaded
     if _gnn_loaded:
         return _gnn_model
     try:
-        from train_gnn_model import GNN_Predictor
+        from models_ddi import GINEDDIPredictor
         import torch as _torch
-        # Architecture: GINConv x3, hidden_dim=128, mean+max pooling
-        m = GNN_Predictor(node_feature_dim=16, hidden_dim=128)
+        # Architecture: GINEConv x4, hidden_dim=128, multi-pooling, Morgan FP branch
+        m = GINEDDIPredictor(
+            node_in_dim=22,
+            edge_in_dim=10,
+            hidden_dim=128,
+            num_layers=4,
+            dropout=0.1,
+            use_fingerprint=True
+        )
         if os.path.exists(MODEL_PATH):
             m.load_state_dict(_torch.load(MODEL_PATH, map_location="cpu"))
             m.eval()
-            _gnn_model  = m
-            print("[GNN] Model loaded OK")
+            _gnn_model = m
+            print("[GNN] GINEDDIPredictor model loaded OK from drugbank_gine_model.pth")
         else:
             print(f"[GNN] Model checkpoint not found at {MODEL_PATH}")
         _gnn_loaded = True

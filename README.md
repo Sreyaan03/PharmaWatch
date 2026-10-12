@@ -129,7 +129,46 @@ Once the server is running, open your web browser and go to:
 - Graph-theoretic analysis explanation with tech tags
 - LSTM baseline vs. real-time prediction demo chart
 
-### 7. About
+---
+
+## Inductive Drug-Drug Interaction (DDI) Benchmark
+
+PharmaWatch incorporates an inductive Graph Isomorphism Network with Edge Features (**GINE**) paired with a 2048-bit Morgan Fingerprint branch to predict novel, uncatalogued drug-drug interaction likelihoods directly from 2D molecular structures.
+
+### Rigorous Evaluation Regimes (TDC DrugBank ~1,705 Drugs)
+The model was evaluated against classical machine learning baselines across disjoint drug-level splits with zero molecular leakage:
+- **S0 (Warm)**: Both drugs seen in the training graph.
+- **S1 (One Unseen)**: Exactly one drug withheld during training (primary inductive cold-start).
+- **S2 (Both Unseen)**: Both drugs unseen during training (fully inductive cold-start).
+
+| Model | Regime | AUROC | AUPRC | Recall@100 | Recall@1000 |
+| --- | --- | --- | --- | --- | --- |
+| **GINE (Calibrated)** | S0 (Warm) | 0.6887 | 0.6731 | 0.0085 | 0.0803 |
+| Logistic Regression | S0 (Warm) | 0.8683 | 0.8455 | 0.0098 | 0.0932 |
+| XGBoost | S0 (Warm) | 0.8249 | 0.8064 | 0.0096 | 0.0923 |
+| NN-Tanimoto | S0 (Warm) | 0.7928 | 0.7867 | 0.0097 | 0.0940 |
+| **GINE (Calibrated)** | S1 (One Unseen) | 0.6617 | 0.6410 | 0.0018 | 0.0161 |
+| Logistic Regression | S1 (One Unseen) | 0.6939 | 0.6582 | 0.0018 | 0.0164 |
+| XGBoost | S1 (One Unseen) | 0.7569 | 0.7379 | 0.0020 | 0.0190 |
+| NN-Tanimoto | S1 (One Unseen) | 0.7511 | 0.7311 | 0.0021 | 0.0196 |
+| **GINE (Calibrated)** | S2 (Both Unseen) | 0.6374 | 0.6133 | 0.0154 | 0.1252 |
+| Logistic Regression | S2 (Both Unseen) | 0.5853 | 0.5653 | 0.0110 | 0.1144 |
+| XGBoost | S2 (Both Unseen) | 0.6713 | 0.6571 | 0.0169 | 0.1420 |
+| NN-Tanimoto | S2 (Both Unseen) | 0.5765 | 0.5835 | 0.0163 | 0.1250 |
+
+### Architectural Ablations (S1 Setting)
+- **GIN (No Edge Features)**: AUROC 0.6722 | AUPRC 0.6536
+- **GINE without Morgan Fingerprint**: AUROC 0.5260 | AUPRC 0.4984 (*Drops by 13.5% AUROC; structural fingerprints are indispensable for generalization*)
+- **Concatenation Head (Directional)**: AUROC 0.5151 | AUPRC 0.4907 (*Drops to random chance; permutation symmetry $[a+b, a \odot b, \|a-b\|]$ is essential*)
+
+### Calibration & Scientific Limitations
+1. **Temperature Scaling**: Post-hoc calibrated with $T = 0.8231$ minimizing negative log likelihood on held-out validation pairs.
+2. **Scientific Honesty & Terminology**:
+   - Model predictions are strictly labeled **"interaction likelihood score"** (never "probability of harm" or "safety score").
+   - Absence of an interaction prediction means **"no evidence found"** rather than "safe to combine". Non-listed pairs in biomedical databases are unlabeled candidates, not confirmed non-interacting pairs.
+   - **Research use only**: Predictions are hypothesis-generating and do not constitute clinical guidance.
+
+---
 - Project abstract, tech stack grid
 - Team member cards (Sreyaan Roy, Sohan Arvind Sanil)
 - Key references with live external links

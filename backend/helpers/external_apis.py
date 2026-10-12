@@ -217,27 +217,35 @@ def _pubchem_synonyms(name: str, max_syns: int = 6):
 
 # ── GNN Pair Execution ───────────────────────────────────────────────────────
 def _run_gnn_pair(smiles_a: str, smiles_b: str):
-    """Run the trained GNN on a SMILES pair. Returns (is_harmful: bool, confidence: float) or raises."""
-    from helpers.models import _load_gnn
-    from train_gnn_model import smiles_to_graph
+    """
+    Run the trained GINE DDI model with temperature scaling on a SMILES pair.
+    Returns (is_harmful: bool, interaction_likelihood_score: float).
+    """
+    from helpers.models import _load_gnn, get_gnn_temperature
+    from models_ddi import smiles_to_molecular_graph, smiles_to_fingerprint
     import torch as _torch
 
     gnn = _load_gnn()
     if gnn is None:
         raise RuntimeError("GNN model not available")
 
-    g1 = smiles_to_graph(smiles_a)
-    g2 = smiles_to_graph(smiles_b)
+    g1 = smiles_to_molecular_graph(smiles_a)
+    g2 = smiles_to_molecular_graph(smiles_b)
     if g1 is None or g2 is None:
         raise ValueError("Invalid SMILES - could not build molecular graph")
 
-    with _torch.no_grad():
-        out  = gnn(g1, g2)
-        prob = _torch.sigmoid(out).item()
+    fp1 = smiles_to_fingerprint(smiles_a)
+    fp2 = smiles_to_fingerprint(smiles_b)
 
-    is_harmful = prob > 0.5
-    confidence = prob if is_harmful else 1.0 - prob
-    return is_harmful, round(confidence, 4)
+    temperature = get_gnn_temperature()
+
+    with _torch.no_grad():
+        out = gnn(g1, g2, fp1, fp2)
+        scaled_logit = out / temperature
+        prob = _torch.sigmoid(scaled_logit).item()
+
+    is_harmful = prob >= 0.50
+    return is_harmful, round(prob, 4)
 
 # ── openFDA and FAERS queries ────────────────────────────────────────────────
 def _query_faers_coprescription(name_a: str, name_b: str) -> int:

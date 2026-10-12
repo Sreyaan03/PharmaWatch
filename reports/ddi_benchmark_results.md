@@ -1,0 +1,29 @@
+# Drug-Drug Interaction Model Benchmark & Ablation Results
+
+Evaluated on TDC DrugBank (~1,705 approved drugs) across disjoint inductive cold-start splits.
+
+| Model | Regime | AUROC | AUPRC | Recall@100 | Recall@1000 |
+| --- | --- | --- | --- | --- | --- |
+| GINE (Ours) | S0 (Warm) | 0.6887 | 0.6731 | 0.0085 | 0.0803 |
+| Logistic Regression | S0 (Warm) | 0.8683 | 0.8455 | 0.0098 | 0.0932 |
+| XGBoost | S0 (Warm) | 0.8249 | 0.8064 | 0.0096 | 0.0923 |
+| NN-Tanimoto | S0 (Warm) | 0.7928 | 0.7867 | 0.0097 | 0.094 |
+| GINE (Ours) | S1 (One Unseen) | 0.6617 | 0.641 | 0.0018 | 0.0161 |
+| Logistic Regression | S1 (One Unseen) | 0.6939 | 0.6582 | 0.0018 | 0.0164 |
+| XGBoost | S1 (One Unseen) | 0.7569 | 0.7379 | 0.002 | 0.019 |
+| NN-Tanimoto | S1 (One Unseen) | 0.7511 | 0.7311 | 0.0021 | 0.0196 |
+| GINE (Ours) | S2 (Both Unseen) | 0.6374 | 0.6133 | 0.0154 | 0.1252 |
+| Logistic Regression | S2 (Both Unseen) | 0.5853 | 0.5653 | 0.011 | 0.1144 |
+| XGBoost | S2 (Both Unseen) | 0.6713 | 0.6571 | 0.0169 | 0.142 |
+| NN-Tanimoto | S2 (Both Unseen) | 0.5765 | 0.5835 | 0.0163 | 0.125 |
+| Ablation: GIN (No Edge Features) | S1 (One Unseen) | 0.6722 | 0.6536 | 0.0017 | 0.0163 |
+| Ablation: GINE without Fingerprint | S1 (One Unseen) | 0.526 | 0.4984 | 0.0005 | 0.0079 |
+| Ablation: Concatenation Head (Directional) | S1 (One Unseen) | 0.5151 | 0.4907 | 0.0002 | 0.0065 |
+
+### Metric Definitions
+- **AUROC**: Area Under the Receiver Operating Characteristic curve.
+- **AUPRC**: Area Under the Precision-Recall curve (primary metric for ranking under negative sampling).
+- **Recall@100 / Recall@1000**: Fraction of true interactions captured in top 100 / 1000 ranked pairs.
+- **S0 (Warm)**: Both drugs seen in training graph.
+- **S1 (One Unseen)**: Exactly one drug withheld during training (primary inductive setting).
+- **S2 (Both Unseen)**: Both drugs unseen during training (fully inductive cold-start).

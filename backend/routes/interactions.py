@@ -230,6 +230,39 @@ def predict_interaction():
     try:
         is_harmful, confidence = _run_gnn_pair(smiles_a, smiles_b)
 
+        # Check documented sources (FDA label or adverse event database)
+        label_check = _query_openfda_label_interaction(name_a, name_b)
+        if not label_check.get("documented"):
+            label_check = _query_openfda_label_interaction(name_b, name_a)
+
+        in_hbase = False
+        try:
+            conn = _hbase_connect()
+            if conn:
+                try:
+                    table = conn.table('interactions')
+                    for key_candidate in [
+                        f"{name_a.upper()}_{name_b.upper()}".encode(),
+                        f"{name_b.upper()}_{name_a.upper()}".encode()
+                    ]:
+                        if table.row(key_candidate):
+                            in_hbase = True
+                            break
+                finally:
+                    conn.close()
+        except Exception:
+            pass
+
+        if label_check.get("documented") or in_hbase:
+            tier = "documented"
+            tier_desc = "Documented clinical interaction found in regulatory labels or databases"
+        elif confidence >= 0.50:
+            tier = "model_predicted"
+            tier_desc = "Hypothesis-generating prediction based on molecular graph similarity"
+        else:
+            tier = "no_evidence_found"
+            tier_desc = "No documented interaction or elevated structural similarity found in current evidence"
+
         upsert_prediction(
             drug_a=name_a, drug_b=name_b,
             is_harmful=is_harmful, confidence=confidence,
@@ -239,13 +272,18 @@ def predict_interaction():
         )
 
         return jsonify({
-            "drug_a":      name_a,
-            "drug_b":      name_b,
-            "is_harmful":  is_harmful,
-            "confidence":  confidence,
-            "prediction":  "Harmful Interaction Detected" if is_harmful else "No Significant Interaction",
-            "predicted_interactions": ["High risk — avoid combination"] if is_harmful else ["Safe to combine"],
-            "source":      "gnn"
+            "drug_a":                      name_a,
+            "drug_b":                      name_b,
+            "tier":                        tier,
+            "tier_description":            tier_desc,
+            "interaction_likelihood_score": confidence,
+            "calibrated":                  True,
+            "is_harmful":                  is_harmful,
+            "confidence":                  confidence,
+            "prediction":                  "Potential Interaction Detected" if is_harmful else "No Evidence Found",
+            "predicted_interactions":      ["Elevated interaction likelihood predicted — investigate further"] if is_harmful else ["No interaction evidence identified"],
+            "source":                      "gnn",
+            "disclaimer":                  "Research use only, not clinical advice"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -353,20 +391,31 @@ def polypharmacy_analysis():
             else:
                 data_source = "gnn_novel"
 
+            # 3-tier categorization
+            if label_check["documented"] or len(side_effects) > 0:
+                tier = "documented"
+            elif is_harmful:
+                tier = "model_predicted"
+            else:
+                tier = "no_evidence_found"
+
             pairs.append({
-                "drug_a":           ra["name"],
-                "drug_b":           rb["name"],
-                "is_harmful":       is_harmful,
-                "confidence":       confidence,
-                "side_effects":     side_effects,
-                "faers_reports":    faers_reports,
-                "label_documented": label_check["documented"],
-                "label_severity":   label_check["severity"],
-                "label_snippet":    label_check["snippet"],
-                "label_found_in":   label_check["found_in"],
-                "data_source":      data_source,
-                "index_a":          i,
-                "index_b":          j
+                "drug_a":                      ra["name"],
+                "drug_b":                      rb["name"],
+                "tier":                        tier,
+                "interaction_likelihood_score": confidence,
+                "calibrated":                  True,
+                "is_harmful":                  is_harmful,
+                "confidence":                  confidence,
+                "side_effects":                side_effects,
+                "faers_reports":               faers_reports,
+                "label_documented":            label_check["documented"],
+                "label_severity":              label_check["severity"],
+                "label_snippet":               label_check["snippet"],
+                "label_found_in":              label_check["found_in"],
+                "data_source":                 data_source,
+                "index_a":                     i,
+                "index_b":                     j
             })
         except Exception as e:
             errors.append(f"{ra['name']} + {rb['name']}: {e}")
@@ -386,23 +435,26 @@ def polypharmacy_analysis():
 
     links = [
         {
-            "source":       p["drug_a"],
-            "target":       p["drug_b"],
-            "is_harmful":   p["is_harmful"],
-            "confidence":   p["confidence"],
-            "side_effects": p.get("side_effects", []),
-            "faers_reports": p.get("faers_reports", 0),
-            "data_source":  p.get("data_source", "gnn_novel"),
-            "value":        2 if p["is_harmful"] else 1
+            "source":                       p["drug_a"],
+            "target":                       p["drug_b"],
+            "tier":                         p.get("tier", "no_evidence_found"),
+            "interaction_likelihood_score": p.get("interaction_likelihood_score", p["confidence"]),
+            "is_harmful":                   p["is_harmful"],
+            "confidence":                   p["confidence"],
+            "side_effects":                 p.get("side_effects", []),
+            "faers_reports":                p.get("faers_reports", 0),
+            "data_source":                  p.get("data_source", "gnn_novel"),
+            "value":                        2 if p["is_harmful"] else 1
         }
         for p in pairs
     ]
 
     return jsonify({
-        "drugs":  [r["name"] for r in resolved_drugs],
-        "pairs":  pairs,
-        "errors": errors,
-        "graph":  {"nodes": nodes, "links": links}
+        "drugs":      [r["name"] for r in resolved_drugs],
+        "pairs":      pairs,
+        "errors":     errors,
+        "graph":      {"nodes": nodes, "links": links},
+        "disclaimer": "Research use only, not clinical advice"
     })
 
 @interactions_bp.route("/api/interactions/uncharted", methods=["GET"])

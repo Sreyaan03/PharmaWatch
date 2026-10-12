@@ -1,0 +1,9 @@
+{
+  "optimal_temperature": 0.8231,
+  "uncalibrated_ece": 0.0768,
+  "calibrated_ece": 0.078,
+  "ece_reduction_percent": -1.61,
+  "val_nll": 0.6776,
+  "score_terminology": "interaction likelihood score",
+  "calibration_method": "temperature_scaling"
+}
