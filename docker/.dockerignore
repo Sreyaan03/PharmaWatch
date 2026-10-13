@@ -26,6 +26,7 @@ data/faers_raw/
 # Backend log files
 backend/*.log
 backend/*.txt
+!backend/requirements.txt
 backend/app_err.*
 backend/app_out.*
 

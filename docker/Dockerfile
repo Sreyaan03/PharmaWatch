@@ -25,10 +25,12 @@ WORKDIR /app
 # ── Python Dependencies ───────────────────────────────────────────────────────
 COPY backend/requirements.txt /app/requirements.txt
 
-# Install CPU-only PyTorch first (saves ~1 GB vs default CUDA build)
+# Install CPU-only PyTorch first (saves ~1 GB vs default CUDA build). torchvision is pinned
+# with it: easyocr asks for an unpinned torchvision, and the newest one would otherwise
+# replace this torch with the CUDA build and download the NVIDIA libraries.
 # then install the rest of the project requirements.
 RUN pip install --no-cache-dir \
-        "torch==2.2.0+cpu" --index-url https://download.pytorch.org/whl/cpu \
+        "torch==2.2.0+cpu" "torchvision==0.17.0+cpu" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r /app/requirements.txt
 
 # ── Application Source ────────────────────────────────────────────────────────
