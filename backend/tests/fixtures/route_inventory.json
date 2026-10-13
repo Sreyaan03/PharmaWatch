@@ -1,0 +1,758 @@
+{
+  "responses": {
+    "GET /": {
+      "keys": [
+        "<text/html>"
+      ],
+      "status": 200
+    },
+    "GET /api/analytics/data-coverage": {
+      "keys": [
+        "source",
+        "status",
+        "total_drugs",
+        "total_reactions",
+        "total_reports"
+      ],
+      "status": 200
+    },
+    "GET /api/analytics/prr": {
+      "keys": [
+        "error",
+        "source"
+      ],
+      "status": 503
+    },
+    "GET /api/analytics/temporal": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
+    "GET /api/analytics/top-reactions": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
+    "GET /api/boxed-warning-events/<drug_name>": {
+      "keys": [
+        "boxed_warning_event_count",
+        "boxed_warning_percentage",
+        "drug",
+        "has_boxed_warning",
+        "other_events",
+        "total_reports",
+        "warned_events"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/<drug_name>": {
+      "keys": [
+        "brand_name",
+        "drug",
+        "generic_name",
+        "has_warning",
+        "warning_text"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/bias-analysis/<drug_name>": {
+      "keys": [
+        "drug",
+        "error",
+        "warning_year",
+        "weber_peak_detected"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/timeline/<drug_name>": {
+      "keys": [
+        "drug",
+        "error"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/violations/<drug_name>": {
+      "keys": [
+        "drug",
+        "has_boxed_warning",
+        "message",
+        "stored_violations",
+        "violations"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/violations/all": {
+      "keys": [
+        "count",
+        "violations"
+      ],
+      "status": 200
+    },
+    "GET /api/dashboard/drug-categories": {
+      "keys": [
+        "data",
+        "error",
+        "labels",
+        "source"
+      ],
+      "status": 200
+    },
+    "GET /api/dashboard/prr-distribution": {
+      "keys": [
+        "data",
+        "error",
+        "labels",
+        "source"
+      ],
+      "status": 200
+    },
+    "GET /api/dashboard/signal-intensity": {
+      "keys": [
+        "critical",
+        "error",
+        "high",
+        "labels",
+        "moderate",
+        "source"
+      ],
+      "status": 200
+    },
+    "GET /api/demographics/age": {
+      "keys": [
+        "counts",
+        "drug",
+        "event",
+        "groups",
+        "highest_risk_group",
+        "message",
+        "prr_values",
+        "source",
+        "total_reports"
+      ],
+      "status": 200
+    },
+    "GET /api/demographics/geo": {
+      "keys": [
+        "countries",
+        "counts",
+        "drug",
+        "event",
+        "grr_scores",
+        "message",
+        "source",
+        "top_country",
+        "total_reports"
+      ],
+      "status": 200
+    },
+    "GET /api/demographics/overview": {
+      "keys": [
+        "age",
+        "drug",
+        "event",
+        "geo",
+        "sex"
+      ],
+      "status": 200
+    },
+    "GET /api/demographics/sex": {
+      "keys": [
+        "drug",
+        "event",
+        "message",
+        "source",
+        "total_reports"
+      ],
+      "status": 200
+    },
+    "GET /api/graph": {
+      "keys": [
+        "links",
+        "nodes"
+      ],
+      "status": 200
+    },
+    "GET /api/graph/detailed": {
+      "keys": [
+        "links",
+        "nodes"
+      ],
+      "status": 200
+    },
+    "GET /api/graph/twosides": {
+      "keys": [
+        "error"
+      ],
+      "status": 500
+    },
+    "GET /api/health": {
+      "keys": [
+        "database",
+        "model",
+        "status"
+      ],
+      "status": 200
+    },
+    "GET /api/interactions/recent": {
+      "keys": [
+        "predictions"
+      ],
+      "status": 200
+    },
+    "GET /api/interactions/resolve": {
+      "keys": [
+        "cid",
+        "found",
+        "input_type",
+        "name",
+        "smiles"
+      ],
+      "status": 200
+    },
+    "GET /api/interactions/uncharted": {
+      "keys": [
+        "drugs",
+        "min_reports",
+        "pairs",
+        "total_pairs",
+        "uncharted_count"
+      ],
+      "status": 200
+    },
+    "GET /api/local-stats": {
+      "keys": [
+        "by_source",
+        "drug_event_pairs",
+        "drugs_monitored",
+        "error",
+        "interactions_analyzed",
+        "reports_analyzed",
+        "signals_detected",
+        "source",
+        "total_records"
+      ],
+      "status": 200
+    },
+    "GET /api/lstm": {
+      "keys": [
+        "actual",
+        "baseline",
+        "drug",
+        "fallback",
+        "labels",
+        "note"
+      ],
+      "status": 200
+    },
+    "GET /api/lstm/gap-scan": {
+      "keys": [
+        "error"
+      ],
+      "status": 200
+    },
+    "GET /api/pipeline/alerts": {
+      "keys": [
+        "alerts",
+        "count",
+        "error"
+      ],
+      "status": 200
+    },
+    "GET /api/pipeline/pubmed": {
+      "keys": [
+        "count",
+        "error",
+        "papers"
+      ],
+      "status": 200
+    },
+    "GET /api/pipeline/stats": {
+      "keys": [
+        "error",
+        "ingested",
+        "kafka_running",
+        "source",
+        "topics"
+      ],
+      "status": 200
+    },
+    "GET /api/pipeline/trials": {
+      "keys": [
+        "count",
+        "error",
+        "trials"
+      ],
+      "status": 200
+    },
+    "GET /api/prr": {
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "drug",
+        "event",
+        "is_signal",
+        "prr",
+        "source"
+      ],
+      "status": 200
+    },
+    "GET /api/prr-trials": {
+      "keys": [
+        "a",
+        "active_drug_study_count",
+        "b",
+        "c",
+        "corroboration",
+        "corroboration_message",
+        "d",
+        "drug",
+        "event",
+        "is_signal",
+        "prr",
+        "trial_matches"
+      ],
+      "status": 200
+    },
+    "GET /api/signals": {
+      "keys": [
+        "signals",
+        "total"
+      ],
+      "status": 200
+    },
+    "GET /api/signals/ner-mine/stream/<task_id>": {
+      "keys": [
+        "error"
+      ],
+      "status": 404
+    },
+    "GET /api/signals/network": {
+      "keys": [
+        "links",
+        "nodes"
+      ],
+      "status": 200
+    },
+    "GET /api/system/bigdata-status": {
+      "keys": [
+        "hbase_ready",
+        "message",
+        "status"
+      ],
+      "status": 200
+    },
+    "GET /api/temporal/seasonality": {
+      "keys": [
+        "counts",
+        "drug",
+        "elevated_months",
+        "event",
+        "is_seasonal",
+        "message",
+        "months",
+        "seasonality_index",
+        "source"
+      ],
+      "status": 200
+    },
+    "GET /api/temporal/tto": {
+      "keys": [
+        "buckets",
+        "counts",
+        "drug",
+        "event",
+        "median_days",
+        "message",
+        "peak_bucket",
+        "source",
+        "total_reports"
+      ],
+      "status": 200
+    },
+    "GET /api/temporal/velocity": {
+      "keys": [
+        "counts",
+        "drug",
+        "event",
+        "has_spike",
+        "message",
+        "months",
+        "source",
+        "spikes",
+        "z_scores"
+      ],
+      "status": 200
+    },
+    "GET /api/trials/<drug_name>": {
+      "keys": [
+        "active_safety_count",
+        "active_safety_monitoring",
+        "drug",
+        "recruiting_count",
+        "studies",
+        "total_studies"
+      ],
+      "status": 200
+    },
+    "POST /api/graph/predict": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
+    },
+    "POST /api/interactions/polypharmacy": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
+    },
+    "POST /api/lstm/train": {
+      "keys": [
+        "error"
+      ],
+      "status": 403
+    },
+    "POST /api/ner": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
+    },
+    "POST /api/reddit/process": {
+      "keys": [
+        "error"
+      ],
+      "status": 403
+    },
+    "POST /api/reddit/scrape": {
+      "keys": [
+        "error"
+      ],
+      "status": 403
+    },
+    "POST /api/signals/ner-mine": {
+      "keys": [
+        "task_id"
+      ],
+      "status": 200
+    },
+    "POST /api/system/start-bigdata": {
+      "keys": [
+        "error"
+      ],
+      "status": 403
+    }
+  },
+  "rules": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/analytics/data-coverage"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/analytics/prr"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/analytics/temporal"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/analytics/top-reactions"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning-events/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/bias-analysis/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/timeline/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/violations/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/violations/all"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/dashboard/drug-categories"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/dashboard/prr-distribution"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/dashboard/signal-intensity"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/demographics/age"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/demographics/geo"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/demographics/overview"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/demographics/sex"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/graph"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/graph/detailed"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/graph/predict"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/graph/twosides"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/health"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/interactions/polypharmacy"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/interactions/recent"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/interactions/resolve"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/interactions/uncharted"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/local-stats"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/lstm"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/lstm/gap-scan"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/lstm/train"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/ner"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/pipeline/alerts"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/pipeline/pubmed"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/pipeline/stats"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/pipeline/trials"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/prr"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/prr-trials"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/reddit/process"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/reddit/scrape"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/signals"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/signals/ner-mine"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/signals/ner-mine/stream/<task_id>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/signals/network"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/system/bigdata-status"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/system/start-bigdata"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/temporal/seasonality"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/temporal/tto"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/temporal/velocity"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/trials/<drug_name>"
+    }
+  ]
+}
