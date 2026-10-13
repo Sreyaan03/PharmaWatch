@@ -1,47 +1,21 @@
 # backend/services/demographics.py
 # Business logic for backend/routes/demographics.py (no Flask imports).
 
-import json
-from datetime import datetime, timedelta
-from db.mysql import query_one, execute
 from clients.http import http_requests
+from core.cache import PayloadCache
 from faers.analytics import (
     get_demographics_sex_duckdb,
     get_demographics_age_duckdb,
     get_demographics_geo_duckdb
 )
+import logging
+log = logging.getLogger(__name__)
 
 FDA_BASE = "https://api.fda.gov/drug/event.json"
 
-def get_cached_payload(drug, event, strata_type):
-    """Retrieve cached payload from demographic_cache if less than 24 hours old."""
-    try:
-        sql = "SELECT payload, cached_at FROM demographic_cache WHERE drug = %s AND event = %s AND strata_type = %s LIMIT 1"
-        row = query_one(sql, (drug.lower(), event.lower(), strata_type))
-        if row and row.get("payload"):
-            cached_at = row["cached_at"]
-            if isinstance(cached_at, str):
-                try:
-                    cached_at = datetime.fromisoformat(cached_at.rstrip("Z"))
-                except ValueError:
-                    cached_at = datetime.strptime(cached_at[:19], "%Y-%m-%d %H:%M:%S")
-            if datetime.now() - cached_at < timedelta(hours=24):
-                return json.loads(row["payload"])
-    except Exception as e:
-        print(f"[DEMO CACHE ERROR] {e}")
-    return None
-
-def set_cached_payload(drug, event, strata_type, payload):
-    """Cache payload in MySQL."""
-    try:
-        sql = """
-            INSERT INTO demographic_cache (drug, event, strata_type, payload, cached_at)
-            VALUES (%s, %s, %s, %s, NOW())
-            ON DUPLICATE KEY UPDATE payload = VALUES(payload), cached_at = NOW()
-        """
-        execute(sql, (drug.lower(), event.lower(), strata_type, json.dumps(payload)))
-    except Exception as e:
-        print(f"[DEMO CACHE SAVE ERROR] {e}")
+_cache = PayloadCache("demographic_cache", "strata_type", "DEMO")
+get_cached_payload = _cache.get
+set_cached_payload = _cache.set
 
 def _no_data_response(drug, event, strata_type):
     """Standard empty response when no real data exists."""
@@ -96,7 +70,7 @@ def api_demographics_sex(drug, event):
                 set_cached_payload(drug, event, "sex", payload)
                 return payload, 200
     except Exception as e:
-        print(f"[DEMO SEX FDA WARN] {e}")
+        log.warning(f"[DEMO SEX FDA WARN] {e}")
 
     # 3. No data — return empty
     return _no_data_response(drug, event, "sex"), 200
@@ -152,7 +126,7 @@ def api_demographics_age(drug, event):
                 set_cached_payload(drug, event, "age", payload)
                 return payload, 200
     except Exception as e:
-        print(f"[DEMO AGE FDA WARN] {e}")
+        log.warning(f"[DEMO AGE FDA WARN] {e}")
 
     # 3. No data — return empty
     return {
@@ -203,7 +177,7 @@ def api_demographics_geo(drug, event):
                 set_cached_payload(drug, event, "geo", payload)
                 return payload, 200
     except Exception as e:
-        print(f"[DEMO GEO FDA WARN] {e}")
+        log.warning(f"[DEMO GEO FDA WARN] {e}")
 
     # 3. No data — return empty
     return {

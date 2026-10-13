@@ -11,54 +11,21 @@ import torch
 import torch.nn as nn
 import numpy as np
 import requests as original_requests
+from clients.http import http_requests
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
-# Patch requests.get to automatically include openFDA API key and support cache layer
 FDA_API_KEY = os.getenv("FDA_API_KEY")
-class PatchedRequests:
-    @staticmethod
-    def get(url, **kwargs):
-        if "api.fda.gov" in url and "api_key" not in url:
-            connector = "&" if "?" in url else "?"
-            url = f"{url}{connector}api_key={FDA_API_KEY}"
-        
-        # Check database cache for FDA responses
-        if "api.fda.gov" in url:
-            try:
-                from database import get_cached_fda_response
-                cached = get_cached_fda_response(url)
-                if cached is not None:
-                    class MockResponse:
-                        def __init__(self, json_data):
-                            self.json_data = json_data
-                            self.status_code = 200
-                        def json(self):
-                            return self.json_data
-                    return MockResponse(cached)
-            except Exception as e:
-                print(f"[CACHE ERROR] {e}")
-
-        resp = original_requests.get(url, **kwargs)
-
-        # Cache successful openFDA responses
-        if "api.fda.gov" in url and resp.status_code == 200:
-            try:
-                from database import cache_fda_response
-                cache_fda_response(url, resp.json())
-            except Exception as e:
-                print(f"[CACHE SAVE ERROR] {e}")
-
-        return resp
-
-requests = PatchedRequests()
+requests = http_requests
 import os
 import json
 from datetime import datetime
 
 from core.config import MODEL_DIR
+import logging
+log = logging.getLogger(__name__)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 LABEL_API = "https://api.fda.gov/drug/label.json"
@@ -110,16 +77,16 @@ def fetch_fda_timeseries(drug, limit=1000):
             results = res.get("results", [])
             if results:
                 label = url.split('search=')[1].split('&count')[0]
-                print(f"[LSTM] Got {len(results)} data points via: {label}")
+                log.info(f"[LSTM] Got {len(results)} data points via: {label}")
                 break
             else:
-                print(f"[LSTM] No results from: {url.split('search=')[1][:50]}")
+                log.warning(f"[LSTM] No results from: {url.split('search=')[1][:50]}")
         except Exception as e:
-            print(f"[LSTM] Strategy failed ({e}), trying next...")
+            log.warning(f"[LSTM] Strategy failed ({e}), trying next...")
             continue
 
     if not results:
-        print(f"[LSTM] All strategies returned empty for '{drug}'")
+        log.warning(f"[LSTM] All strategies returned empty for '{drug}'")
         return []
 
     # Aggregate into monthly buckets (YYYYMM) for LSTM stability
@@ -134,7 +101,7 @@ def fetch_fda_timeseries(drug, limit=1000):
             pass
 
     parsed = sorted(monthly_map.items(), key=lambda x: x[0])
-    print(f"[LSTM] Built {len(parsed)} monthly buckets for '{drug}'")
+    log.info(f"[LSTM] Built {len(parsed)} monthly buckets for '{drug}'")
     return parsed
 
 
@@ -170,7 +137,7 @@ def train_model(drug, epochs=100, seq_length=30, lr=0.001):
     Train a real LSTM on openFDA data for a specific drug.
     Returns (model, error_string). error_string is None on success.
     """
-    print(f"[LSTM] Fetching openFDA data for '{drug}'...")
+    log.info(f"[LSTM] Fetching openFDA data for '{drug}'...")
     raw_pairs = fetch_fda_timeseries(drug, limit=365)
     raw_counts = [p[1] for p in raw_pairs]
     raw_dates = [p[0] for p in raw_pairs]
@@ -197,7 +164,7 @@ def train_model(drug, epochs=100, seq_length=30, lr=0.001):
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(lstm_model.parameters(), lr=lr)
 
-    print(f"[LSTM] Training on {len(X_train)} sequences for {epochs} epochs...")
+    log.info(f"[LSTM] Training on {len(X_train)} sequences for {epochs} epochs...")
     lstm_model.train()
     for epoch in range(epochs):
         output = lstm_model(X_train)
@@ -206,14 +173,14 @@ def train_model(drug, epochs=100, seq_length=30, lr=0.001):
         loss.backward()
         optimizer.step()
         if (epoch + 1) % 20 == 0:
-            print(f"  [LSTM] {drug} epoch {epoch+1}/{epochs}, loss={loss.item():.6f}")
+            log.info(f"  [LSTM] {drug} epoch {epoch+1}/{epochs}, loss={loss.item():.6f}")
 
     # Evaluate on test set
     lstm_model.eval()
     with torch.no_grad():
         test_output = lstm_model(X_test)
         test_loss = criterion(test_output, y_test).item()
-    print(f"[LSTM] Test MSE loss: {test_loss:.6f}")
+    log.info(f"[LSTM] Test MSE loss: {test_loss:.6f}")
 
     # Save model weights + metadata
     save_path = os.path.join(MODEL_DIR, f"lstm_{drug.lower()}.pt")
@@ -235,7 +202,7 @@ def train_model(drug, epochs=100, seq_length=30, lr=0.001):
             "boxed_warning_date": warning_date
         }, f)
 
-    print(f"[LSTM] Model saved -> {save_path}")
+    log.info(f"[LSTM] Model saved -> {save_path}")
     return lstm_model, None
 
 

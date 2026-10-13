@@ -14,6 +14,8 @@ from services.text_mining import MINING_TASKS
 from clients.http import http_requests
 from core.config import WATCHLIST
 from ml.ner import run_ner
+import logging
+log = logging.getLogger(__name__)
 
 def compute_disproportionality_helper(drug, event, source=None):
     """Calculates PRR, ROR, BCPNN from DuckDB if available, otherwise openFDA data."""
@@ -29,7 +31,7 @@ def compute_disproportionality_helper(drug, event, source=None):
             if source == "duckdb":
                 return duck_res
         except Exception as e:
-            print(f"[DUCKDB ERROR] Failed to query local database: {e}")
+            log.error(f"[DUCKDB ERROR] Failed to query local database: {e}")
             if source == "duckdb":
                 return None
 
@@ -60,7 +62,7 @@ def compute_disproportionality_helper(drug, event, source=None):
         res["source"] = "openfda"
         return res
     except Exception as e:
-        print(f"[DISPROPORTIONALITY ERROR] {drug} + {event}: {e}")
+        log.error(f"[DISPROPORTIONALITY ERROR] {drug} + {event}: {e}")
         return None
 
 _SIGNAL_NETWORK_CACHE = {}
@@ -180,7 +182,7 @@ def get_signal_network(drug, event):
             if cross_count > 0:
                 links.append({"source": cd_name, "target": event, "value": cross_count, "type": "cross_link"})
     except Exception as e:
-        print(f"[NETWORK ERROR] {drug} + {event}: {e}")
+        log.error(f"[NETWORK ERROR] {drug} + {event}: {e}")
         pass
 
     # Strict referential integrity: every link must connect nodes that actually exist in the node list

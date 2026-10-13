@@ -76,3 +76,26 @@ def _hbase_connect():
         _hbase_online_cached = False
         _hbase_last_check = now
         raise
+
+
+def find_pair_row(name_a, name_b):
+    """Return the TWOSIDES interaction row for a drug pair (either order), or None.
+
+    Returns None when happybase is not installed; connection errors propagate.
+    """
+    conn = _hbase_connect()
+    if not conn:
+        return None
+    try:
+        table = conn.table('interactions')
+        for key in (f"{name_a.upper()}_{name_b.upper()}".encode(),
+                    f"{name_b.upper()}_{name_a.upper()}".encode()):
+            row = table.row(key)
+            if row:
+                return row
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass

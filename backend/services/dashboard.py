@@ -4,6 +4,8 @@
 import math
 from datetime import datetime, timedelta, timezone
 from db.mysql import query, query_one
+import logging
+log = logging.getLogger(__name__)
 
 def local_stats():
     """Returns real counts from MySQL and DuckDB for dashboard animated counters."""
@@ -30,7 +32,7 @@ def local_stats():
                 reports_analyzed = cov["total_reports"]
                 source_label = "duckdb+mysql"
         except Exception as e:
-            print(f"[DUCKDB COVERAGE ERROR] {e}")
+            log.error(f"[DUCKDB COVERAGE ERROR] {e}")
 
         sources = query("SELECT source, COUNT(*) AS c FROM drug_events GROUP BY source") if drug_event_pairs > 0 else []
 

@@ -3,6 +3,7 @@
 # PharmaWatch Backend Entry Point (Refactored Blueprint Architecture)
 # ─────────────────────────────────────────────────────────────────────────────
 
+import logging
 import os
 import pathlib
 import sys
@@ -16,6 +17,9 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from database import init_db
+
+# Request-time diagnostics go through logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 # Load environment variables
 load_dotenv()

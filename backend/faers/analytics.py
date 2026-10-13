@@ -2,6 +2,9 @@
 import os
 import duckdb
 import numpy as np
+from .stats import zscore_spikes
+import logging
+log = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -17,7 +20,7 @@ def get_connection():
         # Open in read-only mode to allow concurrent flask requests
         return duckdb.connect(DB_PATH, read_only=True)
     except Exception as e:
-        print(f"[-] DuckDB connection failed: {e}")
+        log.error(f"[-] DuckDB connection failed: {e}")
         return None
 
 def get_drug_terms(conn, drug_name):
@@ -125,7 +128,7 @@ def compute_prr_duckdb(drug, event):
 
         
     except Exception as e:
-        print(f"[-] Error computing disproportionality in DuckDB: {e}")
+        log.error(f"[-] Error computing disproportionality in DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -172,7 +175,7 @@ def get_temporal_trend(drug, granularity="month"):
                 })
         return result
     except Exception as e:
-        print(f"[-] Error fetching temporal trend from DuckDB: {e}")
+        log.error(f"[-] Error fetching temporal trend from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -201,7 +204,7 @@ def get_top_reactions(drug, limit=20):
         
         return [{"reaction": r[0].capitalize(), "count": int(r[1])} for r in rows if r[0]]
     except Exception as e:
-        print(f"[-] Error fetching top reactions from DuckDB: {e}")
+        log.error(f"[-] Error fetching top reactions from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -239,7 +242,7 @@ def get_data_coverage():
             "source": "duckdb"
         }
     except Exception as e:
-        print(f"[-] Error fetching data coverage: {e}")
+        log.error(f"[-] Error fetching data coverage: {e}")
         if conn:
             conn.close()
         return {
@@ -280,23 +283,7 @@ def get_temporal_velocity_duckdb(drug, event):
         counts = [int(r[1]) for r in rows]
 
         # Compute Z-score anomaly spikes
-        spikes = []
-        z_scores = []
-        counts_arr = np.array(counts, dtype=float)
-
-        for i in range(len(counts)):
-            if i < 3:
-                z_scores.append(0.0)
-                spikes.append(False)
-            else:
-                window = counts_arr[max(0, i-12):i]
-                mean = np.mean(window)
-                std = np.std(window)
-                if std == 0:
-                    std = 1.0
-                z = (counts_arr[i] - mean) / std
-                z_scores.append(round(float(z), 2))
-                spikes.append(bool(z > 2.0))
+        spikes, z_scores = zscore_spikes(counts)
 
         return {
             "drug": drug,
@@ -309,7 +296,7 @@ def get_temporal_velocity_duckdb(drug, event):
             "source": "faers_duckdb"
         }
     except Exception as e:
-        print(f"[-] Error querying velocity from DuckDB: {e}")
+        log.error(f"[-] Error querying velocity from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -367,7 +354,7 @@ def get_tto_duckdb(drug, event):
             "source": "faers_duckdb"
         }
     except Exception as e:
-        print(f"[-] Error querying TTO from DuckDB: {e}")
+        log.error(f"[-] Error querying TTO from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -416,7 +403,7 @@ def get_seasonality_duckdb(drug, event):
             "source": "faers_duckdb"
         }
     except Exception as e:
-        print(f"[-] Error querying seasonality from DuckDB: {e}")
+        log.error(f"[-] Error querying seasonality from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -475,7 +462,7 @@ def get_demographics_sex_duckdb(drug, event):
             "source": "faers_duckdb"
         }
     except Exception as e:
-        print(f"[-] Error querying sex demographics from DuckDB: {e}")
+        log.error(f"[-] Error querying sex demographics from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -535,7 +522,7 @@ def get_demographics_age_duckdb(drug, event):
             "source": "faers_duckdb"
         }
     except Exception as e:
-        print(f"[-] Error querying age demographics from DuckDB: {e}")
+        log.error(f"[-] Error querying age demographics from DuckDB: {e}")
         if conn:
             conn.close()
         return None
@@ -584,7 +571,7 @@ def get_demographics_geo_duckdb(drug, event):
             "source": "faers_duckdb"
         }
     except Exception as e:
-        print(f"[-] Error querying geo demographics from DuckDB: {e}")
+        log.error(f"[-] Error querying geo demographics from DuckDB: {e}")
         if conn:
             conn.close()
         return None

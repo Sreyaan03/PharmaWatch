@@ -4,12 +4,10 @@ Provides thread-safe access to drug events, Reddit posts, boxed warnings,
 GNN predictions, openFDA caching, and disproportionality signals.
 """
 
-import os
 import json
 import hashlib
 import logging
-from datetime import datetime, timedelta
-from db.mysql import query, query_one, execute, execute_many, get_db, ping, clean_row
+from db.mysql import query, query_one, execute, ping
 
 log = logging.getLogger("pharmawatch.database")
 
@@ -271,44 +269,6 @@ def get_recent_predictions(limit=20):
     except Exception as e:
         log.error(f"[DB] get_recent_predictions failed: {e}")
         return []
-
-
-# ── openFDA Cache Helpers ─────────────────────────────────────────────────────
-
-def get_cached_fda_response(url):
-    """Retrieve cached openFDA JSON response if less than 7 days old."""
-    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
-    sql = "SELECT response_json, cached_at FROM fda_cache WHERE url_hash = %s LIMIT 1"
-    try:
-        row = query_one(sql, (url_hash,))
-        if row:
-            cached_at = row["cached_at"]
-            if isinstance(cached_at, str):
-                try:
-                    cached_at = datetime.fromisoformat(cached_at.rstrip("Z"))
-                except ValueError:
-                    cached_at = datetime.strptime(cached_at[:19], "%Y-%m-%d %H:%M:%S")
-            if datetime.now() - cached_at < timedelta(days=7):
-                return json.loads(row["response_json"])
-    except Exception as e:
-        log.error(f"[DB] get_cached_fda_response failed: {e}")
-    return None
-
-
-def cache_fda_response(url, response_json):
-    """Persist openFDA API response in MySQL cache with 7-day TTL."""
-    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
-    sql = """
-        INSERT INTO fda_cache (url_hash, url, response_json, cached_at)
-        VALUES (%s, %s, %s, NOW())
-        ON DUPLICATE KEY UPDATE
-          response_json = VALUES(response_json),
-          cached_at = NOW()
-    """
-    try:
-        execute(sql, (url_hash, url, json.dumps(response_json)))
-    except Exception as e:
-        log.error(f"[DB] cache_fda_response failed: {e}")
 
 
 # ── Disproportionality Signals Cache Helpers ─────────────────────────────────

@@ -4,6 +4,8 @@
 import numpy as np
 from clients.clinicaltrials import fetch_trial_monitoring
 from clients.http import http_requests
+import logging
+log = logging.getLogger(__name__)
 
 try:
     from ml.forecast import train_model as lstm_train, predict as lstm_predict, scan_warning_gap
@@ -21,9 +23,9 @@ def get_lstm_forecast(drug):
             result, error = lstm_predict(drug)
             if result:
                 return result, 200
-            print(f"[LSTM] Predict error for '{drug}': {error} — using fallback")
+            log.warning(f"[LSTM] Predict error for '{drug}': {error} — using fallback")
         except Exception as e:
-            print(f"[LSTM] Exception: {e} — using fallback")
+            log.warning(f"[LSTM] Exception: {e} — using fallback")
 
     FDA_BASE = "https://api.fda.gov/drug/event.json"
     try:

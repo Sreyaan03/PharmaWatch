@@ -1,8 +1,8 @@
 # backend/routes/signals.py
 # HTTP layer only: parse the request, call the service, return JSON.
 
-import os
 
+from core.auth import require_admin
 from flask import Blueprint, request, jsonify, Response
 from services import signals as svc
 
@@ -70,40 +70,22 @@ def stream_ner_task(task_id):
 
 
 @signals_bp.route("/api/reddit/scrape", methods=["POST"])
+@require_admin
 def trigger_scrape():
-    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
-    if not admin_key:
-        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
-    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
-    if not provided or provided.strip() != admin_key:
-        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
-
     payload, status = svc.trigger_scrape()
     return jsonify(payload), status
 
 
 @signals_bp.route("/api/reddit/process", methods=["POST"])
+@require_admin
 def trigger_processing():
-    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
-    if not admin_key:
-        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
-    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
-    if not provided or provided.strip() != admin_key:
-        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
-
     payload, status = svc.trigger_processing()
     return jsonify(payload), status
 
 
 @signals_bp.route("/api/system/start-bigdata", methods=["POST"])
+@require_admin
 def start_bigdata():
     """HBase launcher — verifies or starts hbase-server and connects to Thrift."""
-    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
-    if not admin_key:
-        return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
-    provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
-    if not provided or provided.strip() != admin_key:
-        return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
-
     payload, status = svc.start_bigdata()
     return jsonify(payload), status

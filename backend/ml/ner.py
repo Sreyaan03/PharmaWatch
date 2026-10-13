@@ -2,6 +2,8 @@
 # Biomedical NER pipeline, loaded on first use.
 
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
+import logging
+log = logging.getLogger(__name__)
 
 # ── BioBERT NER Model Lazy Loader ─────────────────────────────────────────────
 MODEL_NAME = "d4data/biomedical-ner-all"
@@ -43,11 +45,11 @@ def run_ner(text: str):
     """
     global ner_pipeline
     if ner_pipeline is None:
-        print("Lazy loading Biomedical NER model — first run downloads ~260MB...")
+        log.info("Lazy loading Biomedical NER model — first run downloads ~260MB...")
         tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
         model = AutoModelForTokenClassification.from_pretrained(MODEL_NAME)
         ner_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, aggregation_strategy="simple")
-        print("Biomedical NER model loaded OK")
+        log.info("Biomedical NER model loaded OK")
 
     results = ner_pipeline(text)
     entities = []

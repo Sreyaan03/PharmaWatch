@@ -4,6 +4,8 @@
 import os
 
 from core.config import MODEL_DIR
+import logging
+log = logging.getLogger(__name__)
 
 MODEL_PATH = os.path.join(MODEL_DIR, "drugbank_gine_model.pth")
 CALIBRATION_PATH = os.path.join(MODEL_DIR, "model_calibration.json")
@@ -45,12 +47,12 @@ def _load_gnn():
             m.load_state_dict(_torch.load(MODEL_PATH, map_location="cpu"))
             m.eval()
             _gnn_model = m
-            print("[GNN] GINEDDIPredictor model loaded OK from drugbank_gine_model.pth")
+            log.info("[GNN] GINEDDIPredictor model loaded OK from drugbank_gine_model.pth")
         else:
-            print(f"[GNN] Model checkpoint not found at {MODEL_PATH}")
+            log.warning(f"[GNN] Model checkpoint not found at {MODEL_PATH}")
         _gnn_loaded = True
     except Exception as e:
-        print(f"[GNN] Could not load model: {e}")
+        log.error(f"[GNN] Could not load model: {e}")
         _gnn_loaded = True
     return _gnn_model
 

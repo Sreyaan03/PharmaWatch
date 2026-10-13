@@ -1,8 +1,8 @@
 # backend/services/analytics.py
 # Business logic for backend/routes/analytics.py (no Flask imports).
 
+from services.signals import compute_disproportionality_helper
 from faers.analytics import (
-    compute_prr_duckdb,
     get_temporal_trend,
     get_top_reactions,
     get_data_coverage
@@ -13,7 +13,7 @@ def api_prr(drug, event):
     if not drug or not event:
         return {"error": "Parameters 'drug' and 'event' are required."}, 400
         
-    result = compute_prr_duckdb(drug, event)
+    result = compute_disproportionality_helper(drug, event, source="duckdb")
     if result is None:
         return {
             "error": "DuckDB offline or not initialized",

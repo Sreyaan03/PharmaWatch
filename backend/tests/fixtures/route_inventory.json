@@ -458,12 +458,6 @@
       "methods": [
         "GET"
       ],
-      "rule": "/"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
       "rule": "/api/analytics/data-coverage"
     },
     {

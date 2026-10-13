@@ -1,46 +1,20 @@
 # backend/services/temporal.py
 # Business logic for backend/routes/temporal.py (no Flask imports).
 
-import json
-import numpy as np
-from datetime import datetime, timedelta
-from db.mysql import query_one, execute
 from clients.http import http_requests
+from core.cache import PayloadCache
+from faers.stats import zscore_spikes
 from faers.analytics import (
     get_temporal_velocity_duckdb,
     get_tto_duckdb,
     get_seasonality_duckdb
 )
+import logging
+log = logging.getLogger(__name__)
 
-def get_cached_payload(drug, event, data_type):
-    """Retrieve cached payload from temporal_cache if less than 24 hours old."""
-    try:
-        sql = "SELECT payload, cached_at FROM temporal_cache WHERE drug = %s AND event = %s AND data_type = %s LIMIT 1"
-        row = query_one(sql, (drug.lower(), event.lower(), data_type))
-        if row and row.get("payload"):
-            cached_at = row["cached_at"]
-            if isinstance(cached_at, str):
-                try:
-                    cached_at = datetime.fromisoformat(cached_at.rstrip("Z"))
-                except ValueError:
-                    cached_at = datetime.strptime(cached_at[:19], "%Y-%m-%d %H:%M:%S")
-            if datetime.now() - cached_at < timedelta(hours=24):
-                return json.loads(row["payload"])
-    except Exception as e:
-        print(f"[TEMPORAL CACHE ERROR] {e}")
-    return None
-
-def set_cached_payload(drug, event, data_type, payload):
-    """Cache payload in MySQL."""
-    try:
-        sql = """
-            INSERT INTO temporal_cache (drug, event, data_type, payload, cached_at)
-            VALUES (%s, %s, %s, %s, NOW())
-            ON DUPLICATE KEY UPDATE payload = VALUES(payload), cached_at = NOW()
-        """
-        execute(sql, (drug.lower(), event.lower(), data_type, json.dumps(payload)))
-    except Exception as e:
-        print(f"[TEMPORAL CACHE SAVE ERROR] {e}")
+_cache = PayloadCache("temporal_cache", "data_type", "TEMPORAL")
+get_cached_payload = _cache.get
+set_cached_payload = _cache.set
 
 def api_temporal_velocity(drug, event):
     """Calculates monthly report velocity and detects velocity spikes (Z-score > 2.0)."""
@@ -80,7 +54,7 @@ def api_temporal_velocity(drug, event):
                 months.append(ym)
                 counts.append(monthly_map[ym])
     except Exception as e:
-        print(f"[TEMPORAL VELOCITY FDA FETCH WARN] {e}, falling back to synthetic trend")
+        log.warning(f"[TEMPORAL VELOCITY FDA FETCH WARN] {e}, falling back to synthetic trend")
 
     # 3. No data found — return empty instead of synthetic data
     if not counts:
@@ -96,23 +70,7 @@ def api_temporal_velocity(drug, event):
             "message": f"No FAERS reports found for '{drug}' + '{event}'. This drug-event pair may not exist in the database."
         }, 200
 
-    spikes = []
-    z_scores = []
-    counts_arr = np.array(counts, dtype=float)
-
-    for i in range(len(counts)):
-        if i < 3:
-            z_scores.append(0.0)
-            spikes.append(False)
-        else:
-            window = counts_arr[max(0, i-12):i]
-            mean = np.mean(window)
-            std = np.std(window)
-            if std == 0:
-                std = 1.0
-            z = (counts_arr[i] - mean) / std
-            z_scores.append(round(float(z), 2))
-            spikes.append(bool(z > 2.0))
+    spikes, z_scores = zscore_spikes(counts)
 
     payload = {
         "drug": drug,

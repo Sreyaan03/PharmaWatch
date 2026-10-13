@@ -4,20 +4,25 @@
 from itertools import combinations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from database import upsert_prediction, get_recent_predictions
-from clients.hbase import _hbase_connect
+from clients.hbase import _hbase_connect, find_pair_row
 from clients.http import http_requests
 from clients.openfda import _query_faers_coprescription, _query_openfda_label_interaction
 from clients.pubchem import _resolve_drug
 from ml.ddi.inference import _run_gnn_pair
 
+FDA_EVENT_URL = "https://api.fda.gov/drug/event.json"
+
+
+def _co_reported_drugs(target_drug):
+    """openFDA counts of the drugs most often co-reported with `target_drug` (top 15)."""
+    url = f'{FDA_EVENT_URL}?search=patient.drug.medicinalproduct:"{target_drug}"&count=patient.drug.medicinalproduct.exact&limit=15'
+    return http_requests.get(url).json()
+
+
 def get_interaction_graph(target_drug):
     """Fetches REAL co-prescribed drug data from openFDA for the selected drug."""
-    FDA_BASE = "https://api.fda.gov/drug/event.json"
-
     try:
-        url = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{target_drug}"&count=patient.drug.medicinalproduct.exact&limit=15'
-        response = http_requests.get(url)
-        fda_data = response.json()
+        fda_data = _co_reported_drugs(target_drug)
 
         nodes = [{"id": target_drug, "group": 1}]
         links = []
@@ -61,12 +66,10 @@ def get_interaction_graph(target_drug):
 
 def get_detailed_graph(target_drug):
     """Enhanced graph: co-prescription + FDA label warnings."""
-    FDA_BASE = "https://api.fda.gov/drug/event.json"
     LABEL_BASE = "https://api.fda.gov/drug/label.json"
 
     try:
-        url = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{target_drug}"&count=patient.drug.medicinalproduct.exact&limit=15'
-        fda_data = http_requests.get(url).json()
+        fda_data = _co_reported_drugs(target_drug)
 
         label_url = f'{LABEL_BASE}?search=openfda.generic_name:"{target_drug}"&limit=1'
         label_res = http_requests.get(label_url).json()
@@ -222,19 +225,7 @@ def predict_interaction(body):
 
         in_hbase = False
         try:
-            conn = _hbase_connect()
-            if conn:
-                try:
-                    table = conn.table('interactions')
-                    for key_candidate in [
-                        f"{name_a.upper()}_{name_b.upper()}".encode(),
-                        f"{name_b.upper()}_{name_a.upper()}".encode()
-                    ]:
-                        if table.row(key_candidate):
-                            in_hbase = True
-                            break
-                finally:
-                    conn.close()
+            in_hbase = find_pair_row(name_a, name_b) is not None
         except Exception:
             pass
 
@@ -336,25 +327,11 @@ def polypharmacy_analysis(body):
             side_effects = []
             if is_harmful:
                 try:
-                    conn = _hbase_connect()
-                    if conn:
-                        try:
-                            table = conn.table('interactions')
-                            for key_candidate in [
-                                f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
-                                f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
-                            ]:
-                                row = table.row(key_candidate)
-                                if row:
-                                    se = row.get(b'info:side_effect', b'').decode().strip()
-                                    if se:
-                                        side_effects.append(se)
-                                    break
-                        finally:
-                            try:
-                                conn.close()
-                            except Exception:
-                                pass
+                    row = find_pair_row(ra['name'], rb['name'])
+                    if row:
+                        se = row.get(b'info:side_effect', b'').decode().strip()
+                        if se:
+                            side_effects.append(se)
                 except Exception:
                     pass
 
@@ -464,22 +441,7 @@ def uncharted_interactions(drugs_param, min_reports):
 
         in_twosides = False
         try:
-            conn = _hbase_connect()
-            if conn:
-                try:
-                    table = conn.table("interactions")
-                    for key in [
-                        f"{name_a.upper()}_{name_b.upper()}".encode(),
-                        f"{name_b.upper()}_{name_a.upper()}".encode()
-                    ]:
-                        if table.row(key):
-                            in_twosides = True
-                            break
-                finally:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
+            in_twosides = find_pair_row(name_a, name_b) is not None
         except Exception:
             pass
 
