@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-kafka_producer.py — PharmaWatch Multi-Source Kafka Producer
+ingest/producer.py — PharmaWatch Multi-Source Kafka Producer
 
 Polls 4 real data sources and publishes JSON messages to Kafka topics:
 
@@ -9,7 +9,7 @@ Polls 4 real data sources and publishes JSON messages to Kafka topics:
   clinical-trials   ← ClinicalTrials.gov active study updates
   fda-alerts        ← FDA MedWatch Safety Alerts RSS feed
 
-Run:  python scripts/kafka_producer.py
+Run:  python -m ingest.producer   (from the backend directory)
 Env:  KAFKA_BOOTSTRAP_SERVERS, FDA_API_KEY, NCBI_API_KEY (all from .env)
 """
 
@@ -25,7 +25,7 @@ from kafka.errors import KafkaError
 from dotenv import load_dotenv
 
 # ── Load environment ──────────────────────────────────────────────────────────
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", "backend", ".env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 FDA_API_KEY  = os.getenv("FDA_API_KEY", "")
 NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")

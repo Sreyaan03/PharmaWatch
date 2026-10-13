@@ -15,8 +15,11 @@ from flask import Blueprint, request, jsonify, Response
 from database import (get_cached_signals, upsert_signal, insert_drug_event,
                       insert_violation)
 from reddit_scraper import scrape_all, process_posts_with_ner
-from helpers.http_client import http_requests
-from helpers.models import (WATCHLIST, MINING_TASKS, get_easyocr_reader, run_ner)
+from clients.http import http_requests
+from core.config import WATCHLIST
+from ml.ner import run_ner
+from ml.ocr import get_easyocr_reader
+from services.text_mining import MINING_TASKS
 
 signals_bp = Blueprint("signals", __name__)
 
@@ -399,7 +402,7 @@ def start_bigdata():
 
 @signals_bp.route("/api/system/bigdata-status", methods=["GET"])
 def bigdata_status():
-    from helpers.external_apis import _hbase_connect
+    from clients.hbase import _hbase_connect
     try:
         conn = _hbase_connect()
         if conn is None:

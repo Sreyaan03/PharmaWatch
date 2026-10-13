@@ -24,39 +24,17 @@ import torch.optim as optim
 from torch_geometric.data import Batch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-# Ensure scripts directory in path
+# Entry-point script: make the backend packages importable
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-if SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SCRIPTS_DIR)
+BACKEND_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'backend'))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
-from models_ddi import (
-    smiles_to_molecular_graph,
-    smiles_to_fingerprint,
-    GINEDDIPredictor
-)
+from core.config import SPLITS_DIR, MODEL_DIR, REPORTS_DIR  # noqa: E402
+from ml.ddi.model import GINEDDIPredictor  # noqa: E402
+from ml.ddi.data import precompute_drug_structures  # noqa: E402
 
-DATA_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'data'))
-SPLITS_DIR = os.path.join(DATA_DIR, 'splits')
-MODEL_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'backend', 'trained_models'))
 CHECKPOINTS_DIR = os.path.join(MODEL_DIR, 'checkpoints')
-REPORTS_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'reports'))
-
-
-def precompute_drug_structures(drug_metadata):
-    """Pre-computes molecular graphs and fingerprints for all drugs once."""
-    print(f"[CACHE] Pre-computing molecular graphs and fingerprints for {len(drug_metadata['drug_smiles'])} drugs...", flush=True)
-    graph_dict = {}
-    fp_dict = {}
-
-    for drug_id, smi in drug_metadata['drug_smiles'].items():
-        g = smiles_to_molecular_graph(smi)
-        if g is None:
-            g = smiles_to_molecular_graph('C')
-        graph_dict[drug_id] = g
-        fp_dict[drug_id] = smiles_to_fingerprint(smi)
-
-    print("[CACHE] Pre-computation complete.", flush=True)
-    return graph_dict, fp_dict
 
 
 def sample_train_negatives(train_drug_ids, pos_set, n_samples, rng):

@@ -37,7 +37,7 @@ def test_zero_sqlite_imports_in_runtime_code():
         os.path.join(BASE_DIR, "routes", "boxed_warnings.py"),
         os.path.join(BASE_DIR, "routes", "ml.py"),
         os.path.join(BASE_DIR, "routes", "analytics.py"),
-        os.path.join(BASE_DIR, "..", "scripts", "kafka_consumer.py"),
+        os.path.join(BASE_DIR, "ingest", "consumer.py"),
     ]
 
     for filepath in app_files_to_check:

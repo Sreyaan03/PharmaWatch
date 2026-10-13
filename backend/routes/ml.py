@@ -14,13 +14,13 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 try:
-    from lstm_model import train_model as lstm_train, predict as lstm_predict, scan_warning_gap
+    from ml.forecast import train_model as lstm_train, predict as lstm_predict, scan_warning_gap
     LSTM_AVAILABLE = True
 except ImportError:
     LSTM_AVAILABLE = False
 
-from helpers.external_apis import fetch_trial_monitoring
-from helpers.http_client import http_requests
+from clients.clinicaltrials import fetch_trial_monitoring
+from clients.http import http_requests
 
 ml_bp = Blueprint("ml", __name__)
 

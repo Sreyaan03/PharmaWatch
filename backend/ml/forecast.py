@@ -58,7 +58,7 @@ import os
 import json
 from datetime import datetime
 
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "trained_models")
+from core.config import MODEL_DIR
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 LABEL_API = "https://api.fda.gov/drug/label.json"

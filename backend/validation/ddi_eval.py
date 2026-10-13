@@ -1,4 +1,4 @@
-# scripts/eval_ddi_model.py
+# backend/validation/ddi_eval.py
 # ─────────────────────────────────────────────────────────────────────────────
 # Rigorous Evaluation Benchmark & Ablation Analysis:
 # 1. Regimes: S0 (Warm), S1 (One Unseen Drug), S2 (Both Unseen Drugs).
@@ -29,21 +29,13 @@ from torch_geometric.data import Batch
 from sklearn.metrics import roc_auc_score, average_precision_score
 import xgboost as xgb
 
-SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'data'))
-SPLITS_DIR = os.path.join(DATA_DIR, 'splits')
-MODEL_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'backend', 'trained_models'))
-REPORTS_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'reports'))
-
-if SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SCRIPTS_DIR)
-
-from models_ddi import (
+from core.config import SPLITS_DIR, MODEL_DIR, REPORTS_DIR
+from ml.ddi.model import (
     smiles_to_molecular_graph,
     smiles_to_fingerprint,
     GINEDDIPredictor
 )
-from baselines_ddi import (
+from ml.ddi.baselines import (
     build_drug_fingerprints,
     build_pair_feature_matrix,
     NearestNeighborTanimoto

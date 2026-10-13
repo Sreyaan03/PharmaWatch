@@ -6,8 +6,8 @@
 from flask import Blueprint, request, jsonify
 
 from database import insert_violation, get_violations, get_all_violations
-from helpers.external_apis import _get_true_warning_year
-from helpers.http_client import http_requests
+from services.boxed_warnings import _get_true_warning_year
+from clients.http import http_requests
 
 boxed_warnings_bp = Blueprint("boxed_warnings", __name__)
 

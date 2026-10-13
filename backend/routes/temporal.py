@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 
 from db.mysql import query_one, execute
-from helpers.http_client import http_requests
+from clients.http import http_requests
 from faers.analytics import (
     get_temporal_velocity_duckdb,
     get_tto_duckdb,

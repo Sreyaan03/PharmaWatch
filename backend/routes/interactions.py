@@ -8,11 +8,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Blueprint, request, jsonify
 
 from database import upsert_prediction, get_recent_predictions
-from helpers.external_apis import (
-    _resolve_drug, _run_gnn_pair, _query_faers_coprescription,
-    _query_openfda_label_interaction, _hbase_connect
-)
-from helpers.http_client import http_requests
+from clients.hbase import _hbase_connect
+from clients.http import http_requests
+from clients.openfda import _query_faers_coprescription, _query_openfda_label_interaction
+from clients.pubchem import _resolve_drug
+from ml.ddi.inference import _run_gnn_pair
 
 interactions_bp = Blueprint("interactions", __name__)
 

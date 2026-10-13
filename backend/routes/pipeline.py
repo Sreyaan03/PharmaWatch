@@ -1,7 +1,7 @@
 # backend/routes/pipeline.py
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline routes: real Kafka consumer stats for the dashboard
-# Reads from kafka_pipeline_stats table written by kafka_consumer.py
+# Reads from kafka_pipeline_stats table written by ingest/consumer.py
 # ─────────────────────────────────────────────────────────────────────────────
 
 from flask import Blueprint, jsonify

@@ -12,12 +12,12 @@ import os
 import torch
 import pytest
 
-# Ensure scripts folder is importable
-SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
-if SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SCRIPTS_DIR)
+# Ensure the backend packages are importable
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
-from models_ddi import (
+from ml.ddi.model import (
     smiles_to_molecular_graph,
     smiles_to_fingerprint,
     SymmetricPairHead,

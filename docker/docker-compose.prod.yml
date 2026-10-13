@@ -151,7 +151,7 @@ services:
       - MYSQL_PORT=3306
       - KAFKA_ROLE=producer
       - PYTHONUNBUFFERED=1
-    command: ["python", "scripts/kafka_producer.py"]
+    command: ["python", "-m", "ingest.producer"]
 
   # ── 6. KAFKA CONSUMER (Real-Time Pipeline Worker) ──────────────────────────
   kafka-consumer:
@@ -175,7 +175,7 @@ services:
       - MYSQL_PORT=3306
       - KAFKA_ROLE=consumer
       - PYTHONUNBUFFERED=1
-    command: ["python", "scripts/kafka_consumer.py"]
+    command: ["python", "-m", "ingest.consumer"]
 
   # ── 7. PHARMAWATCH APPLICATION (Gunicorn + Flask) ──────────────────────────
   pharmawatch:

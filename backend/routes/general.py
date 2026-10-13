@@ -27,7 +27,7 @@ def serve_index():
 @general_bp.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint checking server, ML model status, and MySQL database connectivity."""
-    from helpers.models import MODEL_NAME
+    from ml.ner import MODEL_NAME
     db_status = "not_connected"
     try:
         p = ping()

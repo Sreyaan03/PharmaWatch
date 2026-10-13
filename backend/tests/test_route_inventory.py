@@ -69,7 +69,7 @@ def isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(mysql, "load_dotenv", lambda *a, **k: False)
 
     # The HBase circuit breaker is process-global; earlier tests may have tripped it.
-    for module_name in ("helpers.external_apis", "clients.hbase"):
+    for module_name in ("clients.hbase",):
         module = sys.modules.get(module_name)
         if module is not None and hasattr(module, "_hbase_online_cached"):
             monkeypatch.setattr(module, "_hbase_online_cached", True)

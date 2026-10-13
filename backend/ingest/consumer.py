@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-kafka_consumer.py — PharmaWatch Kafka Consumer (Production MySQL Engine)
+ingest/consumer.py — PharmaWatch Kafka Consumer (Production MySQL Engine)
 
 Reads all 4 topics and writes processed data into MySQL:
   faers-raw        → signals_cache (PRR computed from co-occurrence counts)
@@ -20,11 +20,8 @@ from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 from dotenv import load_dotenv
 
-# Ensure backend directory is in sys.path
-backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-
+# Run from the backend directory: `python -m ingest.consumer`
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(backend_dir, ".env"))
 
 from db.mysql import query, query_one, execute, ping

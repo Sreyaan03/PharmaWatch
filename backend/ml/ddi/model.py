@@ -1,4 +1,4 @@
-# scripts/models_ddi.py
+# backend/ml/ddi/model.py
 # ─────────────────────────────────────────────────────────────────────────────
 # GINEConv Drug-Drug Interaction Architecture:
 # - Rich 22-d node features + 10-d edge features

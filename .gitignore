@@ -62,3 +62,6 @@ backend/app_err.log
 backend/app_out.log
 backend/app_err.txt
 backend/app_out.txt
+
+# Per-seed training checkpoints (reproducible from scripts/train_gnn_model.py)
+backend/trained_models/checkpoints/

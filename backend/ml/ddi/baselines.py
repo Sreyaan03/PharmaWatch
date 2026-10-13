@@ -1,4 +1,4 @@
-# scripts/baselines_ddi.py
+# backend/ml/ddi/baselines.py
 # ─────────────────────────────────────────────────────────────────────────────
 # Classical Machine Learning & Nearest-Neighbor Baselines for DDI Prediction:
 # 1. Feature Representation: 2048-bit Morgan Fingerprints (radius=2)
@@ -22,15 +22,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, average_precision_score
 import xgboost as xgb
 
-SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'data'))
-SPLITS_DIR = os.path.join(DATA_DIR, 'splits')
-MODEL_DIR = os.path.abspath(os.path.join(SCRIPTS_DIR, '..', 'backend', 'trained_models'))
-
-if SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SCRIPTS_DIR)
-
-from models_ddi import smiles_to_fingerprint
+from core.config import SPLITS_DIR, MODEL_DIR
+from ml.ddi.model import smiles_to_fingerprint
 
 
 def build_drug_fingerprints(drug_metadata):

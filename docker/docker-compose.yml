@@ -106,7 +106,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - PYTHONUNBUFFERED=1
       - KAFKA_ROLE=producer
-    command: ["python", "scripts/kafka_producer.py"]
+    command: ["python", "-m", "ingest.producer"]
     restart: unless-stopped
 
   # ── 5. KAFKA CONSUMER — processes topics, writes to SQLite ─────────────────
@@ -127,7 +127,7 @@ services:
       - KAFKA_ROLE=consumer
     volumes:
       - ../backend:/app/backend   # shares SQLite DB with the Flask app
-    command: ["python", "scripts/kafka_consumer.py"]
+    command: ["python", "-m", "ingest.consumer"]
     restart: unless-stopped
 
   # ── 6. PHARMAWATCH FLASK APP ───────────────────────────────────────────────
