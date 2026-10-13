@@ -24,6 +24,12 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "schema.sql")
 LEGACY_SQLITE_PATH = os.path.join(BASE_DIR, "pharmawatch.db")
 
+# (table, column, definition) for columns added to tables that may already exist. Idempotent.
+ADDITIVE_COLUMNS = [
+    ("signals_cache", "data_version", "VARCHAR(160) NULL AFTER `source`"),
+]
+
+
 def parse_args():
     env_file = os.path.join(BASE_DIR, ".env")
     if os.path.exists(env_file):
@@ -128,6 +134,19 @@ def run_migrations(args):
                 except Exception as e:
                     log.error(f"Error executing statement [{idx}]: {e}\nSQL:\n{stmt}")
                     return False
+        app_conn.commit()
+
+        # Columns added after a table was first created (CREATE TABLE IF NOT EXISTS does not add them)
+        with app_conn.cursor() as cur:
+            for table, column, ddl in ADDITIVE_COLUMNS:
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s",
+                    (table, column),
+                )
+                if cur.fetchone()["n"] == 0:
+                    cur.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}")
+                    log.info(f"Added column {table}.{column}")
         app_conn.commit()
 
         # Verify created tables

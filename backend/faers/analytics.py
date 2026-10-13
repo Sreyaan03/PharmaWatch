@@ -3,7 +3,7 @@ import os
 import duckdb
 import numpy as np
 from core.config import data_dir
-from .stats import zscore_spikes
+from .stats import contingency, zscore_spikes
 import logging
 log = logging.getLogger(__name__)
 
@@ -574,3 +574,45 @@ def get_demographics_geo_duckdb(drug, event):
         return None
 
 
+IDENTITY_TABLES = {"drug_identity", "case_drug", "pt_dictionary"}
+
+
+def identity_ready():
+    """True when the loaded database has the drug and event identity tables."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        tables = {t[0] for t in conn.execute("SHOW TABLES").fetchall()}
+        return IDENTITY_TABLES <= tables
+    except Exception as e:
+        log.error(f"[-] Error checking identity tables: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def compute_prr_ingredients(ingredient_rxcuis, pt):
+    """Disproportionality for RxNorm ingredient(s) and a Preferred Term.
+
+    Counts come from stats.contingency, the single source of 2x2 tables.
+    Returns None when the database or its identity tables are not available.
+    """
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        tables = {t[0] for t in conn.execute("SHOW TABLES").fetchall()}
+        if not IDENTITY_TABLES <= tables:
+            return None
+        counts = contingency(conn, ingredient_rxcuis, pt)
+    except Exception as e:
+        log.error(f"[-] Error computing disproportionality from identity tables: {e}")
+        return None
+    finally:
+        conn.close()
+
+    from .disproportionality import compute_metrics
+    res = compute_metrics(counts["a"], counts["b"], counts["c"], counts["d"])
+    res["source"] = "faers_local"
+    return res

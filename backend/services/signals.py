@@ -6,6 +6,7 @@ import traceback
 import uuid
 
 from database import (get_cached_signals, upsert_signal, insert_drug_event)
+from services.identity import IdentityService
 from reddit_scraper import scrape_all, process_posts_with_ner
 from ml.ocr import get_easyocr_reader
 from services.text_mining import MINING_TASKS
@@ -15,13 +16,69 @@ from ml.ner import run_ner
 import logging
 log = logging.getLogger(__name__)
 
+_IDENTITY = None
+
+
+def _identity():
+    """Process-wide identity service (loaded data first, then RxNav with an on-disk cache)."""
+    global _IDENTITY
+    if _IDENTITY is None:
+        from clients.rxnav import RxNavClient
+        from faers.identity_build import cache_path
+        _IDENTITY = IdentityService(rxnav=RxNavClient(cache_path=cache_path()))
+    return _IDENTITY
+
+
+def _local_metrics(drug, event):
+    """Disproportionality from the loaded FAERS data, or None when it is not available.
+
+    With the identity tables present the drug is resolved to RxNorm ingredient(s) and the event
+    to a Preferred Term first; a name that cannot be resolved is reported as such, with zero
+    counts, rather than being matched loosely. Databases built before the identity tables existed
+    use the older name matching.
+    """
+    from faers import analytics
+    from faers.disproportionality import compute_metrics
+
+    if not analytics.identity_ready():
+        return analytics.compute_prr_duckdb(drug, event)
+
+    ident = _identity()
+    try:
+        d = ident.resolve_drug(drug)
+    except Exception as exc:                     # RxNav unreachable: unresolved, not guessed
+        log.warning(f"[IDENTITY] drug lookup failed for {drug!r}: {exc}")
+        d = {"resolved": False, "ingredients": [], "match": None, "source": None, "suggestion": None}
+    e = ident.resolve_event(event)
+
+    identity = {
+        "drug": {"input": drug, "resolved": d["resolved"], "ingredients": d["ingredients"],
+                 "source": d.get("source"), "suggestion": d.get("suggestion")},
+        "event": {"input": event, "resolved": e["resolved"], "pt": e["pt"], "match": e["match"],
+                  "note": e["note"], "candidates": e["candidates"]},
+    }
+    if not (d["resolved"] and e["resolved"]):
+        res = compute_metrics(0, 0, 0, 0)
+        res.update(source="faers_local", identity=identity,
+                   unresolved=[k for k in ("drug", "event") if not identity[k]["resolved"]])
+        return res
+
+    res = analytics.compute_prr_ingredients([i["rxcui"] for i in d["ingredients"]], e["pt"])
+    if res is not None:
+        res["identity"] = identity
+    return res
+
+
 def compute_disproportionality_helper(drug, event, source=None):
-    """Calculates PRR, ROR, BCPNN from DuckDB if available, otherwise openFDA data."""
-    # 1. Try DuckDB (if source is not explicitly openfda)
+    """Calculates PRR, ROR, BCPNN from the local FAERS data if available, otherwise openFDA data.
+
+    The openFDA path is a labelled fallback ('source': 'openfda', 'fallback': True): it matches
+    free-text product names, so its counts are approximate and are not comparable with the local ones.
+    """
+    # 1. Try the local FAERS database (if source is not explicitly openfda)
     if source != "openfda":
         try:
-            from faers.analytics import compute_prr_duckdb
-            duck_res = compute_prr_duckdb(drug, event)
+            duck_res = _local_metrics(drug, event)
             if duck_res is not None:
                 duck_res["source"] = "faers_local"
                 return duck_res
@@ -46,8 +103,10 @@ def compute_disproportionality_helper(drug, event, source=None):
                 return data["meta"]["results"]["total"]
             return 0
 
-        a = fetch_count(f'patient.drug.medicinalproduct:"{drug}" AND patient.reaction.reactionmeddrapt:"{event}"')
-        ab = fetch_count(f'patient.drug.medicinalproduct:"{drug}"')
+        # drugcharacterization:1 = suspect drug; concomitant drugs are not counted as exposure
+        suspect = f'patient.drug.medicinalproduct:"{drug}" AND patient.drug.drugcharacterization:1'
+        a = fetch_count(f'{suspect} AND patient.reaction.reactionmeddrapt:"{event}"')
+        ab = fetch_count(suspect)
         ac = fetch_count(f'patient.reaction.reactionmeddrapt:"{event}"')
         total = fetch_count('_exists_:patient')
 
@@ -58,6 +117,8 @@ def compute_disproportionality_helper(drug, event, source=None):
         from faers.disproportionality import compute_metrics
         res = compute_metrics(a, b, c, d)
         res["source"] = "openfda"
+        res["fallback"] = True
+        res["note"] = "openFDA live query: free-text product match, approximate; not the loaded FAERS data"
         return res
     except Exception as e:
         log.error(f"[DISPROPORTIONALITY ERROR] {drug} + {event}: {e}")
@@ -89,11 +150,21 @@ def ner_endpoint(data):
     except Exception as exc:
         return {"error": str(exc)}, 500
 
+def _data_version():
+    from faers.registry import data_version
+    return data_version()
+
+
 def get_signals(source, refresh):
     """Returns calculated disproportionality signals for the curated watchlist."""
     signals = []
+    version = _data_version()
     cached_list = get_cached_signals(100)
-    cached_map = {} if refresh else {(s["drug"].lower(), s["event"].lower()): s for s in cached_list}
+    # a cached row is only valid for the data version it was computed from
+    cached_map = {} if refresh else {
+        (s["drug"].lower(), s["event"].lower()): s
+        for s in cached_list if s.get("data_version") == version
+    }
 
     for drug, event in WATCHLIST:
         pair_key = (drug.lower(), event.lower())
@@ -104,9 +175,9 @@ def get_signals(source, refresh):
             metrics = compute_disproportionality_helper(drug, event, source=source)
             if metrics:
                 metric_source = metrics.get("source", "openfda")
-                upsert_signal(drug, event, metrics, source=metric_source)
+                upsert_signal(drug, event, metrics, source=metric_source, data_version=version)
                 signal_data = metrics.copy()
-                signal_data.update({"drug": drug, "event": event, "source": metric_source})
+                signal_data.update({"drug": drug, "event": event, "source": metric_source, "data_version": version})
                 signals.append(signal_data)
 
     watchlist_keys = {(d.lower(), e.lower()) for d, e in WATCHLIST}
@@ -216,14 +287,18 @@ def get_prr(drug, event, source):
     if not metrics:
         return {"error": "Failed to compute disproportionality or no data found"}, 500
 
-    return {
+    body = {
         "drug": drug,
         "event": event,
         "a": metrics["a"], "b": metrics["b"], "c": metrics["c"], "d": metrics["d"],
         "prr": metrics["prr"],
         "is_signal": metrics["prr"] > 2.0 and metrics["a"] >= 3,
         "source": metrics.get("source", "openfda")
-    }, 200
+    }
+    for key in ("identity", "unresolved", "fallback", "note"):
+        if key in metrics:
+            body[key] = metrics[key]
+    return body, 200
 
 
 def register_ner_task(text, uploaded_file):

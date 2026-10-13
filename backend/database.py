@@ -219,42 +219,52 @@ def get_recent_predictions(limit=20):
 
 # ── Disproportionality Signals Cache Helpers ─────────────────────────────────
 
-def upsert_signal(drug, event, metrics, source="faers"):
-    """Upsert computed disproportionality metrics into signals_cache."""
-    sql = """
-        INSERT INTO signals_cache (
-            drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high,
-            chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-        ON DUPLICATE KEY UPDATE
-            a = VALUES(a), b = VALUES(b), c = VALUES(c), d = VALUES(d),
-            prr = VALUES(prr), prr_ci_low = VALUES(prr_ci_low), prr_ci_high = VALUES(prr_ci_high),
-            ror = VALUES(ror), ror_ci_low = VALUES(ror_ci_low), ror_ci_high = VALUES(ror_ci_high),
-            chi2 = VALUES(chi2), bcpnn_ic = VALUES(bcpnn_ic), ic025 = VALUES(ic025),
-            n_reports = VALUES(n_reports), signal_strength = VALUES(signal_strength),
-            source = VALUES(source), computed_at = NOW()
+def upsert_signal(drug, event, metrics, source="faers", data_version=None):
+    """Upsert computed disproportionality metrics into signals_cache.
+
+    `data_version` records which FAERS data the numbers came from; a cached row is only
+    reused while it matches the data currently loaded.
     """
+    base_cols = ("drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high, "
+                 "chi2, bcpnn_ic, ic025, n_reports, signal_strength, source")
+    base_update = (
+        "a = VALUES(a), b = VALUES(b), c = VALUES(c), d = VALUES(d), "
+        "prr = VALUES(prr), prr_ci_low = VALUES(prr_ci_low), prr_ci_high = VALUES(prr_ci_high), "
+        "ror = VALUES(ror), ror_ci_low = VALUES(ror_ci_low), ror_ci_high = VALUES(ror_ci_high), "
+        "chi2 = VALUES(chi2), bcpnn_ic = VALUES(bcpnn_ic), ic025 = VALUES(ic025), "
+        "n_reports = VALUES(n_reports), signal_strength = VALUES(signal_strength), source = VALUES(source)"
+    )
+    sql_versioned = (f"INSERT INTO signals_cache ({base_cols}, data_version, computed_at) "
+                     f"VALUES ({', '.join(['%s'] * 19)}, NOW()) "
+                     f"ON DUPLICATE KEY UPDATE {base_update}, data_version = VALUES(data_version), computed_at = NOW()")
+    sql_plain = (f"INSERT INTO signals_cache ({base_cols}, computed_at) "
+                 f"VALUES ({', '.join(['%s'] * 18)}, NOW()) "
+                 f"ON DUPLICATE KEY UPDATE {base_update}, computed_at = NOW()")
+
+    def num(key):
+        return float(metrics[key]) if metrics.get(key) is not None else None
+
+    params = (
+        drug.strip().lower(), event.strip().lower(),
+        int(metrics.get("a", 0)), int(metrics.get("b", 0)),
+        int(metrics.get("c", 0)), int(metrics.get("d", 0)),
+        num("prr"), num("prr_ci_low"), num("prr_ci_high"),
+        num("ror"), num("ror_ci_low"), num("ror_ci_high"),
+        num("chi2"), num("bcpnn_ic"), num("ic025"),
+        int(metrics.get("n_reports", 0)),
+        metrics.get("signal_strength", "None"),
+        source,
+    )
     try:
-        execute(sql, (
-            drug.strip().lower(), event.strip().lower(),
-            int(metrics.get("a", 0)), int(metrics.get("b", 0)),
-            int(metrics.get("c", 0)), int(metrics.get("d", 0)),
-            float(metrics["prr"]) if metrics.get("prr") is not None else None,
-            float(metrics["prr_ci_low"]) if metrics.get("prr_ci_low") is not None else None,
-            float(metrics["prr_ci_high"]) if metrics.get("prr_ci_high") is not None else None,
-            float(metrics["ror"]) if metrics.get("ror") is not None else None,
-            float(metrics["ror_ci_low"]) if metrics.get("ror_ci_low") is not None else None,
-            float(metrics["ror_ci_high"]) if metrics.get("ror_ci_high") is not None else None,
-            float(metrics["chi2"]) if metrics.get("chi2") is not None else None,
-            float(metrics["bcpnn_ic"]) if metrics.get("bcpnn_ic") is not None else None,
-            float(metrics["ic025"]) if metrics.get("ic025") is not None else None,
-            int(metrics.get("n_reports", 0)),
-            metrics.get("signal_strength", "None"),
-            source
-        ))
+        execute(sql_versioned, params + (data_version,))
     except Exception as e:
-        log.error(f"[DB] upsert_signal failed: {e}")
+        # A database created before data_version existed: store the row without it. The reader
+        # treats an unversioned row as stale, so it is recomputed rather than trusted.
+        log.warning(f"[DB] upsert_signal with data_version failed ({e}); run backend/db/migrate.py")
+        try:
+            execute(sql_plain, params)
+        except Exception as e2:
+            log.error(f"[DB] upsert_signal failed: {e2}")
 
 
 def get_cached_signals(limit=100):

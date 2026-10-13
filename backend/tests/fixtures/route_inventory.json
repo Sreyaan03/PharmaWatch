@@ -294,7 +294,9 @@
         "d",
         "drug",
         "event",
+        "fallback",
         "is_signal",
+        "note",
         "prr",
         "source"
       ],

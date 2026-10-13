@@ -94,9 +94,9 @@ Plans:
   7. Every watchlist event is a Preferred Term present in the loaded data.
 
 Plans:
-- [ ] 06-01: Parser and loader: keep `caseid`, `caseversion`, `age_cod`, read THER and OUTC, de-duplicate, quarter registry, sequential low-memory load; move the mock generator to test fixtures
-- [ ] 06-02: Identity service: RxNav client with a local cache table, Preferred Term dictionary built from loaded data, watchlist correction
-- [ ] 06-03: Single statistics path: all counts through `faers/`, openFDA as a labelled fallback restricted to suspect drugs; run the 20-quarter load
+- [x] 06-01: Parser and loader: keep `caseid`, `caseversion`, `age_cod`, read THER and OUTC, de-duplicate, quarter registry, sequential low-memory load; move the mock generator to test fixtures
+- [x] 06-02: Identity service: RxNav client with a local cache table, Preferred Term dictionary built from loaded data, watchlist correction
+- [~] 06-03 (code complete; 20-quarter load pending the FDA host): Single statistics path: all counts through `faers/`, openFDA as a labelled fallback restricted to suspect drugs; run the 20-quarter load
 
 ### Phase 7 (Day 3): Statistical Correctness
 **Goal**: Every displayed number is computed from data or absent. No invented values, no mislabelled classes, no causal claims from report counts.
@@ -195,7 +195,7 @@ Plans:
 | 3. Backend Modularization & MySQL | 2/2 | Complete | 2026-10-11 |
 | 4. DDI Prediction Model Rigor | 4/4 | Complete | 2026-10-12 |
 | 5. Baseline & Clean Architecture | 3/3 | Complete | 2026-10-13 |
-| 6. Real FAERS Data Foundation | 0/3 | Planned | — |
+| 6. Real FAERS Data Foundation | 2/3 + 06-03 code | In progress (data load pending) | — |
 | 7. Statistical Correctness | 0/3 | Planned | — |
 | 8. Validation Harness | 0/3 | Planned | — |
 | 9. Prescription Review | 0/3 | Planned | — |

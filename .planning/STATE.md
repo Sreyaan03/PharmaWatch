@@ -10,10 +10,10 @@ See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidenc
 
 ## Current Position
 
-Phase: 6 of 11 (Real FAERS Data Foundation) — not started
-Plan: 0 of 3 in current phase
-Status: Phase 5 complete (3 of 3 plans). Backend is layered and tested; behaviour verified unchanged.
-Last activity: 2026-10-13 — Phase 5 executed on branch feat/milestone-2-pilot.
+Phase: 6 of 11 (Real FAERS Data Foundation) — in progress
+Plan: 06-03 code complete; its 20-quarter load is waiting on the FDA host (connection resets since 2026-10-13)
+Status: 06-01 and 06-02 done and committed. One real quarter (2026Q2) loaded.
+Last activity: 2026-10-13 — ingest, identity and single statistics path built and tested.
 
 Progress: [█████░░░░░░] 5 of 11 phases complete
 

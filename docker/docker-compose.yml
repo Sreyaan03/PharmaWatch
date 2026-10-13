@@ -148,6 +148,7 @@ services:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - DATA_DIR=/app/data
     volumes:
       - ../data/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
       - ../data/twosides.parquet:/app/data/twosides.parquet:ro

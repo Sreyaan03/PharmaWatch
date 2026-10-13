@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS signals_cache (
     n_reports INT NOT NULL DEFAULT 0,
     signal_strength VARCHAR(32) DEFAULT NULL,
     source VARCHAR(64) NOT NULL DEFAULT 'faers',
+    data_version VARCHAR(160) DEFAULT NULL,
     computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_signals_drug_event (drug, event),
     INDEX idx_signals_drug (drug),
