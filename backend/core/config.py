@@ -21,9 +21,10 @@ def data_dir():
     return os.getenv("DATA_DIR") or REPO_DATA_DIR
 
 
-# Curated drug-event pairs shown by default in the signal table
+# Curated drug-event pairs shown by default in the signal table.
+# Events are MedDRA Preferred Terms as they appear in FAERS (checked by test_identity).
 WATCHLIST = [
-    ("Warfarin", "Bleeding"),
+    ("Warfarin", "Subdural haematoma"),
     ("Ciprofloxacin", "Tendon Rupture"),
     ("Metformin", "Lactic Acidosis"),
     ("Amiodarone", "Pulmonary Toxicity"),
@@ -31,11 +32,11 @@ WATCHLIST = [
     ("Methotrexate", "Hepatotoxicity"),
     ("Simvastatin", "Rhabdomyolysis"),
     ("Isotretinoin", "Depression"),
-    ("Lithium", "Nephrotoxicity"),
+    ("Lithium", "Nephropathy toxic"),
     ("Valproate", "Hepatotoxicity"),
-    ("Haloperidol", "QT Prolongation"),
+    ("Haloperidol", "Electrocardiogram QT prolonged"),
     ("Oxycodone", "Respiratory Depression"),
-    ("Paclitaxel", "Peripheral Neuropathy"),
-    ("Amlodipine", "Peripheral Edema"),
+    ("Paclitaxel", "Neuropathy peripheral"),
+    ("Amlodipine", "Oedema peripheral"),
     ("Atorvastatin", "Myalgia")
 ]

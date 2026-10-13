@@ -1,0 +1,16 @@
+term,pt,source,note
+bleeding,Haemorrhage,MedDRA lower-level term of PT Haemorrhage (verify against licensed MedDRA),Bleeding is reported under many specific PTs; the PT Haemorrhage alone undercounts it. Group terms (SMQ) need a MedDRA licence.
+hemorrhage,Haemorrhage,US spelling of the PT,
+stomach bleeding,Gastrointestinal haemorrhage,MedDRA lower-level term (verify against licensed MedDRA),
+gi bleed,Gastrointestinal haemorrhage,MedDRA lower-level term (verify against licensed MedDRA),
+qt prolongation,Electrocardiogram QT prolonged,MedDRA lower-level term (verify against licensed MedDRA),
+qt interval prolongation,Electrocardiogram QT prolonged,MedDRA lower-level term (verify against licensed MedDRA),
+prolonged qt interval,Electrocardiogram QT prolonged,MedDRA lower-level term (verify against licensed MedDRA),
+peripheral edema,Oedema peripheral,US spelling of the PT,
+nephrotoxicity,Nephropathy toxic,MedDRA lower-level term (verify against licensed MedDRA),
+kidney toxicity,Nephropathy toxic,MedDRA lower-level term (verify against licensed MedDRA),
+renal toxicity,Nephropathy toxic,MedDRA lower-level term (verify against licensed MedDRA),
+peripheral neuropathy,Neuropathy peripheral,MedDRA lower-level term (verify against licensed MedDRA),
+liver toxicity,Hepatotoxicity,MedDRA lower-level term (verify against licensed MedDRA),
+heart attack,Myocardial infarction,MedDRA lower-level term (verify against licensed MedDRA),
+high blood pressure,Hypertension,MedDRA lower-level term (verify against licensed MedDRA),
