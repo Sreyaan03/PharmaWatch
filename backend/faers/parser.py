@@ -1,124 +1,214 @@
 # backend/faers/parser.py
-import os
-import zipfile
-import pandas as pd
-import argparse
-import io
+# Converts one FAERS quarterly ASCII zip into Parquet files, streaming each member so memory
+# stays bounded (a real DRUG file is about 150 MB of text).
+#
+#   python -m faers.parser --quarters 2026q2        # one or more quarters from <DATA_DIR>/faers_raw
+#   python -m faers.parser --all                    # every verified zip found there
+#
+# Output, in <DATA_DIR>/faers_parquet:  demo_2026q2.parquet, drug_..., reac_..., ther_...,
+# outc_..., dele_...  and  manifest_2026q2.json  (row counts, checksum, malformed-row count).
 
-def parse_zip_file(year, qtr):
-    """Parses a FAERS ZIP file and saves DEMO, DRUG, and REAC as Parquet files."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    raw_dir = os.path.join(base_dir, "data", "faers_raw")
-    parquet_dir = os.path.join(base_dir, "data", "faers_parquet")
-    os.makedirs(parquet_dir, exist_ok=True)
-    
-    zip_filename = f"faers_ascii_{year}q{qtr}.zip"
-    zip_path = os.path.join(raw_dir, zip_filename)
-    
-    if not os.path.exists(zip_path):
-        print(f"[-] ZIP file not found at: {zip_path}")
-        return False
-        
-    print(f"[*] Parsing {zip_filename}...")
-    
-    # Identify internal file names for DEMO, DRUG, REAC
-    demo_file = None
-    drug_file = None
-    reac_file = None
-    
+import argparse
+import datetime
+import json
+import os
+import re
+import sys
+import zipfile
+
+import pyarrow as pa
+import pyarrow.csv as pacsv
+import pyarrow.parquet as pq
+
+from core.config import data_dir
+
+# Columns kept per table. Missing columns in older files are written as nulls.
+TABLES = {
+    "demo": ["primaryid", "caseid", "caseversion", "i_f_code", "event_dt", "fda_dt",
+             "age", "age_cod", "sex", "reporter_country", "occr_country"],
+    "drug": ["primaryid", "caseid", "drug_seq", "role_cod", "drugname", "prod_ai"],
+    "reac": ["primaryid", "pt"],
+    "ther": ["primaryid", "dsg_drug_seq", "start_dt", "end_dt"],
+    "outc": ["primaryid", "outc_cod"],
+}
+REQUIRED = ("demo", "drug", "reac", "ther", "outc")
+
+# A real quarter has hundreds of thousands of reports; anything far smaller is a sample or a mock.
+MIN_REAL_DEMO_ROWS = 50_000
+
+
+class NotARealQuarter(ValueError):
+    """The zip is missing members or is implausibly small for a FAERS quarter."""
+
+
+def parquet_dir():
+    path = os.path.join(data_dir(), "faers_parquet")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _label_from_zip(zip_path):
+    m = re.search(r"(\d{4})q([1-4])", os.path.basename(zip_path), re.IGNORECASE)
+    if not m:
+        raise ValueError(f"Cannot read the quarter from the file name: {zip_path}")
+    return f"{m.group(1)}q{m.group(2)}"
+
+
+def _find_members(zf):
+    """Map table name -> zip member, matching on the file's base name (case-insensitive)."""
+    found = {}
+    for name in zf.namelist():
+        base = os.path.basename(name).upper()
+        if not base.endswith(".TXT") or base.endswith("/"):
+            continue
+        for table in TABLES:
+            if base.startswith(table.upper()):
+                found[table] = name
+        if base.startswith("DELE"):
+            found["dele"] = name
+    return found
+
+
+def _stream_table(zf, member, columns, writer_path, quarter_label):
+    """Stream one delimited member into a Parquet file. Returns (rows, malformed_rows)."""
+    bad = {"n": 0}
+
+    def on_invalid(_row):
+        bad["n"] += 1
+        return "skip"
+
+    with zf.open(member) as raw:
+        reader = pacsv.open_csv(
+            raw,
+            read_options=pacsv.ReadOptions(encoding="latin1", block_size=8 * 1024 * 1024),
+            parse_options=pacsv.ParseOptions(delimiter="$", quote_char=False, invalid_row_handler=on_invalid),
+            convert_options=pacsv.ConvertOptions(
+                column_types={c: pa.string() for c in columns},
+                include_columns=columns,
+                include_missing_columns=True,
+                strings_can_be_null=False,
+            ),
+        )
+        schema = pa.schema([(c, pa.string()) for c in columns] + [("quarter", pa.string())])
+        rows = 0
+        with pq.ParquetWriter(writer_path, schema, compression="snappy") as writer:
+            for batch in reader:
+                n = batch.num_rows
+                table = pa.Table.from_batches([batch]).append_column("quarter", pa.array([quarter_label] * n, pa.string()))
+                writer.write_table(table.cast(schema))
+                rows += n
+    return rows, bad["n"]
+
+
+def _read_deleted_cases(zf, member):
+    """The DELETE file lists case ids, one per line, preceded by a blank line."""
+    ids = []
+    with zf.open(member) as f:
+        for line in f.read().decode("latin1").splitlines():
+            token = line.strip()
+            if token.isdigit():
+                ids.append(token)
+    return ids
+
+
+def parse_quarter(zip_path, out_dir=None, allow_fixture=False, log=print):
+    """Parse one quarter zip into Parquet and write its manifest. Returns the manifest dict."""
+    out_dir = out_dir or parquet_dir()
+    os.makedirs(out_dir, exist_ok=True)
+    label = _label_from_zip(zip_path)
+
+    with zipfile.ZipFile(zip_path) as zf:
+        members = _find_members(zf)
+        missing = [t for t in REQUIRED if t not in members]
+        if missing:
+            raise NotARealQuarter(f"{label}: missing {missing} in {os.path.basename(zip_path)}; found {sorted(members)}")
+
+        manifest = {"quarter": label, "zip": os.path.basename(zip_path), "tables": {}, "malformed_rows": {}}
+        for table, columns in TABLES.items():
+            path = os.path.join(out_dir, f"{table}_{label}.parquet")
+            log(f"[*] {label}: {table} <- {members[table]}")
+            rows, bad = _stream_table(zf, members[table], columns, path, label)
+            manifest["tables"][table] = rows
+            if bad:
+                manifest["malformed_rows"][table] = bad
+            if table == "demo" and rows < MIN_REAL_DEMO_ROWS and not allow_fixture:
+                os.remove(path)
+                raise NotARealQuarter(
+                    f"{label}: only {rows} reports (a real quarter has more than {MIN_REAL_DEMO_ROWS}). "
+                    "This looks like a sample or mock file; refusing to load it."
+                )
+
+        deleted = _read_deleted_cases(zf, members["dele"]) if "dele" in members else []
+        dele_schema = pa.schema([("caseid", pa.string()), ("quarter", pa.string())])
+        pq.write_table(
+            pa.table({"caseid": pa.array(deleted, pa.string()), "quarter": pa.array([label] * len(deleted), pa.string())},
+                     schema=dele_schema),
+            os.path.join(out_dir, f"dele_{label}.parquet"),
+        )
+        manifest["deleted_cases"] = len(deleted)
+
+    sidecar = zip_path + ".sha256"
+    if os.path.exists(sidecar):
+        with open(sidecar, encoding="utf-8") as f:
+            manifest["zip_sha256"] = f.read().split()[0]
+    else:
+        from faers.downloader import sha256_of
+        manifest["zip_sha256"] = sha256_of(zip_path)
+    manifest["fixture"] = bool(allow_fixture)
+    manifest["parsed_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+    with open(os.path.join(out_dir, f"manifest_{label}.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    log(f"[+] {label}: {manifest['tables']['demo']:,} reports, {manifest['tables']['drug']:,} drug rows, "
+        f"{manifest['deleted_cases']:,} deleted cases"
+        + (f", malformed rows skipped: {manifest['malformed_rows']}" if manifest["malformed_rows"] else ""))
+    return manifest
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Parse FAERS quarterly zips into Parquet.")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--quarters", nargs="+", metavar="YYYYqN")
+    group.add_argument("--all", action="store_true", help="every verified zip in faers_raw")
+    parser.add_argument("--force", action="store_true", help="re-parse quarters that already have a manifest")
+    args = parser.parse_args(argv)
+
     try:
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            namelist = zf.namelist()
-            for name in namelist:
-                basename = os.path.basename(name).upper()
-                if basename.startswith("DEMO") and (basename.endswith(".TXT") or basename.endswith(".DAT")):
-                    demo_file = name
-                elif basename.startswith("DRUG") and (basename.endswith(".TXT") or basename.endswith(".DAT")):
-                    drug_file = name
-                elif basename.startswith("REAC") and (basename.endswith(".TXT") or basename.endswith(".DAT")):
-                    reac_file = name
-                    
-            if not demo_file or not drug_file or not reac_file:
-                print(f"[-] Could not find required DEMO, DRUG, or REAC files inside the ZIP.")
-                print(f"[-] Found files: {namelist}")
-                return False
-                
-            print(f"[*] Found files: DEMO={demo_file}, DRUG={drug_file}, REAC={reac_file}")
-            
-            # Helper to read table from zip
-            def read_txt(filename):
-                with zf.open(filename) as f:
-                    # Read bytes and decode with latin-1 or utf-8
-                    content = f.read()
-                    try:
-                        decoded = content.decode('utf-8')
-                    except UnicodeDecodeError:
-                        decoded = content.decode('latin-1')
-                    return pd.read_csv(io.StringIO(decoded), sep='$', low_memory=False, dtype=str)
-            
-            # 1. Parse DEMO file
-            print("[*] Reading DEMO file...")
-            df_demo = read_txt(demo_file)
-            # Standardize primaryid (older versions used isr)
-            if 'isr' in df_demo.columns and 'primaryid' not in df_demo.columns:
-                df_demo.rename(columns={'isr': 'primaryid'}, inplace=True)
-            
-            # Ensure primaryid exists
-            if 'primaryid' not in df_demo.columns:
-                print("[-] 'primaryid' (or 'isr') not found in DEMO columns.")
-                return False
-                
-            # Keep only columns we need
-            demo_cols = ['primaryid', 'event_dt', 'age', 'sex', 'occr_country']
-            demo_cols = [c for c in demo_cols if c in df_demo.columns]
-            df_demo = df_demo[demo_cols]
-            
-            # 2. Parse DRUG file
-            print("[*] Reading DRUG file...")
-            df_drug = read_txt(drug_file)
-            if 'isr' in df_drug.columns and 'primaryid' not in df_drug.columns:
-                df_drug.rename(columns={'isr': 'primaryid'}, inplace=True)
-                
-            drug_cols = ['primaryid', 'drug_seq', 'role_cod', 'drugname']
-            drug_cols = [c for c in drug_cols if c in df_drug.columns]
-            df_drug = df_drug[drug_cols]
-            
-            # 3. Parse REAC file
-            print("[*] Reading REAC file...")
-            df_reac = read_txt(reac_file)
-            if 'isr' in df_reac.columns and 'primaryid' not in df_reac.columns:
-                df_reac.rename(columns={'isr': 'primaryid'}, inplace=True)
-                
-            reac_cols = ['primaryid', 'pt']
-            reac_cols = [c for c in reac_cols if c in df_reac.columns]
-            df_reac = df_reac[reac_cols]
-            
-            # Save to Parquet
-            demo_parquet = os.path.join(parquet_dir, f"demo_{year}q{qtr}.parquet")
-            drug_parquet = os.path.join(parquet_dir, f"drug_{year}q{qtr}.parquet")
-            reac_parquet = os.path.join(parquet_dir, f"reac_{year}q{qtr}.parquet")
-            
-            print(f"[*] Writing to parquet: {demo_parquet}")
-            df_demo.to_parquet(demo_parquet, compression='snappy', index=False)
-            
-            print(f"[*] Writing to parquet: {drug_parquet}")
-            df_drug.to_parquet(drug_parquet, compression='snappy', index=False)
-            
-            print(f"[*] Writing to parquet: {reac_parquet}")
-            df_reac.to_parquet(reac_parquet, compression='snappy', index=False)
-            
-            print(f"[+] Successfully parsed and saved Parquet files for {year} Q{qtr}!")
-            return True
-            
-    except Exception as e:
-        print(f"[-] Error parsing ZIP: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        from dotenv import load_dotenv
+        from core.config import BACKEND_DIR
+        load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
+    except ImportError:
+        pass
+
+    from faers.downloader import raw_dir, is_verified
+    raw = raw_dir()
+    if args.all:
+        zips = sorted(os.path.join(raw, n) for n in os.listdir(raw) if n.lower().endswith(".zip"))
+    else:
+        zips = [os.path.join(raw, f"faers_ascii_{q.lower()}.zip") for q in args.quarters]
+
+    out = parquet_dir()
+    failures = 0
+    for zp in zips:
+        label = _label_from_zip(zp)
+        if not os.path.exists(zp):
+            print(f"[-] {label}: {zp} not found; run faers.downloader first.", file=sys.stderr)
+            failures += 1
+            continue
+        if not is_verified(zp):
+            print(f"[-] {label}: {os.path.basename(zp)} has no verified checksum; run faers.downloader first.", file=sys.stderr)
+            failures += 1
+            continue
+        if os.path.exists(os.path.join(out, f"manifest_{label}.json")) and not args.force:
+            print(f"[=] {label}: already parsed (use --force to redo)")
+            continue
+        try:
+            parse_quarter(zp, out)
+        except Exception as exc:
+            print(f"[-] {label}: {exc}", file=sys.stderr)
+            failures += 1
+    return 1 if failures else 0
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="FAERS Ingestion Parser")
-    parser.add_argument("--year", type=int, default=2023, help="Year of the dataset")
-    parser.add_argument("--qtr", type=int, default=4, help="Quarter of the dataset (1, 2, 3, 4)")
-    args = parser.parse_args()
-    parse_zip_file(args.year, args.qtr)
+    sys.exit(main())

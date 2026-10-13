@@ -2,15 +2,12 @@
 import os
 import duckdb
 import numpy as np
+from core.config import data_dir
 from .stats import zscore_spikes
 import logging
 log = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "data",
-    "pharmawatch_faers.duckdb"
-)
+DB_PATH = os.path.join(data_dir(), "pharmawatch_faers.duckdb")
 
 def get_connection():
     """Returns a read-only connection to the DuckDB database if it exists."""
