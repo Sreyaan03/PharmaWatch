@@ -1,0 +1,520 @@
+# backend/services/interactions.py
+# Business logic for backend/routes/interactions.py (no Flask imports).
+
+from itertools import combinations
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from database import upsert_prediction, get_recent_predictions
+from clients.hbase import _hbase_connect
+from clients.http import http_requests
+from clients.openfda import _query_faers_coprescription, _query_openfda_label_interaction
+from clients.pubchem import _resolve_drug
+from ml.ddi.inference import _run_gnn_pair
+
+def get_interaction_graph(target_drug):
+    """Fetches REAL co-prescribed drug data from openFDA for the selected drug."""
+    FDA_BASE = "https://api.fda.gov/drug/event.json"
+
+    try:
+        url = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{target_drug}"&count=patient.drug.medicinalproduct.exact&limit=15'
+        response = http_requests.get(url)
+        fda_data = response.json()
+
+        nodes = [{"id": target_drug, "group": 1}]
+        links = []
+        co_drugs = []
+
+        if "results" in fda_data:
+            for item in fda_data["results"]:
+                co_drug = item["term"].upper()
+                interaction_count = item["count"]
+                if co_drug == target_drug:
+                    continue
+                co_drugs.append((co_drug, interaction_count))
+
+        if co_drugs:
+            counts = [c for _, c in co_drugs]
+            max_count = max(counts)
+            min_count = min(counts)
+            range_val = max_count - min_count if max_count != min_count else 1
+            high_threshold = min_count + range_val * 0.66
+            mod_threshold = min_count + range_val * 0.33
+
+            for co_drug, interaction_count in co_drugs:
+                if interaction_count >= high_threshold:
+                    group = 2   # critical
+                elif interaction_count >= mod_threshold:
+                    group = 3   # moderate
+                else:
+                    group = 4   # low
+
+                value = max(1, interaction_count / 500)
+                nodes.append({"id": co_drug, "group": group})
+                links.append({
+                    "source": target_drug,
+                    "target": co_drug,
+                    "value": value
+                })
+
+        return {"nodes": nodes, "links": links}, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def get_detailed_graph(target_drug):
+    """Enhanced graph: co-prescription + FDA label warnings."""
+    FDA_BASE = "https://api.fda.gov/drug/event.json"
+    LABEL_BASE = "https://api.fda.gov/drug/label.json"
+
+    try:
+        url = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{target_drug}"&count=patient.drug.medicinalproduct.exact&limit=15'
+        fda_data = http_requests.get(url).json()
+
+        label_url = f'{LABEL_BASE}?search=openfda.generic_name:"{target_drug}"&limit=1'
+        label_res = http_requests.get(label_url).json()
+        warnings_text = ""
+        interactions_text = ""
+        if "results" in label_res:
+            label = label_res["results"][0]
+            warnings_text = " ".join(label.get("warnings", [""])).lower()
+            interactions_text = " ".join(label.get("drug_interactions", [""])).lower()
+
+        nodes = [{"id": target_drug.upper(), "group": 1}]
+        links = []
+
+        if "results" in fda_data:
+            for item in fda_data["results"]:
+                co_drug = item["term"].upper()
+                if co_drug == target_drug.upper():
+                    continue
+                count = item["count"]
+
+                in_warnings = co_drug.lower() in warnings_text
+                in_interactions = co_drug.lower() in interactions_text
+
+                if in_warnings or in_interactions:
+                    group = 2; risk = "critical"
+                else:
+                    group = 4; risk = "low"
+
+                nodes.append({"id": co_drug, "group": group, "risk": risk})
+                links.append({
+                    "source": target_drug.upper(), "target": co_drug,
+                    "value": max(1, count / 500), "risk": risk
+                })
+
+        return {"nodes": nodes, "links": links}, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def get_twosides_graph(raw):
+    """Fetches known interactions from HBase (TWOSIDES dataset)."""
+    if not raw:
+        return {"error": "Provide ?drug= parameter"}, 400
+
+    try:
+        from thrift.transport.TTransport import TTransportException
+    except ImportError:
+        TTransportException = Exception
+
+    try:
+        resolved = _resolve_drug(raw)
+        if resolved is None:
+            return {"found": False, "input": raw}, 200
+        drug_name = resolved["name"].upper()
+
+        def _do_scan():
+            """Connect, scan, return (nodes, links). Raises on failure."""
+            conn = _hbase_connect()
+            if conn is None:
+                return [], []
+            try:
+                table = conn.table('interactions')
+                prefix = f"{drug_name}_"
+                rows_iter = table.scan(row_prefix=prefix.encode())
+
+                _nodes = [{"id": drug_name, "group": 1}]
+                _links = []
+                added = {drug_name}
+
+                for key, data in rows_iter:
+                    row_str = key.decode()
+                    parts = row_str.split("_")
+                    if len(parts) == 2:
+                        other = parts[1]
+                        side_effect = data.get(b'info:side_effect', b'').decode().strip()
+                        severity = data.get(b'info:severity', b'high').decode().strip()
+
+                        group = 2 if severity in ("critical", "high") else (3 if severity == "moderate" else 4)
+
+                        if other not in added:
+                            _nodes.append({"id": other, "group": group})
+                            added.add(other)
+
+                        _links.append({
+                            "source": drug_name,
+                            "target": other,
+                            "side_effect": side_effect,
+                            "severity": severity,
+                            "value": 3 if severity in ("critical", "high") else 1
+                        })
+
+                return _nodes, _links
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+        # First attempt; retry once on stale-socket
+        try:
+            nodes, links = _do_scan()
+        except TTransportException:
+            nodes, links = _do_scan()
+
+        return {"nodes": nodes, "links": links, "found": len(links) > 0}, 200
+
+    except RuntimeError as e:
+        # Circuit breaker fired — HBase is genuinely offline
+        err = str(e)
+        if "circuit breaker" in err or "offline" in err.lower():
+            return {"error": err, "hbase_offline": True}, 503
+        return {"error": err}, 500
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def predict_interaction(body):
+    """Runs GNN inference on a drug pair."""
+    smiles_a = body.get("smiles_a") or body.get("composition", "")
+    smiles_b = body.get("smiles_b") or body.get("target_composition", "")
+    drug_a   = body.get("drug_a", "")
+    drug_b   = body.get("drug_b", "")
+
+    resolved_a = resolved_b = None
+
+    if drug_a and not smiles_a:
+        resolved_a = _resolve_drug(drug_a)
+        if resolved_a:
+            smiles_a = resolved_a.get("smiles", "")
+    if drug_b and not smiles_b:
+        resolved_b = _resolve_drug(drug_b)
+        if resolved_b:
+            smiles_b = resolved_b.get("smiles", "")
+
+    if smiles_a and not resolved_a:
+        resolved_a = _resolve_drug(smiles_a)
+    if smiles_b and not resolved_b:
+        resolved_b = _resolve_drug(smiles_b)
+
+    if not smiles_a or not smiles_b:
+        return {"error": "Provide smiles_a+smiles_b or drug_a+drug_b"}, 400
+
+    name_a = (resolved_a or {}).get("name") or drug_a or smiles_a[:20]
+    name_b = (resolved_b or {}).get("name") or drug_b or smiles_b[:20]
+    cid_a  = str((resolved_a or {}).get("cid", ""))
+    cid_b  = str((resolved_b or {}).get("cid", ""))
+
+    try:
+        is_harmful, confidence = _run_gnn_pair(smiles_a, smiles_b)
+
+        # Check documented sources (FDA label or adverse event database)
+        label_check = _query_openfda_label_interaction(name_a, name_b)
+        if not label_check.get("documented"):
+            label_check = _query_openfda_label_interaction(name_b, name_a)
+
+        in_hbase = False
+        try:
+            conn = _hbase_connect()
+            if conn:
+                try:
+                    table = conn.table('interactions')
+                    for key_candidate in [
+                        f"{name_a.upper()}_{name_b.upper()}".encode(),
+                        f"{name_b.upper()}_{name_a.upper()}".encode()
+                    ]:
+                        if table.row(key_candidate):
+                            in_hbase = True
+                            break
+                finally:
+                    conn.close()
+        except Exception:
+            pass
+
+        if label_check.get("documented") or in_hbase:
+            tier = "documented"
+            tier_desc = "Documented clinical interaction found in regulatory labels or databases"
+        elif confidence >= 0.50:
+            tier = "model_predicted"
+            tier_desc = "Hypothesis-generating prediction based on molecular graph similarity"
+        else:
+            tier = "no_evidence_found"
+            tier_desc = "No documented interaction or elevated structural similarity found in current evidence"
+
+        upsert_prediction(
+            drug_a=name_a, drug_b=name_b,
+            is_harmful=is_harmful, confidence=confidence,
+            smiles_a=smiles_a, smiles_b=smiles_b,
+            cid_a=cid_a, cid_b=cid_b,
+            source="gnn"
+        )
+
+        return {
+            "drug_a":                      name_a,
+            "drug_b":                      name_b,
+            "tier":                        tier,
+            "tier_description":            tier_desc,
+            "interaction_likelihood_score": confidence,
+            "calibrated":                  True,
+            "is_harmful":                  is_harmful,
+            "confidence":                  confidence,
+            "prediction":                  "Potential Interaction Detected" if is_harmful else "No Evidence Found",
+            "predicted_interactions":      ["Elevated interaction likelihood predicted — investigate further"] if is_harmful else ["No interaction evidence identified"],
+            "source":                      "gnn",
+            "disclaimer":                  "Research use only, not clinical advice"
+        }, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def resolve_drug_endpoint(raw):
+    """Resolve a drug name or SMILES string."""
+    if not raw:
+        return {"error": "Provide ?drug= or ?input= parameter"}, 400
+
+    resolved = _resolve_drug(raw)
+    if resolved is not None:
+        return {"found": True, **resolved}, 200
+    else:
+        return {"found": False, "input": raw}, 200
+
+def polypharmacy_analysis(body):
+    """Accepts up to 5 drugs, runs GNN on combinations and fetches details."""
+    drugs = body.get("drugs", [])
+
+    if not drugs or len(drugs) < 2:
+        return {"error": "Provide at least 2 drugs"}, 400
+    if len(drugs) > 5:
+        return {"error": "Maximum 5 drugs allowed"}, 400
+
+    def _resolve_one(idx_drug):
+        idx, d = idx_drug
+        r = _resolve_drug(d.strip())
+        return idx, d.strip(), r
+
+    resolved_drugs = [None] * len(drugs)
+    errors_resolve = []
+
+    with ThreadPoolExecutor(max_workers=min(len(drugs), 5)) as ex:
+        futures = {ex.submit(_resolve_one, (i, d)): i for i, d in enumerate(drugs)}
+        for fut in as_completed(futures):
+            idx, raw, result = fut.result()
+            if result is None:
+                errors_resolve.append(raw)
+            else:
+                if result.get("input_type") == "name":
+                    result["name"] = raw.title()
+                resolved_drugs[idx] = result
+
+    if errors_resolve:
+        return {"error": f"Could not resolve: {', '.join(errors_resolve)}"}, 404
+
+    pairs  = []
+    errors = []
+
+    for (i, ra), (j, rb) in combinations(enumerate(resolved_drugs), 2):
+        if not ra.get("smiles") or not rb.get("smiles"):
+            errors.append(f"No SMILES for {ra['name']} or {rb['name']}")
+            continue
+        try:
+            is_harmful, confidence = _run_gnn_pair(ra["smiles"], rb["smiles"])
+
+            upsert_prediction(
+                drug_a=ra["name"], drug_b=rb["name"],
+                is_harmful=is_harmful, confidence=confidence,
+                smiles_a=ra["smiles"], smiles_b=rb["smiles"],
+                cid_a=str(ra.get("cid", "")), cid_b=str(rb.get("cid", "")),
+                source="gnn"
+            )
+
+            side_effects = []
+            if is_harmful:
+                try:
+                    conn = _hbase_connect()
+                    if conn:
+                        try:
+                            table = conn.table('interactions')
+                            for key_candidate in [
+                                f"{ra['name'].upper()}_{rb['name'].upper()}".encode(),
+                                f"{rb['name'].upper()}_{ra['name'].upper()}".encode()
+                            ]:
+                                row = table.row(key_candidate)
+                                if row:
+                                    se = row.get(b'info:side_effect', b'').decode().strip()
+                                    if se:
+                                        side_effects.append(se)
+                                    break
+                        finally:
+                            try:
+                                conn.close()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+            faers_reports = _query_faers_coprescription(ra["name"], rb["name"])
+            label_check = _query_openfda_label_interaction(ra["name"], rb["name"])
+            if not label_check["documented"]:
+                label_check = _query_openfda_label_interaction(rb["name"], ra["name"])
+
+            if label_check["documented"]:
+                data_source = "fda_label"
+            elif faers_reports >= 100:
+                data_source = "faers_signal"
+            elif faers_reports >= 10:
+                data_source = "faers_weak"
+            else:
+                data_source = "gnn_novel"
+
+            # 3-tier categorization
+            if label_check["documented"] or len(side_effects) > 0:
+                tier = "documented"
+            elif is_harmful:
+                tier = "model_predicted"
+            else:
+                tier = "no_evidence_found"
+
+            pairs.append({
+                "drug_a":                      ra["name"],
+                "drug_b":                      rb["name"],
+                "tier":                        tier,
+                "interaction_likelihood_score": confidence,
+                "calibrated":                  True,
+                "is_harmful":                  is_harmful,
+                "confidence":                  confidence,
+                "side_effects":                side_effects,
+                "faers_reports":               faers_reports,
+                "label_documented":            label_check["documented"],
+                "label_severity":              label_check["severity"],
+                "label_snippet":               label_check["snippet"],
+                "label_found_in":              label_check["found_in"],
+                "data_source":                 data_source,
+                "index_a":                     i,
+                "index_b":                     j
+            })
+        except Exception as e:
+            errors.append(f"{ra['name']} + {rb['name']}: {e}")
+
+    nodes = [
+        {
+            "id":    r["name"],
+            "cid":   str(r.get("cid", "")),
+            "group": 1,
+            "harmful_count": sum(
+                1 for p in pairs
+                if p["is_harmful"] and (p["drug_a"] == r["name"] or p["drug_b"] == r["name"])
+            )
+        }
+        for r in resolved_drugs
+    ]
+
+    links = [
+        {
+            "source":                       p["drug_a"],
+            "target":                       p["drug_b"],
+            "tier":                         p.get("tier", "no_evidence_found"),
+            "interaction_likelihood_score": p.get("interaction_likelihood_score", p["confidence"]),
+            "is_harmful":                   p["is_harmful"],
+            "confidence":                   p["confidence"],
+            "side_effects":                 p.get("side_effects", []),
+            "faers_reports":                p.get("faers_reports", 0),
+            "data_source":                  p.get("data_source", "gnn_novel"),
+            "value":                        2 if p["is_harmful"] else 1
+        }
+        for p in pairs
+    ]
+
+    return {
+        "drugs":      [r["name"] for r in resolved_drugs],
+        "pairs":      pairs,
+        "errors":     errors,
+        "graph":      {"nodes": nodes, "links": links},
+        "disclaimer": "Research use only, not clinical advice"
+    }, 200
+
+def uncharted_interactions(drugs_param, min_reports):
+    """Priority #2 — Uncharted Interactions panel."""
+    drug_names = [d.strip().title() for d in drugs_param.split(",") if d.strip()]
+    if len(drug_names) < 2:
+        return {"error": "Provide at least 2 drugs as comma-separated ?drugs= param"}, 400
+
+    results = []
+
+    for name_a, name_b in combinations(drug_names, 2):
+        faers_count = _query_faers_coprescription(name_a, name_b)
+        if faers_count < min_reports:
+            results.append({
+                "drug_a":           name_a,
+                "drug_b":           name_b,
+                "faers_reports":    faers_count,
+                "in_twosides":      False,
+                "label_documented": False,
+                "label_severity":   "unknown",
+                "label_snippet":    "",
+                "is_uncharted":     False,
+                "signal_strength":  "none"
+            })
+            continue
+
+        in_twosides = False
+        try:
+            conn = _hbase_connect()
+            if conn:
+                try:
+                    table = conn.table("interactions")
+                    for key in [
+                        f"{name_a.upper()}_{name_b.upper()}".encode(),
+                        f"{name_b.upper()}_{name_a.upper()}".encode()
+                    ]:
+                        if table.row(key):
+                            in_twosides = True
+                            break
+                finally:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        label_check = _query_openfda_label_interaction(name_a, name_b)
+        if not label_check["documented"]:
+            label_check = _query_openfda_label_interaction(name_b, name_a)
+
+        is_uncharted = not in_twosides and not label_check["documented"]
+
+        results.append({
+            "drug_a":           name_a,
+            "drug_b":           name_b,
+            "faers_reports":    faers_count,
+            "in_twosides":      in_twosides,
+            "label_documented": label_check["documented"],
+            "label_severity":   label_check["severity"],
+            "label_snippet":    label_check["snippet"],
+            "is_uncharted":     is_uncharted,
+            "signal_strength":  (
+                "strong"   if faers_count >= 500  else
+                "moderate" if faers_count >= 100  else
+                "weak"
+            )
+        })
+
+    results.sort(key=lambda x: (-x["is_uncharted"], -x["faers_reports"]))
+
+    return {
+        "drugs":           drug_names,
+        "min_reports":     min_reports,
+        "pairs":           results,
+        "uncharted_count": sum(1 for r in results if r["is_uncharted"]),
+        "total_pairs":     len(results)
+    }, 200
+
+def recent_predictions(limit):
+    """Return the last N GNN predictions stored in SQLite."""
+    return {"predictions": get_recent_predictions(limit)}, 200
