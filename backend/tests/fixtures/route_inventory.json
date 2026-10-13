@@ -42,6 +42,7 @@
         "boxed_warning_percentage",
         "drug",
         "has_boxed_warning",
+        "matching",
         "meta",
         "other_events",
         "total_reports",
@@ -62,18 +63,47 @@
     },
     "GET /api/boxed-warning/bias-analysis/<drug_name>": {
       "keys": [
+        "counts",
         "drug",
-        "error",
+        "has_boxed_warning",
+        "labels",
+        "message",
         "meta",
-        "warning_year",
         "weber_peak_detected"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/post-warning-reports/<drug_name>": {
+      "keys": [
+        "drug",
+        "events",
+        "events_detected",
+        "has_boxed_warning",
+        "message",
+        "meta",
+        "stored",
+        "stored_violations",
+        "violations",
+        "violations_detected"
+      ],
+      "status": 200
+    },
+    "GET /api/boxed-warning/post-warning-reports/all": {
+      "keys": [
+        "count",
+        "meta",
+        "reports",
+        "violations"
       ],
       "status": 200
     },
     "GET /api/boxed-warning/timeline/<drug_name>": {
       "keys": [
+        "counts",
         "drug",
-        "error",
+        "has_boxed_warning",
+        "labels",
+        "message",
         "meta"
       ],
       "status": 200
@@ -81,11 +111,15 @@
     "GET /api/boxed-warning/violations/<drug_name>": {
       "keys": [
         "drug",
+        "events",
+        "events_detected",
         "has_boxed_warning",
         "message",
         "meta",
+        "stored",
         "stored_violations",
-        "violations"
+        "violations",
+        "violations_detected"
       ],
       "status": 200
     },
@@ -93,6 +127,7 @@
       "keys": [
         "count",
         "meta",
+        "reports",
         "violations"
       ],
       "status": 200
@@ -274,15 +309,21 @@
         "drug",
         "fallback",
         "labels",
+        "lower",
+        "message",
         "meta",
-        "note"
+        "model_used",
+        "source",
+        "upper"
       ],
       "status": 200
     },
     "GET /api/lstm/gap-scan": {
       "keys": [
+        "drug",
         "error",
-        "meta"
+        "meta",
+        "source"
       ],
       "status": 200
     },
@@ -347,14 +388,15 @@
         "active_drug_study_count",
         "b",
         "c",
-        "corroboration",
-        "corroboration_message",
         "d",
         "drug",
         "event",
         "is_signal",
         "meta",
         "prr",
+        "signal_strength",
+        "trial_context",
+        "trial_context_message",
         "trial_matches"
       ],
       "status": 200
@@ -539,6 +581,18 @@
         "GET"
       ],
       "rule": "/api/boxed-warning/bias-analysis/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/post-warning-reports/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/boxed-warning/post-warning-reports/all"
     },
     {
       "methods": [

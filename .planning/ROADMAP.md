@@ -19,7 +19,7 @@ Milestone 2 (Phases 5–11, one phase per day) turns the project into a coherent
 
 - [x] **Phase 5 (Day 1): Baseline & Clean Architecture** — Layered structure, duplicate consolidation, dead-code removal, no behaviour change
 - [ ] **Phase 6 (Day 2): Real FAERS Data Foundation** — 20 real quarters, case de-duplication, RxNorm and Preferred Term identity, single statistics path
-- [ ] **Phase 7 (Day 3): Statistical Correctness** — Real time-to-onset and stratified PRR, no-signal class, no invented numbers, descriptive wording
+- [x] **Phase 7 (Day 3): Statistical Correctness** — Real time-to-onset and stratified PRR, no-signal class, no invented numbers, descriptive wording
 - [ ] **Phase 8 (Day 4): Validation Harness** — Reference-set benchmarks for signals, NER and DDI; Methods & Validation page; CI regression gate
 - [ ] **Phase 9 (Day 5): Prescription Review** — Upload, cloud vision extraction, confirm step, interaction and safety report, PDF export
 - [ ] **Phase 10 (Day 6): Coherence & Kafka Integration** — Regrouped navigation, drug profile page, evidence badges, Kafka as evidence ingest
@@ -111,9 +111,9 @@ Plans:
   6. No response text states or implies that reports are prescriptions or that a count trend is a risk trend.
 
 Plans:
-- [ ] 07-01: Golden tests for `compute_metrics`; add the `none` class; real time-to-onset and stratified PRR
-- [ ] 07-02: Remove dashboard fallbacks; add the response envelope (`evidence`, `data_version`, `model_version`); empty-data test
-- [ ] 07-03: Reword boxed-warning and forecast outputs, normalise the forecast by share of total reports with an out-of-sample baseline, remove the unverified warning-year table
+- [x] 07-01: Golden tests for `compute_metrics`; add the `none` class; real time-to-onset and stratified PRR
+- [x] 07-02: Remove dashboard fallbacks; add the response envelope (`evidence`, `data_version`, `model_version`); empty-data test
+- [x] 07-03: Reword boxed-warning and forecast outputs, normalise the forecast by share of total reports with an out-of-sample baseline, remove the unverified warning-year table
 
 ### Phase 8 (Day 4): Validation Harness
 **Goal**: Measure the tool against published reference standards and publish the results inside the app, reproducible with one command.
@@ -196,7 +196,7 @@ Plans:
 | 4. DDI Prediction Model Rigor | 4/4 | Complete | 2026-10-12 |
 | 5. Baseline & Clean Architecture | 3/3 | Complete | 2026-10-13 |
 | 6. Real FAERS Data Foundation | 2/3 + 06-03 code | In progress (data load pending) | — |
-| 7. Statistical Correctness | 0/3 | Planned | — |
+| 7. Statistical Correctness | 3/3 | Complete | 2026-10-14 |
 | 8. Validation Harness | 0/3 | Planned | — |
 | 9. Prescription Review | 0/3 | Planned | — |
 | 10. Coherence & Kafka Integration | 0/3 | Planned | — |

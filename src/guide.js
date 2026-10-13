@@ -155,7 +155,7 @@ const WORKFLOW_PERSONAS = [
     steps: [
       { title: "Enter Patient Drugs", desc: "Go to Interactions → Polypharmacy Analyzer. Type each drug name and press Enter (up to 5 drugs). The resolver auto-corrects brand names to generic via PubChem.", icon: "💊", link: "interactions" },
       { title: "Read GNN Results", desc: "The GNN evaluates all drug pairs. Red nodes = harmful interactions. Hover over edges to see the specific side effects from the TWOSIDES dataset.", icon: "🕸️", link: "interactions" },
-      { title: "Check Boxed Warnings", desc: "For any high-risk drug in the interaction result, click its name to jump to Boxed Warnings. Review the warning text, post-warning event spike chart, and violations table.", icon: "⚠️", link: "boxed-warnings" },
+      { title: "Check Boxed Warnings", desc: "For any high-risk drug in the interaction result, click its name to jump to Boxed Warnings. Review the warning text, the reports-over-time chart, and the table of post-warning reports of labelled events.", icon: "⚠️", link: "boxed-warnings" },
       { title: "Verify Alternatives", desc: "In Drug Search, look up an alternative drug from the same class. Compare PRR and adverse event profiles between the original and alternative to find the safer option.", icon: "🔄", link: "drug-search" }
     ]
   },
@@ -261,13 +261,13 @@ const FEATURE_MANUAL = [
     id: "boxed-warnings",
     title: "Boxed Warnings",
     icon: "⬛",
-    description: "FDA's most serious safety warnings (Black Box). PharmaWatch shows the warning text, post-warning FAERS event spikes, Weber Effect analysis, and prescriber violations.",
+    description: "FDA's most serious safety warnings (Black Box). PharmaWatch shows the warning text, how reports of the labelled events are spread over time, a descriptive check for an early peak in reporting, and registered trials that mention the drug.",
     howToUse: [
       "Search any drug — the warning text is pulled live from the FDA label API",
-      "The event spike chart shows FAERS report counts before and after the warning was issued",
-      "The LSTM timeline overlays an 'expected' baseline — if actual > baseline, the warning may not be working",
-      "Weber Effect / Bias Analysis section decomposes how much of the post-warning spike is real vs reporting bias",
-      "FDA Violations table shows drug-warning pairs where prescriptions were issued contrary to boxed warnings"
+      "The timeline shows annual report counts; a before/after comparison appears only when the warning year has a recorded source",
+      "The label's revision date is shown separately and is not the year the warning was first issued",
+      "The early-peak section describes the shape of the report counts; it cannot show why reporting changed",
+      "The post-warning table lists reported events that the warning names, by report date; report counts are not rates and do not show what a warning changed"
     ],
     tips: "Try 'Clozapine' — it has 4 separate boxed warnings and very clear pre/post FAERS signature. Compare with 'Metformin' (no boxed warning) to understand what absence of signal looks like."
   },
@@ -331,9 +331,9 @@ const INTERPRETATION_GUIDE = [
     action: "Priority research finding. Run Warning Gap Predictor. Submit for regulatory review. Check if drug is recently approved (Weber effect may explain part of the signal)."
   },
   {
-    scenario: "LSTM slope is negative (trend_slope < 0)",
-    meaning: "FAERS reports for this drug are declining over time. Could mean the drug is being used less, or that the Weber Effect is subsiding post-launch.",
-    action: "Low immediate concern. Continue routine monitoring. Compare with market share data if available."
+    scenario: "Reporting share is within the forecast interval",
+    meaning: "The drug's share of all reports received is about what last year's pattern (or the LSTM, if it did better on held-out months) predicts.",
+    action: "No change in reporting share to follow up. Continue routine monitoring."
   },
   {
     scenario: "GNN confidence 0.45–0.55",

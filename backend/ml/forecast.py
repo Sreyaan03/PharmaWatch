@@ -1,129 +1,61 @@
 """
-lstm_model.py — Real PyTorch LSTM for PharmaWatch adverse event forecasting.
-Trains on openFDA historical daily report counts per drug.
+forecast.py — monthly reporting-share forecast for a drug.
 
-Three use cases for Boxed Warning integration:
-  1. Timeline Analysis   — show if a warning bent the curve (actual vs predicted)
-  2. Warning Gap         — flag drugs with rising signals but no boxed warning
-  3. Early Signal        — forecast 3-6 months ahead to predict emerging risks
+What is forecast is the drug's share of all reports received in a month (percent), not its raw
+count, so growth and seasonality that every drug shares in reporting volume cancel out. The
+series is split chronologically:
+
+    train       everything before the last 24 months (the LSTM is fitted here only)
+    validation  the 12 months before the last 12 (calibrates the forecast interval)
+    test        the last 12 months (model selection and reported error)
+
+Every prediction is one step ahead from earlier actual values. The LSTM is shown only when its
+test error is below that of the seasonal-naive baseline (the same month a year earlier);
+otherwise the baseline is shown and says so. A month is flagged only when its actual share is
+above the forecast interval.
 """
+
+import json
+import logging
+import os
+import re
+from datetime import datetime, timezone
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-import requests as original_requests
-from clients.http import http_requests
-
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-FDA_API_KEY = os.getenv("FDA_API_KEY")
-requests = http_requests
-import os
-import json
-from datetime import datetime
 
 from core.config import MODEL_DIR
-import logging
+
 log = logging.getLogger(__name__)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-LABEL_API = "https://api.fda.gov/drug/label.json"
-FAERS_API = "https://api.fda.gov/drug/event.json"
+SEQ_LENGTH = 12          # months of history the LSTM sees
+HOLDOUT = 12             # months in each of the validation and test windows
+MIN_MONTHS = 36          # baseline needs a year of history plus validation and test windows
+MIN_MONTHS_LSTM = 48     # at least 12 training sequences before the validation window
+Z_95 = 1.96
+MIN_CONSECUTIVE = 3      # months in a row above the interval before it is reported as a run
 
 
-# ── LSTM Architecture ────────────────────────────────────────────────────────
+# ── LSTM architecture ────────────────────────────────────────────────────────
 class ADEForecaster(nn.Module):
-    def __init__(self, input_size=1, hidden_size=64, num_layers=2, output_size=1):
+    def __init__(self, input_size=1, hidden_size=32, num_layers=1, output_size=1):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers,
-                            batch_first=True, dropout=0.2)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
         out, _ = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
-        return out
+        return self.fc(out[:, -1, :])
 
 
-# ── Data Fetching ────────────────────────────────────────────────────────────
-def fetch_fda_timeseries(drug, limit=1000):
-    """
-    Fetch monthly adverse event counts from openFDA for a drug.
-    Bypasses the SQLite cache layer to always get live data.
-    Returns list of (date_str, count) tuples sorted by date.
-    """
-    drug_upper = drug.upper()
-    drug_lower = drug.lower()
-
-    # Build API key param if available
-    api_key_param = f"&api_key={FDA_API_KEY}" if FDA_API_KEY else ""
-
-    strategies = [
-        f'{FAERS_API}?search=patient.drug.medicinalproduct:"{drug_upper}"&count=receivedate&limit={limit}{api_key_param}',
-        f'{FAERS_API}?search=patient.drug.openfda.generic_name:"{drug_lower}"&count=receivedate&limit={limit}{api_key_param}',
-        f'{FAERS_API}?search=patient.drug.medicinalproduct:"{drug_lower}"&count=receivedate&limit={limit}{api_key_param}',
-    ]
-
-    results = []
-    for url in strategies:
-        try:
-            # Use original_requests to bypass the SQLite cache layer entirely
-            res = original_requests.get(url, timeout=25).json()
-            results = res.get("results", [])
-            if results:
-                label = url.split('search=')[1].split('&count')[0]
-                log.info(f"[LSTM] Got {len(results)} data points via: {label}")
-                break
-            else:
-                log.warning(f"[LSTM] No results from: {url.split('search=')[1][:50]}")
-        except Exception as e:
-            log.warning(f"[LSTM] Strategy failed ({e}), trying next...")
-            continue
-
-    if not results:
-        log.warning(f"[LSTM] All strategies returned empty for '{drug}'")
-        return []
-
-    # Aggregate into monthly buckets (YYYYMM) for LSTM stability
-    monthly_map = {}
-    for r in results:
-        try:
-            time_str = str(r.get("time", r.get("receivedate", "")))
-            if len(time_str) >= 6:
-                ym = time_str[:6]
-                monthly_map[ym] = monthly_map.get(ym, 0) + r.get("count", 0)
-        except Exception:
-            pass
-
-    parsed = sorted(monthly_map.items(), key=lambda x: x[0])
-    log.info(f"[LSTM] Built {len(parsed)} monthly buckets for '{drug}'")
-    return parsed
-
-
-def get_boxed_warning_date(drug):
-    """
-    Attempt to get the effective_time of the earliest boxed warning label
-    for this drug. Returns date string like '20150101' or None.
-    """
-    url = (f'{LABEL_API}?search=openfda.generic_name:"{drug}"'
-           f'+AND+_exists_:boxed_warning&sort=effective_time:asc&limit=1')
-    try:
-        res = requests.get(url, timeout=10).json()
-        if "results" in res and res["results"]:
-            return res["results"][0].get("effective_time", None)
-    except Exception:
-        pass
-    return None
-
-
-# ── Sequence Creation ────────────────────────────────────────────────────────
-def create_sequences(data, seq_length=30):
-    """Sliding window sequences for LSTM training."""
+def create_sequences(data, seq_length=SEQ_LENGTH):
+    """Sliding windows: seq_length months in, the next month out."""
     xs, ys = [], []
     for i in range(len(data) - seq_length):
         xs.append(data[i:i + seq_length])
@@ -131,202 +63,191 @@ def create_sequences(data, seq_length=30):
     return np.array(xs), np.array(ys)
 
 
-# ── Training ─────────────────────────────────────────────────────────────────
-def train_model(drug, epochs=100, seq_length=30, lr=0.001):
+# ── evaluation (pure; no torch needed) ───────────────────────────────────────
+def _mae(pairs):
+    return float(np.mean([abs(a - p) for a, p in pairs])) if pairs else None
+
+
+def _rmse(pairs):
+    return float(np.sqrt(np.mean([(a - p) ** 2 for a, p in pairs]))) if pairs else None
+
+
+def evaluate(months, share, totals, lstm_predict=None):
+    """Compare the baseline and (if given) the LSTM on the test window and flag deviations.
+
+    months       'YYYYMM' strings, ascending
+    share        percent of all reports that month
+    totals       all reports that month (gives the sampling noise of a share)
+    lstm_predict callable(t) -> predicted share at index t from the actual months before it
     """
-    Train a real LSTM on openFDA data for a specific drug.
-    Returns (model, error_string). error_string is None on success.
-    """
-    log.info(f"[LSTM] Fetching openFDA data for '{drug}'...")
-    raw_pairs = fetch_fda_timeseries(drug, limit=365)
-    raw_counts = [p[1] for p in raw_pairs]
-    raw_dates = [p[0] for p in raw_pairs]
+    n = len(share)
+    if n < MIN_MONTHS:
+        raise ValueError(f"need at least {MIN_MONTHS} months, have {n}")
+    val = range(n - 2 * HOLDOUT, n - HOLDOUT)
+    test = range(n - HOLDOUT, n)
 
-    if len(raw_counts) < seq_length + 10:
-        return None, f"Not enough data points ({len(raw_counts)}) from openFDA for '{drug}'"
+    def baseline(t):
+        return share[t - 12]
 
-    # Normalize to [0, 1]
-    data = np.array(raw_counts, dtype=np.float32)
-    data_min, data_max = data.min(), data.max()
-    data_range = data_max - data_min if data_max != data_min else 1.0
-    normalized = (data - data_min) / data_range
+    base_val = _rmse([(share[t], baseline(t)) for t in val])
+    base_test = _mae([(share[t], baseline(t)) for t in test])
 
-    X, y = create_sequences(normalized, seq_length)
-    X_tensor = torch.FloatTensor(X).unsqueeze(-1)   # [batch, seq, 1]
-    y_tensor = torch.FloatTensor(y).unsqueeze(-1)
+    lstm_test = lstm_val = None
+    if lstm_predict is not None:
+        lstm_val = _rmse([(share[t], lstm_predict(t)) for t in val])
+        lstm_test = _mae([(share[t], lstm_predict(t)) for t in test])
 
-    # 80/20 chronological split
-    split = int(len(X_tensor) * 0.8)
-    X_train, X_test = X_tensor[:split], X_tensor[split:]
-    y_train, y_test = y_tensor[:split], y_tensor[split:]
+    use_lstm = lstm_test is not None and lstm_test < base_test
+    predict = lstm_predict if use_lstm else baseline
+    val_rmse = lstm_val if use_lstm else base_val
+    model_error = lstm_test if use_lstm else base_test
 
-    lstm_model = ADEForecaster()
+    expected, lower, upper, above = {}, {}, {}, {}
+    for t in test:
+        p = max(0.0, float(predict(t)))
+        # sampling noise of a share of this month's reports, in percentage points
+        binomial_sd = 100.0 * np.sqrt(max(p / 100.0 * (1 - p / 100.0), 0.0) / max(totals[t], 1))
+        half = Z_95 * max(val_rmse, binomial_sd)
+        expected[t], lower[t], upper[t] = p, max(0.0, p - half), p + half
+        above[t] = share[t] > upper[t]
+
+    run = 0
+    for t in reversed(list(test)):
+        if not above[t]:
+            break
+        run += 1
+
+    pad = [None] * (n - HOLDOUT)
+    return {
+        "labels": [f"{m[:4]}-{m[4:6]}" for m in months],
+        "actual": [round(float(v), 6) for v in share],
+        "baseline": pad + [round(float(expected[t]), 6) for t in test],
+        "lower": pad + [round(float(lower[t]), 6) for t in test],
+        "upper": pad + [round(float(upper[t]), 6) for t in test],
+        "unit": "% of all reports received that month",
+        "model_used": "lstm" if use_lstm else "seasonal_naive",
+        "baseline_error": round(base_test, 6),
+        "lstm_error": None if lstm_test is None else round(lstm_test, 6),
+        "model_error": round(model_error, 6),
+        "error_metric": "mean absolute error, percentage points, last 12 months",
+        "interval": {"z": Z_95, "validation_rmse": round(val_rmse, 6),
+                     "method": "max(validation RMSE, binomial noise of the month's report total)"},
+        "holdout_months": HOLDOUT,
+        "evaluated_months": [f"{months[t][:4]}-{months[t][4:6]}" for t in test],
+        "above_interval": bool(above[n - 1]),
+        "consecutive_months_above": run,
+        "run_reported": run >= MIN_CONSECUTIVE,
+    }
+
+
+# ── training ─────────────────────────────────────────────────────────────────
+def _slug(drug):
+    return re.sub(r"[^a-z0-9]+", "_", (drug or "").lower()).strip("_") or "drug"
+
+
+def _paths(drug):
+    base = os.path.join(MODEL_DIR, f"lstm_share_{_slug(drug)}")
+    return base + ".pt", base + "_meta.json"
+
+
+def _predictor(model, share, scale):
+    def f(t):
+        window = np.array(share[t - SEQ_LENGTH:t], dtype=np.float32) / scale
+        with torch.no_grad():
+            out = model(torch.FloatTensor(window).view(1, -1, 1)).item()
+        return max(0.0, out * scale)
+    return f
+
+
+def train_model(drug, months, share, totals, epochs=100, lr=0.01, seed=0):
+    """Fit the LSTM on the training window only. Returns (info, error_string)."""
+    n = len(share)
+    if n < MIN_MONTHS_LSTM:
+        return None, (f"Not enough months to train: {n} available, at least {MIN_MONTHS_LSTM} "
+                      f"needed (12 months of history, 12 sequences, and 24 held out).")
+    torch.manual_seed(seed)
+    train_end = n - 2 * HOLDOUT
+    train = np.array(share[:train_end], dtype=np.float32)
+    scale = float(train.max()) or 1.0
+    X, y = create_sequences(train / scale, SEQ_LENGTH)
+    X_t = torch.FloatTensor(X).unsqueeze(-1)
+    y_t = torch.FloatTensor(y).unsqueeze(-1)
+
+    model = ADEForecaster()
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(lstm_model.parameters(), lr=lr)
-
-    log.info(f"[LSTM] Training on {len(X_train)} sequences for {epochs} epochs...")
-    lstm_model.train()
-    for epoch in range(epochs):
-        output = lstm_model(X_train)
-        loss = criterion(output, y_train)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model.train()
+    for _ in range(epochs):
+        loss = criterion(model(X_t), y_t)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if (epoch + 1) % 20 == 0:
-            log.info(f"  [LSTM] {drug} epoch {epoch+1}/{epochs}, loss={loss.item():.6f}")
+    model.eval()
 
-    # Evaluate on test set
-    lstm_model.eval()
-    with torch.no_grad():
-        test_output = lstm_model(X_test)
-        test_loss = criterion(test_output, y_test).item()
-    log.info(f"[LSTM] Test MSE loss: {test_loss:.6f}")
-
-    # Save model weights + metadata
-    save_path = os.path.join(MODEL_DIR, f"lstm_{drug.lower()}.pt")
-    meta_path = os.path.join(MODEL_DIR, f"lstm_{drug.lower()}_meta.json")
-    torch.save(lstm_model.state_dict(), save_path)
-
-    warning_date = get_boxed_warning_date(drug)
-
-    with open(meta_path, "w") as f:
+    result = evaluate(months, share, totals, _predictor(model, share, scale))
+    weights, meta_path = _paths(drug)
+    torch.save(model.state_dict(), weights)
+    with open(meta_path, "w", encoding="utf-8") as f:
         json.dump({
-            "drug": drug,
-            "min": float(data_min),
-            "max": float(data_max),
-            "seq_length": seq_length,
-            "data_points": len(raw_counts),
-            "test_mse": round(test_loss, 6),
-            "trained_at": datetime.utcnow().isoformat(),
-            "dates": raw_dates,
-            "boxed_warning_date": warning_date
+            "drug": drug, "scale": scale, "seq_length": SEQ_LENGTH,
+            "months": n, "first_month": months[0], "last_month": months[-1],
+            "train_end_month": months[train_end - 1], "epochs": epochs,
+            "lstm_error": result["lstm_error"], "baseline_error": result["baseline_error"],
+            "model_used": result["model_used"],
+            "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }, f)
+    log.info(f"[FORECAST] {drug}: LSTM error {result['lstm_error']} vs baseline "
+             f"{result['baseline_error']} -> {result['model_used']}")
+    return result, None
 
-    log.info(f"[LSTM] Model saved -> {save_path}")
-    return lstm_model, None
 
+# ── inference ────────────────────────────────────────────────────────────────
+def predict(drug, months, share, totals):
+    """Forecast evaluation for the series, using a trained LSTM only if it matches the data.
 
-# ── Inference ─────────────────────────────────────────────────────────────────
-def predict(drug, seq_length=30):
+    A model trained on different data (other months loaded) would have seen the validation or
+    test window, so it is reported as stale and the baseline is used.
     """
-    Load the trained model and return actual vs LSTM-predicted baseline.
-    Also marks where the FDA boxed warning was added on the timeline.
-    """
-    save_path = os.path.join(MODEL_DIR, f"lstm_{drug.lower()}.pt")
-    meta_path = os.path.join(MODEL_DIR, f"lstm_{drug.lower()}_meta.json")
-
-    if not os.path.exists(save_path):
-        return None, f"Model not trained yet — call POST /api/lstm/train?drug={drug} first"
-
-    with open(meta_path) as f:
-        meta = json.load(f)
-
-    raw_pairs = fetch_fda_timeseries(drug, limit=365)
-    raw_counts = [p[1] for p in raw_pairs]
-    raw_dates  = [p[0] for p in raw_pairs]
-
-    if len(raw_counts) < seq_length:
-        return None, "Not enough recent data from openFDA"
-
-    data_min = meta["min"]
-    data_max = meta["max"]
-    data_range = data_max - data_min if data_max != data_min else 1.0
-
-    data = np.array(raw_counts, dtype=np.float32)
-    normalized = (data - data_min) / data_range
-
-    lstm_model = ADEForecaster()
-    lstm_model.load_state_dict(torch.load(save_path, weights_only=True))
-    lstm_model.eval()
-
-    # Generate LSTM predictions on sliding windows
-    baseline = []
-    with torch.no_grad():
-        for i in range(seq_length, len(normalized)):
-            seq = torch.FloatTensor(normalized[i - seq_length:i]).unsqueeze(0).unsqueeze(-1)
-            pred = lstm_model(seq).item()
-            # Denormalize back to original scale
-            baseline.append(round(float(pred * data_range + data_min), 1))
-
-    actual = raw_counts[seq_length:]
-    labels = raw_dates[seq_length:]
-
-    # ── Boxed Warning Timeline Marker ────────────────────────────────────────
-    # Find which index on the chart corresponds to the warning effective date
-    warning_date = meta.get("boxed_warning_date")
-    warning_index = None
-    if warning_date:
-        for idx, d in enumerate(labels):
-            if str(d) >= str(warning_date):
-                warning_index = idx
-                break
-
-    # ── Warning Gap Detection ─────────────────────────────────────────────────
-    # Calculate the slope of the last 30 predictions.
-    # A strongly positive slope on a drug WITHOUT a boxed warning = emerging risk.
-    rising_signal = False
-    slope = 0.0
-    if len(baseline) >= 30:
-        recent = baseline[-30:]
-        x = np.arange(len(recent))
-        slope = float(np.polyfit(x, recent, 1)[0])
-        rising_signal = slope > (data_max * 0.005)  # Rising > 0.5% of max per day
-
-    return {
-        "drug": drug,
-        "labels": labels,
-        "actual": actual,
-        "baseline": baseline,
-        "trained_on": meta["data_points"],
-        "test_mse": meta.get("test_mse"),
-        "boxed_warning_date": warning_date,
-        "boxed_warning_index": warning_index,
-        "rising_signal": rising_signal,
-        "trend_slope": round(slope, 4)
-    }, None
+    weights, meta_path = _paths(drug)
+    lstm_predict, status = None, "not_trained"
+    if len(share) < MIN_MONTHS_LSTM:
+        status = "insufficient_data"
+    elif os.path.exists(weights) and os.path.exists(meta_path):
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+        if (meta.get("months"), meta.get("first_month"), meta.get("last_month")) == \
+                (len(share), months[0], months[-1]):
+            model = ADEForecaster()
+            model.load_state_dict(torch.load(weights, weights_only=True))
+            model.eval()
+            lstm_predict, status = _predictor(model, share, meta["scale"]), "trained"
+        else:
+            status = "stale"
+    result = evaluate(months, share, totals, lstm_predict)
+    result["lstm_status"] = status
+    result["trained_on_months"] = len(share) - 2 * HOLDOUT if status == "trained" else None
+    return result
 
 
-# ── Warning Gap Scanner ───────────────────────────────────────────────────────
-def scan_warning_gap(drug):
-    """
-    Use the LSTM trend slope to determine if a drug has a rising signal
-    but no boxed warning — i.e. it MIGHT need one in the future.
-    Returns a risk classification.
-    """
-    save_path = os.path.join(MODEL_DIR, f"lstm_{drug.lower()}.pt")
-    if not os.path.exists(save_path):
-        return {"error": f"No trained model for '{drug}'. Train first."}
-
-    result, error = predict(drug)
-    if error:
-        return {"error": error}
-
-    has_warning = result["boxed_warning_date"] is not None
-    rising = result["rising_signal"]
-    slope = result["trend_slope"]
-
-    if rising and not has_warning:
-        risk = "HIGH"
-        message = (f"LSTM detects a rising adverse event trend (slope={slope}) "
-                   f"but '{drug}' has NO FDA Boxed Warning. This may be an emerging risk.")
-    elif rising and has_warning:
-        risk = "MODERATE"
-        message = (f"LSTM detects a rising trend despite an existing Boxed Warning. "
-                   f"The warning may not be changing clinical practice for '{drug}'.")
-    elif not rising and has_warning:
-        risk = "LOW"
-        message = (f"Adverse event reports are stable/declining. "
-                   f"The Boxed Warning appears to be effective for '{drug}'.")
+def reporting_scan(result):
+    """Describe whether the latest reporting share is above its forecast interval."""
+    run = result["consecutive_months_above"]
+    model = "LSTM" if result["model_used"] == "lstm" else "seasonal-naive baseline"
+    if result["run_reported"]:
+        message = (f"The drug's share of reports was above the {model} forecast interval for "
+                   f"{run} consecutive months, up to {result['labels'][-1]}. This describes a "
+                   f"change in reporting share; it does not show a change in risk.")
+    elif result["above_interval"]:
+        message = (f"The latest month ({result['labels'][-1]}) is above the {model} forecast "
+                   f"interval, for {run} month{'s' if run != 1 else ''} so far; "
+                   f"fewer than {MIN_CONSECUTIVE} in a row.")
     else:
-        risk = "MINIMAL"
-        message = f"No significant rising trend detected for '{drug}'. No current concern."
-
+        message = (f"The latest month ({result['labels'][-1]}) is within the {model} forecast "
+                   f"interval.")
     return {
-        "drug": drug,
-        "has_boxed_warning": has_warning,
-        "boxed_warning_date": result["boxed_warning_date"],
-        "rising_signal": rising,
-        "trend_slope": slope,
-        "risk_level": risk,
-        "message": message
+        "above_interval": result["above_interval"],
+        "consecutive_months_above": run,
+        "run_reported": result["run_reported"],
+        "model_used": result["model_used"],
+        "message": message,
     }

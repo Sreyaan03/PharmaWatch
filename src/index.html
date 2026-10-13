@@ -865,11 +865,11 @@
               </div>
             </div>
 
-            <!-- ═══ LITERATURE CONTEXT CARD (Section A: Prescribing Behavior) ═══ -->
+            <!-- ═══ LITERATURE CONTEXT CARD (Section A: Reports over time) ═══ -->
             <div id="bw-literature-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
               <div class="card-header">
-                <h2 class="card-title">📚 Literature Context — Real-World Impact of This Warning</h2>
-                <span style="font-size:0.72rem; color:#888; align-self:center;">Based on pharmacovigilance literature + live FAERS data</span>
+                <h2 class="card-title">📚 What the Reports Show for This Warning</h2>
+                <span style="font-size:0.72rem; color:#888; align-self:center;">Descriptive counts of reports, not effects of the warning</span>
               </div>
               <div id="bw-literature-body" style="display:grid; grid-template-columns: repeat(2,1fr); gap:1rem; padding:0.5rem 0;"></div>
             </div>
@@ -890,11 +890,11 @@
               <div id="bw-timeline-interp" style="margin-top:0.75rem; font-size:0.8rem; color:#555; padding:8px 12px; background:#f8f9fa; border-radius:6px;"></div>
             </div>
 
-            <!-- ═══ VIOLATIONS LOG (Section B: Post-Warning Prescriptions) ═══ -->
+            <!-- ═══ POST-WARNING REPORTS OF LABELLED EVENTS (Section B) ═══ -->
             <div id="bw-violations-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
               <div class="card-header">
-                <h2 class="card-title">⚠️ Post-Warning Violation Log — Persistent SQLite Record</h2>
-                <span style="font-size:0.72rem; color:#888; align-self:center;">Stored in local pharmawatch.db</span>
+                <h2 class="card-title">⚠️ Post-Warning Reports of Labelled Events</h2>
+                <span style="font-size:0.72rem; color:#888; align-self:center;">Events named in the boxed warning, by report date</span>
               </div>
               <div id="bw-violations-summary" style="margin-bottom:0.75rem; font-size:0.83rem; color:#555;"></div>
               <div id="bw-violations-table" style="max-height:380px; overflow-y:auto;"></div>
@@ -906,10 +906,10 @@
               <div id="bw-all-violations-log" style="display:none; margin-top:1rem;"></div>
             </div>
 
-            <!-- ═══ WEBER EFFECT / BIAS ANALYSIS CHART (Section D) ═══ -->
+            <!-- ═══ EARLY PEAK IN REPORTING (Section D) ═══ -->
             <div id="bw-bias-card" class="dashboard-card" style="display:none; margin-top:1.5rem;">
               <div class="card-header">
-                <h2 class="card-title">📊 FAERS Bias Analysis — Weber Effect &amp; Notoriety Bias</h2>
+                <h2 class="card-title">📊 Early Peak in Reporting — Weber-effect Pattern</h2>
                 <span id="bw-weber-badge"
                   style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:700; align-self:center;">
                   Analysing…
@@ -1326,9 +1326,10 @@
             <div class="method-card__num">04</div>
             <div class="method-card__icon">📈</div>
             <h2 class="method-card__title">LSTM Temporal Sequence Modelling</h2>
-            <p class="method-card__desc">Long Short-Term Memory (LSTM) networks trained on historical event frequencies
-              predict the expected baseline reporting rate. Real-time deviations from predicted baselines flag
-              accelerating signals before traditional PRR thresholds are breached.</p>
+            <p class="method-card__desc">A drug's monthly share of all reports is forecast with a seasonal-naive baseline
+              (the same month a year earlier) and an LSTM. The LSTM is shown only when it has lower error than the
+              baseline on the last 12 months, which it was not fitted on. A month is flagged only when the actual
+              share is above the forecast interval, and a flag describes reporting, not risk.</p>
 
             <!-- Drug selector for LSTM chart -->
             <div style="display:flex; gap:0.5rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">

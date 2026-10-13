@@ -1,124 +1,124 @@
 # backend/services/forecasting.py
 # Business logic for backend/routes/ml.py (no Flask imports).
+#
+# The forecast is of a drug's share of all reports received each month, from the loaded FAERS
+# data (see ml/forecast.py). Without enough months of data it says so; it never pads a short
+# series or substitutes counts from elsewhere.
 
-import numpy as np
-from clients.clinicaltrials import fetch_trial_monitoring
-from clients.http import http_requests
 import logging
+
+from clients.clinicaltrials import fetch_trial_monitoring
+
 log = logging.getLogger(__name__)
 
 try:
-    from ml.forecast import train_model as lstm_train, predict as lstm_predict, scan_warning_gap
+    from ml import forecast as ml_forecast
     LSTM_AVAILABLE = True
 except ImportError:
+    ml_forecast = None
     LSTM_AVAILABLE = False
 
-def get_lstm_forecast(drug):
-    """
-    Returns real LSTM predictions vs actual FAERS counts.
-    If model not yet trained, falls back to the rolling average.
-    """
-    if LSTM_AVAILABLE:
-        try:
-            result, error = lstm_predict(drug)
-            if result:
-                return result, 200
-            log.warning(f"[LSTM] Predict error for '{drug}': {error} — using fallback")
-        except Exception as e:
-            log.warning(f"[LSTM] Exception: {e} — using fallback")
 
-    FDA_BASE = "https://api.fda.gov/drug/event.json"
+def _no_data(drug, message, **extra):
+    return {"drug": drug, "source": "no_data", "message": message, "labels": [], "actual": [],
+            "baseline": [], "lower": [], "upper": [], "model_used": None, "fallback": False,
+            **extra}
+
+
+def _series(drug):
+    """(series dict, None) for the drug, or (None, no-data payload) when it cannot be built."""
+    from faers import analytics
+    from services.signals import resolve_drug
+
+    ctx = resolve_drug(drug)
+    if not ctx["ready"]:
+        return None, _no_data(drug, "No FAERS data with drug identity is loaded.")
+    if not ctx["ok"]:
+        return None, _no_data(drug, ctx["note"] or "The drug name could not be resolved.",
+                              unresolved=ctx["unresolved"], identity=ctx["identity"])
+    series = analytics.get_monthly_share(ctx["rxcuis"])
+    if series is None or not series["months"]:
+        return None, _no_data(drug, "No monthly reports are available for this drug.",
+                              identity=ctx["identity"])
+    minimum = ml_forecast.MIN_MONTHS if ml_forecast else 36
+    if len(series["months"]) < minimum:
+        return None, _no_data(
+            drug, f"{len(series['months'])} month(s) of reports are loaded; at least {minimum} are "
+                  f"needed for a forecast with a held-out test period.",
+            months_available=len(series["months"]), identity=ctx["identity"])
+    series["identity"] = ctx["identity"]
+    return series, None
+
+
+def get_lstm_forecast(drug):
+    """Reporting-share forecast with the baseline and the LSTM (when trained and better)."""
+    if not LSTM_AVAILABLE:
+        return {"error": "forecast module not loaded"}, 500
+    series, no_data = _series(drug)
+    if no_data:
+        return no_data, 200
     try:
-        url = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"&count=receivedate'
-        res = http_requests.get(url).json()
-        results = res.get("results", [])
-        raw_counts = [r["count"] for r in results]
-        if len(raw_counts) < 30:
-            raw_counts = (raw_counts * 5)[:30]
-        else:
-            raw_counts = raw_counts[-30:]
-        actual = raw_counts
-        baseline = []
-        window = 5
-        for i in range(len(actual)):
-            start = max(0, i - window)
-            avg = np.mean(actual[start:i+1])
-            baseline.append(round(float(avg), 1))
-        labels = [f"Day {i+1}" for i in range(len(actual))]
-        return {"drug": drug, "labels": labels,
-                        "baseline": baseline, "actual": actual,
-                        "fallback": True, "note": "Using rolling average — train LSTM via POST /api/lstm/train"}, 200
+        result = ml_forecast.predict(drug, series["months"], series["share"], series["total"])
     except Exception as e:
+        log.warning(f"[FORECAST] {drug}: {e}")
         return {"error": str(e)}, 500
+    result.update(drug=drug, source="faers_local", fallback=False, identity=series["identity"],
+                  trained_on=len(series["months"]),
+                  note=("The seasonal-naive baseline (the same month a year earlier) is shown; "
+                        "the LSTM is shown only when it has lower error on the last 12 months."))
+    return result, 200
 
 
 def train_lstm(drug, epochs_raw):
-    """Train a real PyTorch LSTM on openFDA historical data for a given drug."""
+    """Train the LSTM on the drug's monthly reporting share (training window only)."""
     if not LSTM_AVAILABLE:
-        return {"error": "lstm_model.py not loaded"}, 500
-    epochs = min(int(epochs_raw), 50)  # Capped at 50 to prevent DoS
+        return {"error": "forecast module not loaded"}, 500
     try:
-        _, error = lstm_train(drug, epochs=epochs)
-        if error:
-            return {"error": error}, 400
-        return {"status": "ok", "drug": drug,
-                        "message": f"LSTM trained and saved for '{drug}'"}, 200
+        epochs = max(1, min(int(epochs_raw), 200))   # capped to bound the cost of a request
+    except (TypeError, ValueError):
+        return {"error": "epochs must be an integer"}, 400
+    series, no_data = _series(drug)
+    if no_data:
+        return {"error": no_data["message"]}, 400
+    try:
+        result, error = ml_forecast.train_model(drug, series["months"], series["share"],
+                                                series["total"], epochs=epochs)
     except Exception as e:
         return {"error": str(e)}, 500
+    if error:
+        return {"error": error}, 400
+    return {"status": "ok", "drug": drug,
+            "lstm_error": result["lstm_error"], "baseline_error": result["baseline_error"],
+            "model_used": result["model_used"],
+            "message": (f"LSTM trained for '{drug}'. Error on the last 12 months: LSTM "
+                        f"{result['lstm_error']} vs seasonal-naive {result['baseline_error']} "
+                        f"percentage points; "
+                        f"{'the LSTM is used' if result['model_used'] == 'lstm' else 'the baseline is used'}.")}, 200
 
 
 def lstm_gap_scan(drug):
-    """Warning Gap Predictor (enhanced with ClinicalTrials.gov)."""
+    """Is the drug's latest reporting share above its forecast interval, with registered trials."""
     if not LSTM_AVAILABLE:
-        return {"error": "lstm_model.py not loaded"}, 500
+        return {"error": "forecast module not loaded"}, 500
+    series, no_data = _series(drug)
+    if no_data:
+        return {"drug": drug, "error": no_data["message"], "source": "no_data"}, 200
     try:
-        result = scan_warning_gap(drug)
-        if "error" in result:
-            return result, 200
+        result = ml_forecast.predict(drug, series["months"], series["share"], series["total"])
+        scan = ml_forecast.reporting_scan(result)
+        scan.update(drug=drug, source="faers_local",
+                    baseline_error=result["baseline_error"], model_error=result["model_error"])
 
-        ct_data = fetch_trial_monitoring(drug)
-        being_monitored = ct_data["being_monitored"]
-        active_studies = ct_data["active_studies"]
-        phase34_studies = ct_data["phase34_studies"]
-
-        original_risk = result["risk_level"]
-        rising = result["rising_signal"]
-        has_warning = result["has_boxed_warning"]
-
-        if rising and not has_warning and not being_monitored:
-            upgraded_risk = "HIGH"
-            ct_note = (
-                f"⚠ CRITICAL GAP: Rising FAERS signal AND no active ClinicalTrials monitoring "
-                f"for '{drug}'. Neither FDA labels nor research community has flagged this risk."
-            )
-        elif rising and not has_warning and being_monitored:
-            upgraded_risk = "MODERATE"
-            ct_note = (
-                f"📋 {active_studies} active ClinicalTrials stud{'y' if active_studies==1 else 'ies'} "
-                f"for '{drug}' ({phase34_studies} Phase 3/4). Rising signal is under trial observation, "
-                f"but no FDA Boxed Warning yet issued."
-            )
-        elif not rising and not has_warning and not being_monitored:
-            upgraded_risk = "MINIMAL"
-            ct_note = f"No active ClinicalTrials found for '{drug}'. Stable signal with no regulatory concern."
-        else:
-            upgraded_risk = original_risk
-            if being_monitored:
-                ct_note = (
-                    f"✅ {active_studies} active ClinicalTrials stud{'y' if active_studies==1 else 'ies'} "
-                    f"monitoring '{drug}' ({phase34_studies} Phase 3/4). Signal is being tracked."
-                )
-            else:
-                ct_note = f"No active ClinicalTrials studies found for '{drug}'."
-
-        result["risk_level"] = upgraded_risk
-        result["clinicaltrials"] = {
-            "active_studies": active_studies,
-            "phase34_studies": phase34_studies,
-            "being_monitored": being_monitored,
-            "note": ct_note
+        ct = fetch_trial_monitoring(drug)
+        active = ct["active_studies"]
+        scan["clinicaltrials"] = {
+            "active_studies": active,
+            "phase34_studies": ct["phase34_studies"],
+            "being_monitored": ct["being_monitored"],
+            "note": (f"{active} active registered stud{'y' if active == 1 else 'ies'} list '{drug}' "
+                     f"({ct['phase34_studies']} Phase 3/4)." if active
+                     else f"No active registered studies list '{drug}'."),
         }
-
-        return result, 200
+        return scan, 200
     except Exception as e:
         return {"error": str(e)}, 500

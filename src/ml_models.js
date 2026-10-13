@@ -3,6 +3,12 @@
    Centralizes BioBERT and LSTM simulated algorithms
    ============================================================ */
 
+function escapeHtml(text) {
+  const el = document.createElement('div');
+  el.textContent = String(text ?? '');
+  return el.innerHTML;
+}
+
 const MLModels = {
 
   lstmDemoChart: null,
@@ -62,36 +68,27 @@ const MLModels = {
         return;
       }
 
-      // Update status bar
-      if (statusMsg) {
-        if (data.fallback) {
-          statusMsg.innerHTML = `⚠ No trained model for <strong>${drug}</strong> — showing rolling average. Click 🧠 Train Model above.`;
-          statusMsg.style.color = '#e65100';
-        } else {
-          statusMsg.innerHTML = `✅ Real LSTM · <strong>${drug}</strong> · MSE: ${data.test_mse?.toFixed(4) ?? 'N/A'} · Boxed Warning date: ${data.boxed_warning_date ?? 'None found'}`;
-          statusMsg.style.color = '#2e7d32';
-        }
+      const staleAlert = ctx.parentElement.querySelector('.lstm-rising-alert');
+      if (staleAlert) staleAlert.remove();
+
+      if (data.source === 'no_data') {
+        if (statusMsg) { statusMsg.textContent = `ℹ️ ${data.message}`; statusMsg.style.color = '#e65100'; }
+        return;
       }
 
-      // Build annotation for the boxed warning date vertical line
-      const annotations = {};
-      if (data.boxed_warning_index != null) {
-        annotations.warningLine = {
-          type: 'line',
-          xMin: data.boxed_warning_index,
-          xMax: data.boxed_warning_index,
-          borderColor: '#c0392b',
-          borderWidth: 2,
-          borderDash: [4, 4],
-          label: {
-            display: true,
-            content: '⬛ Boxed Warning Added',
-            position: 'start',
-            backgroundColor: '#c0392b',
-            color: '#fff',
-            font: { size: 10 }
-          }
-        };
+      // Status: which model is shown and its error against the baseline, on held-out months
+      if (statusMsg) {
+        const used = data.model_used === 'lstm' ? 'LSTM' : 'Seasonal-naive baseline';
+        const lstmNote = {
+          trained: '',
+          not_trained: ' · LSTM not trained (click 🧠 Train Model)',
+          stale: ' · the trained LSTM is out of date for the loaded data; retrain',
+          insufficient_data: ' · too few months to train an LSTM',
+        }[data.lstm_status] || '';
+        const lstmErr = data.lstm_error != null ? `, LSTM ${data.lstm_error.toFixed(3)}` : '';
+        statusMsg.innerHTML = `<strong>${drug}</strong> · ${used} · mean absolute error over the last 12 months: ` +
+          `${data.model_error.toFixed(3)} points (baseline ${data.baseline_error.toFixed(3)}${lstmErr})${lstmNote}`;
+        statusMsg.style.color = data.model_used === 'lstm' ? '#2e7d32' : '#555';
       }
 
       this.lstmDemoChart = new Chart(ctx, {
@@ -100,24 +97,27 @@ const MLModels = {
           labels: data.labels,
           datasets: [
             {
-              label: data.fallback ? 'Rolling Average Baseline' : 'LSTM Predicted Baseline',
+              label: data.model_used === 'lstm' ? 'LSTM forecast (held-out months)' : 'Seasonal-naive forecast (held-out months)',
               data: data.baseline,
-              borderColor: '#003d7c',
-              borderDash: [6, 3],
-              tension: 0.4,
-              fill: false,
-              pointRadius: 0,
-              borderWidth: 2
+              borderColor: '#003d7c', borderDash: [6, 3], tension: 0.3, fill: false,
+              pointRadius: 0, borderWidth: 2, spanGaps: false
             },
             {
-              label: 'Actual FAERS Report Counts',
+              label: 'Upper 95% interval',
+              data: data.upper,
+              borderColor: 'rgba(0,61,124,0.35)', borderWidth: 1, fill: false, pointRadius: 0, spanGaps: false
+            },
+            {
+              label: 'Lower 95% interval',
+              data: data.lower,
+              borderColor: 'rgba(0,61,124,0.35)', backgroundColor: 'rgba(0,61,124,0.07)',
+              borderWidth: 1, fill: '-1', pointRadius: 0, spanGaps: false
+            },
+            {
+              label: 'Actual share of all reports',
               data: data.actual,
-              borderColor: '#c0392b',
-              backgroundColor: 'rgba(192,57,43,0.15)',
-              tension: 0.4,
-              fill: true,
-              pointRadius: 3,
-              pointHoverRadius: 6
+              borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.10)',
+              tension: 0.3, fill: false, pointRadius: 3, pointHoverRadius: 6
             }
           ]
         },
@@ -126,95 +126,36 @@ const MLModels = {
           maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
           plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
-            tooltip: {
-              backgroundColor: 'rgba(0,0,0,0.8)',
-              titleFont: { size: 13 },
-              bodyFont: { size: 12 },
-              padding: 10,
-              cornerRadius: 4,
-              usePointStyle: true,
-              callbacks: {
-                afterBody: (items) => {
-                  if (data.boxed_warning_index != null && items[0]?.dataIndex === data.boxed_warning_index) {
-                    return ['', '⬛ FDA Boxed Warning added on this date'];
-                  }
-                  return [];
-                }
-              }
-            },
-            annotation: Object.keys(annotations).length ? { annotations } : undefined
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
           },
           scales: {
             x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } },
-            y: { title: { display: true, text: 'FAERS Report Count' } }
+            y: { beginAtZero: true, title: { display: true, text: 'Share of all reports received (%)' } }
           }
         }
       });
 
-      // Rising signal alert — enhanced with ClinicalTrials gap-scan data (Option C)
-      const existingAlert = ctx.parentElement.querySelector('.lstm-rising-alert');
-      if (existingAlert) existingAlert.remove();
-
-      // Only run gap-scan enrichment if we have a real trained LSTM (not fallback)
-      if (!data.fallback) {
-        try {
-          const gapRes = await fetch(`/api/lstm/gap-scan?drug=${encodeURIComponent(drug)}`);
-          const gapData = await gapRes.json();
-
-          if (!gapData.error) {
-            const alertEl = document.createElement('div');
-            alertEl.className = 'lstm-rising-alert';
-
-            const riskColors = { HIGH: '#c0392b', MODERATE: '#e65100', LOW: '#2e7d32', MINIMAL: '#757575' };
-            const riskBgs   = { HIGH: '#fef2f2', MODERATE: '#fff8e1', LOW: '#f1f8e9', MINIMAL: '#f5f5f5' };
-            const riskIcons = { HIGH: '🚨', MODERATE: '⚠️', LOW: '✅', MINIMAL: 'ℹ️' };
-            const risk = gapData.risk_level || 'MINIMAL';
-            const ct = gapData.clinicaltrials || {};
-
-            alertEl.style.cssText = `margin-top:10px; padding:10px 14px;
-              background:${riskBgs[risk] || '#f5f5f5'};
-              border-left:3px solid ${riskColors[risk] || '#999'};
-              font-size:0.8rem; border-radius:4px; line-height:1.6;`;
-
-            alertEl.innerHTML = `
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                <span style="font-size:1.1rem;">${riskIcons[risk]}</span>
-                <strong style="color:${riskColors[risk]};">Warning Gap Risk: ${risk}</strong>
-              </div>
-              <div style="margin-bottom:4px;">${gapData.message || ''}</div>
-              ${ct.note ? `
-                <div style="margin-top:6px; padding:6px 10px;
-                  background:rgba(0,0,0,0.04); border-radius:4px;
-                  font-size:0.77rem; color:#555;">
-                  🧪 <strong>ClinicalTrials.gov:</strong> ${ct.note}
-                  ${ct.active_studies > 0 ?
-                    `<a href="https://clinicaltrials.gov/search?intr=${encodeURIComponent(drug)}"
-                       target="_blank" rel="noopener"
-                       style="margin-left:6px; color:#003d7c; font-size:0.72rem;">
-                       View trials →
-                     </a>` : ''}
-                </div>` : ''}
-            `;
-            ctx.parentElement.appendChild(alertEl);
-          }
-        } catch (gapErr) {
-          // Gap scan not available (model not trained) — show simple alert
-          if (data.rising_signal) {
-            const alertEl = document.createElement('div');
-            alertEl.className = 'lstm-rising-alert';
-            alertEl.style.cssText = 'margin-top:10px; padding:8px 12px; background:#fef2f2; border-left:3px solid #c0392b; font-size:0.8rem; border-radius:4px;';
-            alertEl.innerHTML = `⚠ <strong>Rising Signal Detected</strong> for ${drug} — slope: ${data.trend_slope} reports/day`;
-            ctx.parentElement.appendChild(alertEl);
-          }
+      // Is the latest share above its forecast interval? (descriptive, with registered trials)
+      try {
+        const gapRes = await fetch(`/api/lstm/gap-scan?drug=${encodeURIComponent(drug)}`);
+        const gap = await gapRes.json();
+        if (!gap.error) {
+          const flagged = gap.run_reported;
+          const alertEl = document.createElement('div');
+          alertEl.className = 'lstm-rising-alert';
+          alertEl.style.cssText = `margin-top:10px; padding:10px 14px;
+            background:${flagged ? '#fff8e1' : '#f5f5f5'};
+            border-left:3px solid ${flagged ? '#e65100' : '#9e9e9e'};
+            font-size:0.8rem; border-radius:4px; line-height:1.6;`;
+          const ct = gap.clinicaltrials || {};
+          alertEl.innerHTML = `
+            <div style="margin-bottom:4px;"><strong>${flagged ? 'Reporting share above the forecast interval' : 'Reporting share'}</strong></div>
+            <div>${escapeHtml(gap.message || '')}</div>
+            ${ct.note ? `<div style="margin-top:6px; font-size:0.77rem; color:#555;">🧪 <strong>ClinicalTrials.gov:</strong> ${escapeHtml(ct.note)}</div>` : ''}`;
+          ctx.parentElement.appendChild(alertEl);
         }
-      } else if (data.rising_signal) {
-        // Fallback mode — just show basic alert
-        const alertEl = document.createElement('div');
-        alertEl.className = 'lstm-rising-alert';
-        alertEl.style.cssText = 'margin-top:10px; padding:8px 12px; background:#fef2f2; border-left:3px solid #c0392b; font-size:0.8rem; border-radius:4px;';
-        alertEl.innerHTML = `⚠ <strong>Rising Signal Detected</strong> for ${drug} — slope: ${data.trend_slope} reports/day`;
-        ctx.parentElement.appendChild(alertEl);
+      } catch (gapErr) {
+        // gap scan unavailable; the chart stands on its own
       }
 
     } catch (e) {
@@ -287,7 +228,7 @@ const MLModels = {
       currentDrug = input.value.trim() || currentDrug;
       if (!currentDrug) { if (statusMsg) statusMsg.textContent = 'Enter a drug name first.'; return; }
       if (statusMsg) {
-        statusMsg.innerHTML = `⏳ Training LSTM for <strong>${currentDrug}</strong>… (~30 sec)`;
+        statusMsg.innerHTML = `⏳ Training LSTM for <strong>${currentDrug}</strong>…`;
         statusMsg.style.color = '#e65100';
       }
       trainBtn.disabled = true;
@@ -298,7 +239,7 @@ const MLModels = {
         );
         const d = await r.json();
         if (d.status === 'ok') {
-          if (statusMsg) statusMsg.innerHTML = `✅ Trained! Loading chart for <strong>${currentDrug}</strong>…`;
+          if (statusMsg) statusMsg.innerHTML = `✅ ${d.message} Loading chart…`;
           setTimeout(() => this.initLSTMDemoChart(currentDrug), 400);
         } else {
           if (statusMsg) { statusMsg.textContent = `❌ ${d.error}`; statusMsg.style.color = '#c0392b'; }

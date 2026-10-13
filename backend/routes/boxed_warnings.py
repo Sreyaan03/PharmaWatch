@@ -27,39 +27,54 @@ def get_trials(drug_name):
     return jsonify(payload), status
 
 
+@boxed_warnings_bp.route("/api/boxed-warning/post-warning-reports/<drug_name>", methods=["GET"])
+def get_post_warning_reports(drug_name):
+    """Reports of events named in the boxed warning, before and after a sourced warning year."""
+    payload, status = svc.get_post_warning_reports(drug_name, request.args.get("warning_year"))
+    return jsonify(payload), status
+
+
 @boxed_warnings_bp.route("/api/boxed-warning/violations/<drug_name>", methods=["GET"])
 def get_violations_for_drug(drug_name):
-    """Detects boxed-warning violations for a drug."""
-    payload, status = svc.get_violations_for_drug(drug_name)
+    """Old path for post-warning-reports; returns the same data."""
+    payload, status = svc.get_post_warning_reports(drug_name, request.args.get("warning_year"))
     return jsonify(payload), status
 
 
 @boxed_warnings_bp.route("/api/boxed-warning/timeline/<drug_name>", methods=["GET"])
 def get_warning_timeline(drug_name):
-    """Before & After analysis of FAERS reports around boxed warning date."""
-    payload, status = svc.get_warning_timeline(drug_name)
+    """Reports per year, described before and after a sourced warning year."""
+    payload, status = svc.get_warning_timeline(drug_name, request.args.get("warning_year"))
     return jsonify(payload), status
 
 
 @boxed_warnings_bp.route("/api/boxed-warning/bias-analysis/<drug_name>", methods=["GET"])
 def get_bias_analysis(drug_name):
-    """Weber Effect + Notoriety Bias analysis."""
-    payload, status = svc.get_bias_analysis(drug_name)
+    """Descriptive look for an early peak in reporting (Weber effect pattern)."""
+    payload, status = svc.get_bias_analysis(drug_name, request.args.get("warning_year"))
     return jsonify(payload), status
 
 
 @boxed_warnings_bp.route("/api/prr-trials", methods=["GET"])
 def get_prr_with_trials():
-    """Option B: Cross-reference FAERS PRR signal with ClinicalTrials.gov data."""
+    """A pair's disproportionality next to registered trials that mention it."""
     drug = request.args.get('drug', 'Metformin')
     event = request.args.get('event', 'Nausea')
     payload, status = svc.get_prr_with_trials(drug, event)
     return jsonify(payload), status
 
 
+@boxed_warnings_bp.route("/api/boxed-warning/post-warning-reports/all", methods=["GET"])
+def get_all_post_warning_reports_route():
+    """Return all stored post-warning report records."""
+    limit_raw = request.args.get('limit', 200)
+    payload, status = svc.get_all_post_warning_reports(limit_raw)
+    return jsonify(payload), status
+
+
 @boxed_warnings_bp.route("/api/boxed-warning/violations/all", methods=["GET"])
 def get_all_violations_route():
-    """Return all violation records stored in the local SQLite database."""
+    """Old path for post-warning-reports/all; returns the same data."""
     limit_raw = request.args.get('limit', 200)
     payload, status = svc.get_all_violations_route(limit_raw)
     return jsonify(payload), status

@@ -4,7 +4,7 @@ import duckdb
 import numpy as np
 from core.config import data_dir
 from .stats import (SEASONALITY_ALPHA, AGE_STRATA, SEX_STRATA, contingency, drop_incomplete_tail, reports_by_country,
-                    seasonality_test, stratified_metrics, time_to_onset, unclassified_cases, zscore_spikes)
+                    monthly_report_share, seasonality_test, stratified_metrics, time_to_onset, unclassified_cases, zscore_spikes)
 import logging
 log = logging.getLogger(__name__)
 
@@ -500,3 +500,8 @@ def get_age_strata(ingredient_rxcuis, pt):
 
 def get_country_counts(ingredient_rxcuis, pt, limit=15):
     return _with_identity_connection(lambda c: reports_by_country(c, ingredient_rxcuis, pt, limit))
+
+
+def get_monthly_share(ingredient_rxcuis):
+    """Monthly reporting share for an ingredient set (see stats.monthly_report_share)."""
+    return _with_identity_connection(lambda c: monthly_report_share(c, ingredient_rxcuis))

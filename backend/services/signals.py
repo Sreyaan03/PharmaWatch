@@ -29,6 +29,40 @@ def _identity():
     return _IDENTITY
 
 
+def resolve_drug(drug):
+    """Resolve a drug to RxNorm ingredient(s) for analyses that have no event.
+
+    Returns {'ready', 'ok', 'rxcuis', 'identity', 'unresolved', 'note'}; `ok` means the drug
+    resolved and has indexed reports. A name that cannot be resolved is never matched loosely.
+    """
+    from faers import analytics
+
+    out = {"ready": False, "ok": False, "rxcuis": [], "identity": None, "unresolved": [], "note": ""}
+    if not analytics.identity_ready():
+        return out
+    out["ready"] = True
+    try:
+        d = _identity().resolve_drug(drug)
+    except Exception as exc:                     # RxNav unreachable: unresolved, not guessed
+        log.warning(f"[IDENTITY] drug lookup failed for {drug!r}: {exc}")
+        d = {"resolved": False, "ingredients": [], "match": None, "source": None, "suggestion": None}
+    out["identity"] = {"input": drug, "resolved": d["resolved"], "ingredients": d["ingredients"],
+                       "source": d.get("source"), "suggestion": d.get("suggestion")}
+    if not d["resolved"]:
+        out["unresolved"] = ["drug"]
+        return out
+    out["rxcuis"] = [i["rxcui"] for i in d["ingredients"]]
+    indexed = analytics.indexed_ingredients(out["rxcuis"])
+    if indexed is not None and any(r not in indexed for r in out["rxcuis"]):
+        out["identity"]["indexed"] = False
+        out["unresolved"] = ["drug_not_indexed"]
+        out["note"] = "No reports for this ingredient are in the loaded index; this is not a count of zero."
+        return out
+    out["identity"]["indexed"] = True
+    out["ok"] = True
+    return out
+
+
 def resolve_drug_event(drug, event):
     """Resolve a drug and an event once, for any analysis that needs them.
 

@@ -10,12 +10,12 @@ See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidenc
 
 ## Current Position
 
-Phase: 6 of 11 (Real FAERS Data Foundation) — in progress
-Plan: 06-03 code complete; its 20-quarter load is waiting on the FDA host (connection resets since 2026-10-13)
-Status: 06-01 and 06-02 done and committed. One real quarter (2026Q2) loaded.
-Last activity: 2026-10-13 — ingest, identity and single statistics path built and tested.
+Phase: 7 of 11 (Statistical Correctness) — complete; Phase 6 data load still pending the FDA host
+Plan: 07-01, 07-02, 07-03 done and tested
+Status: One real quarter (2026Q2) loaded; 19 more waiting on fis.fda.gov (connection resets since 2026-10-13). The forecast needs 36+ months and reports no_data until they are loaded.
+Last activity: 2026-10-14 — statistics, provenance, descriptive boxed-warning wording and normalised forecast built and tested.
 
-Progress: [█████░░░░░░] 5 of 11 phases complete
+Progress: [██████░░░░░] 6 of 11 phases complete
 
 ## Accumulated Context
 

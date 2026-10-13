@@ -272,3 +272,36 @@ def drop_incomplete_tail(months, counts, min_remaining=6):
         return months, counts, []
     return ([months[i] for i in keep], [counts[i] for i in keep],
             [m for m in months if m >= quarter_start])
+
+
+# ── reporting share over time ────────────────────────────────────────────────
+def monthly_report_share(con, ingredient_rxcuis):
+    """Reports with the drug as suspect, as a share of all reports, by month received.
+
+    The month is that of the de-duplicated case's FDA receipt date (`fda_dt`). Using the share
+    of all reports, not the raw count, removes the growth and seasonality of reporting volume
+    that every drug shares. Returns {'months': ['YYYYMM', ...], 'drug': [...], 'total': [...],
+    'share': [...]} with `share` in percent, over every month that has any report.
+    """
+    rxcuis = list(dict.fromkeys(
+        [ingredient_rxcuis] if isinstance(ingredient_rxcuis, str) else ingredient_rxcuis))
+    if not rxcuis:
+        raise ValueError("at least one ingredient is required")
+    rows = con.execute(f"""
+        WITH exposed AS (
+            SELECT primaryid FROM case_drug
+            WHERE suspect AND ingredient_rxcui IN ({_marks(rxcuis)})
+            GROUP BY primaryid HAVING count(DISTINCT ingredient_rxcui) = ?
+        )
+        SELECT substr(d.fda_dt, 1, 6) AS ym, count(*) AS total,
+               count(e.primaryid) AS drug_reports
+        FROM faers_demo d
+        LEFT JOIN exposed e USING (primaryid)
+        WHERE length(d.fda_dt) = 8
+        GROUP BY ym ORDER BY ym
+    """, rxcuis + [len(rxcuis)]).fetchall()
+    months = [r[0] for r in rows]
+    total = [int(r[1]) for r in rows]
+    drug = [int(r[2]) for r in rows]
+    return {"months": months, "drug": drug, "total": total,
+            "share": [round(100.0 * d / t, 6) if t else 0.0 for d, t in zip(drug, total)]}

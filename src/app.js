@@ -699,16 +699,14 @@ async function loadDrugProfile(name) {
   const trendCtx = document.getElementById('drug-trend-chart');
   if (trendCtx) {
     if (drugTrendChart) drugTrendChart.destroy();
-    // Show a flat fallback immediately while LSTM loads
-    const fallbackLabels = ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
-    const fallbackData = fallbackLabels.map(() => Math.round(totalReportsLocal / 12));
+    // Empty until the monthly series arrives; nothing is drawn in its place
     drugTrendChart = new Chart(trendCtx, {
       type: 'line',
       data: {
-        labels: fallbackLabels,
+        labels: [],
         datasets: [{
-          label: 'Monthly Reports (FAERS)',
-          data: fallbackData,
+          label: 'Share of all reports (%)',
+          data: [],
           borderColor: '#003d7c',
           backgroundColor: 'rgba(0,61,124,0.08)',
           tension: 0.4, fill: true, pointRadius: 4, pointHoverRadius: 6,
@@ -719,17 +717,17 @@ async function loadDrugProfile(name) {
         plugins: { legend: { display: false } },
       }
     });
-    // Async update with real LSTM time-series data
+    // Monthly share of all reports from the loaded FAERS data
     fetch(`/api/lstm?drug=${encodeURIComponent(name)}`)
       .then(r => r.json())
       .then(data => {
-        if (data.error || data.fallback || !data.actual || !data.labels) return;
-        drugTrendChart.data.labels = data.labels.slice(-12);
-        drugTrendChart.data.datasets[0].data = data.actual.slice(-12);
-        drugTrendChart.data.datasets[0].label = `Monthly Reports (LSTM${data.trained_on ? ' — ' + data.trained_on + ' pts' : ''})`;
+        if (data.error || data.source === 'no_data' || !data.actual || !data.labels) return;
+        drugTrendChart.data.labels = data.labels.slice(-24);
+        drugTrendChart.data.datasets[0].data = data.actual.slice(-24);
+        drugTrendChart.data.datasets[0].label = `Share of all reports (%), last ${Math.min(24, data.labels.length)} months`;
         drugTrendChart.update();
       })
-      .catch(() => {}); // silent fail — flat fallback stays
+      .catch(() => {}); // no data: the chart stays empty
   }
 
   // Signals list with illness-hover tooltips on event terms
@@ -977,7 +975,7 @@ function updatePipelineMetrics() {
   if (hdfsEl) hdfsEl.textContent = 'Illustrative (not connected)';
 
   // LSTM metric — fetched from the real backend.
-  // Shows real MSE if model is trained, or 'Not trained' if still using fallback.
+  // Shows which forecast is in use and its error on the held-out months.
   const lstmEl = document.getElementById('lstm-metric');
   if (lstmEl) {
     const updateLSTMMetric = async () => {
@@ -985,14 +983,15 @@ function updatePipelineMetrics() {
         const res = await fetch('/api/lstm?drug=Metformin');
         const data = await res.json();
         if (data.error) { lstmEl.textContent = 'Backend offline'; return; }
-        if (data.fallback) {
-          lstmEl.textContent = 'Not trained — click Train LSTM';
+        if (data.source === 'no_data') {
+          lstmEl.textContent = 'Not enough monthly data';
           lstmEl.style.color = '#e65100';
-        } else if (data.test_mse !== undefined) {
-          lstmEl.textContent = `MSE: ${data.test_mse.toFixed(4)} (real LSTM)`;
+        } else if (data.model_used === 'lstm') {
+          lstmEl.textContent = `LSTM · error ${data.model_error.toFixed(3)} pts (baseline ${data.baseline_error.toFixed(3)})`;
           lstmEl.style.color = '#2e7d32';
         } else {
-          lstmEl.textContent = 'LSTM active';
+          lstmEl.textContent = `Seasonal baseline · error ${data.baseline_error.toFixed(3)} pts`;
+          lstmEl.style.color = '#555';
         }
       } catch (e) {
         lstmEl.textContent = 'Backend offline';
@@ -1119,26 +1118,28 @@ function initPRRCalculator() {
       if (prrC) prrC.value = data.c;
       if (prrD) prrD.value = data.d;
 
-      const sig = data.prr > 5 ? 'CRITICAL' : data.prr > 3 ? 'HIGH' : data.prr > 2 ? 'MODERATE' : data.prr > 1 ? 'LOW' : 'NONE';
-      const col = data.prr > 3 ? '#fdecea' : data.prr > 2 ? '#fff8e1' : '#e8f5e9';
+      const sigClass = normalizeSignalClass(data.signal_strength);
+      const sig = SIGNAL_CLASS_META[sigClass].label;
+      const col = sigClass === 'strong_signal' ? '#fdecea' : sigClass === 'signal' ? '#fff8e1' : '#e8f5e9';
       result.style.background = col;
       result.innerHTML = `PRR = <strong>${data.prr.toFixed(4)}</strong> &nbsp;|&nbsp; Signal Level: <strong>${sig}</strong><br><small style="opacity:0.7;">Drug: ${escHtml(data.drug)} | Event: ${escHtml(data.event)} | Source: openFDA FAERS (live)</small>`;
 
-      // ── ClinicalTrials Corroboration Panel (Option B) ──────────────────────
-      let ctPanel = document.getElementById('prr-ct-corroboration');
+      // ── Registered-trials context panel ─────────────────────────────────────
+      let ctPanel = document.getElementById('prr-ct-context');
       if (!ctPanel) {
         ctPanel = document.createElement('div');
-        ctPanel.id = 'prr-ct-corroboration';
+        ctPanel.id = 'prr-ct-context';
         result.parentElement.appendChild(ctPanel);
       }
 
-      const corrobColors = {
-        STRONG:     { bg: '#e8f5e9', border: '#2e7d32', icon: '✅', label: 'STRONG CORROBORATION' },
-        MODERATE:   { bg: '#fff8e1', border: '#f9a825', icon: '📋', label: 'PARTIAL CORROBORATION' },
-        FAERS_ONLY: { bg: '#fff3e0', border: '#e65100', icon: '⚠️', label: 'FAERS SIGNAL ONLY' },
-        NO_SIGNAL:  { bg: '#f5f5f5', border: '#9e9e9e', icon: 'ℹ️', label: 'NO SIGNAL' }
+      const trialContext = {
+        SIGNAL_AND_EVENT_UNDER_STUDY: { bg: '#fff8e1', border: '#f9a825', icon: '📋', label: 'SIGNAL · PAIR ALSO UNDER STUDY' },
+        SIGNAL_AND_DRUG_UNDER_STUDY:  { bg: '#fff8e1', border: '#f9a825', icon: '📋', label: 'SIGNAL · DRUG UNDER STUDY' },
+        SIGNAL_ONLY:                  { bg: '#fff3e0', border: '#e65100', icon: '⚠️', label: 'SIGNAL · NO REGISTERED TRIAL FOUND' },
+        NO_SIGNAL:                    { bg: '#f5f5f5', border: '#9e9e9e', icon: 'ℹ️', label: 'NO SIGNAL' },
+        NOT_AVAILABLE:                { bg: '#f5f5f5', border: '#9e9e9e', icon: 'ℹ️', label: 'NOT AVAILABLE' }
       };
-      const cc = corrobColors[data.corroboration] || corrobColors.NO_SIGNAL;
+      const cc = trialContext[data.trial_context] || trialContext.NOT_AVAILABLE;
 
       let trialsHtml = '';
       if (data.trial_matches && data.trial_matches.length > 0) {
@@ -1168,7 +1169,7 @@ function initPRRCalculator() {
           <strong style="color:${cc.border};">ClinicalTrials.gov — ${cc.label}</strong>
           <span style="margin-left:auto; font-size:0.7rem; color:#999;">clinicaltrials.gov</span>
         </div>
-        <div>${escHtml(data.corroboration_message)}</div>
+        <div>${escHtml(data.trial_context_message)}</div>
         ${trialsHtml}
       `;
     } catch (e) {
@@ -1733,15 +1734,15 @@ async function loadBoxedWarningAnalysis(drugName) {
       let cardBg, cardBorder, cardIcon, cardHeading, cardSubtext;
       if (n === 0) {
         cardBg='#fef2f2'; cardBorder='#c0392b'; cardIcon='🚨';
-        cardHeading='No Active Clinical Trials — Monitoring Gap';
-        cardSubtext=`Despite an FDA Boxed Warning, <strong>0 active ClinicalTrials</strong> are monitoring "${escHtml(drugName)}".`;
+        cardHeading='No Active Registered Trials Found';
+        cardSubtext=`<strong>0 active ClinicalTrials.gov studies</strong> list "${escHtml(drugName)}" as an intervention.`;
       } else if (n <= 3) {
         cardBg='#fff8e1'; cardBorder='#f9a825'; cardIcon='⚠️';
-        cardHeading=`Limited Trial Monitoring — ${n} Stud${n===1?'y':'ies'} Active`;
-        cardSubtext=`Only <strong>${n} active trial${n===1?'':'s'}</strong> (${rec} recruiting) found.`;
+        cardHeading=`${n} Active Registered Stud${n===1?'y':'ies'}`;
+        cardSubtext=`<strong>${n} active trial${n===1?'':'s'}</strong> (${rec} recruiting) found.`;
       } else {
         cardBg='#e8f5e9'; cardBorder='#2e7d32'; cardIcon='✅';
-        cardHeading=`Well Monitored — ${n} Active Trial${n===1?'':'s'}`;
+        cardHeading=`${n} Active Registered Trial${n===1?'':'s'}`;
         cardSubtext=`<strong>${n} active ClinicalTrials</strong> (${rec} recruiting, ${phase34} Phase 3/4).`;
       }
       const topStudies = (trialsRes.studies || []).slice(0, 5);
@@ -1828,7 +1829,7 @@ async function loadBoxedWarningAnalysis(drugName) {
     const drug = drugName;
     Promise.all([
       fetch(`/api/boxed-warning/timeline/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/boxed-warning/violations/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/boxed-warning/post-warning-reports/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null),
       fetch(`/api/boxed-warning/bias-analysis/${encodeURIComponent(drug)}`).then(r => r.json()).catch(() => null)
     ]).then(([timelineData, violationsData, biasData]) => {
       renderTimelineChart(timelineData);
@@ -1967,7 +1968,7 @@ function ensureViolationsCardStructure(card) {
   if (!card || document.getElementById('bw-violations-table')) return;
   card.innerHTML = `
     <div class="card-header">
-      <h2 class="card-title">⚠️ Post-Warning Violation Log — Persistent SQLite Record</h2>
+      <h2 class="card-title">⚠️ Post-Warning Reports of Labelled Events</h2>
       <span style="font-size:0.72rem; color:#888; align-self:center;">Stored in local pharmawatch.db</span>
     </div>
     <div id="bw-violations-summary" style="margin-bottom:0.75rem; font-size:0.83rem; color:#555;"></div>
@@ -1984,7 +1985,7 @@ function ensureBiasCardStructure(card) {
   if (!card || document.getElementById('bw-bias-chart')) return;
   card.innerHTML = `
     <div class="card-header">
-      <h2 class="card-title">📊 FAERS Bias Analysis — Weber Effect &amp; Notoriety Bias</h2>
+      <h2 class="card-title">📊 Early Peak in Reporting — Weber-effect Pattern</h2>
       <span id="bw-weber-badge"
         style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:700; align-self:center;">
         Analysing…
@@ -2012,7 +2013,7 @@ function renderLiteratureCard(drugName, eventsRes, violationsData, timelineData,
   const violCount = violationsData?.violations_detected ?? '?';
   const postTotal = violationsData?.violations?.reduce((s, v) => s + (v.post_count || 0), 0) ?? 0;
   const preTotal  = violationsData?.violations?.reduce((s, v) => s + (v.pre_count  || 0), 0) ?? 0;
-  const warningDate = violationsData?.warning_date ?? 'unknown';
+  const warningYear = violationsData?.warning_year ?? null;
 
   const weberDetected = biasData?.weber_peak_detected ?? false;
   const peakYear      = biasData?.peak_year ?? null;
@@ -2023,34 +2024,36 @@ function renderLiteratureCard(drugName, eventsRes, violationsData, timelineData,
 
   const pills = [
     {
-      icon: '📉', label: 'A — Prescribing Impact',
-      color: slopeDown ? '#1b5e20' : '#b71c1c',
-      bg:    slopeDown ? '#e8f5e9'  : '#fef2f2',
+      icon: '📉', label: 'A — Reports Over Time',
+      color: '#37474f',
+      bg:    '#eceff1',
       value: preSlope !== null
-        ? `Pre-warning slope: ${preSlope > 0 ? '+' : ''}${preSlope}/yr → Post-warning: ${postSlope > 0 ? '+' : ''}${postSlope}/yr. ${slopeDown ? 'Warning dampened reporting.' : 'Reporting continued rising post-warning.'}`
-        : 'Insufficient FAERS time-series data to compute prescribing slope.',
+        ? `Reports per year changed by ${preSlope > 0 ? '+' : ''}${preSlope}/yr before ${warningYear} and by ${postSlope > 0 ? '+' : ''}${postSlope}/yr from ${warningYear} on.`
+        : (warningYear === null
+            ? 'No sourced warning year is on record for this drug, so no before/after comparison is shown.'
+            : 'Too few years of data to compare slopes.'),
     },
     {
-      icon: '⚠️', label: 'B — Post-Warning Violations',
-      color: '#7f1d1d', bg: '#fef2f2',
-      value: postTotal > 0
-        ? `${violCount} warned event type(s) with <strong>${postTotal.toLocaleString()}</strong> FAERS reports filed AFTER the ${warningDate} warning — prescriptions continued despite the Black Box.`
-        : violationsData === null
-          ? 'Violations data unavailable (backend may still be loading).'
-          : 'No post-warning FAERS reports detected for warned events.',
+      icon: '⚠️', label: 'B — Post-Warning Reports of Labelled Events',
+      color: '#37474f', bg: '#eceff1',
+      value: warningYear === null
+        ? (violationsData === null
+            ? 'Data unavailable (backend may still be loading).'
+            : `${violCount} event type(s) named in the warning were reported; no sourced warning year, so no before/after split.`)
+        : `${violCount} labelled event type(s) with <strong>${postTotal.toLocaleString()}</strong> reports received from ${warningYear} onward.`,
     },
     {
-      icon: '🔄', label: 'C — Unintended Consequences',
+      icon: '🔄', label: 'C — Share of Reports Naming a Labelled Event',
       color: '#1a237e', bg: '#e8eaf6',
-      value: `${warnedPct}% of all FAERS reports for ${escHtml(drugName)} match the boxed warning criteria. Literature shows warnings can produce spillover effects — reduced access alongside continued high-risk use.`,
+      value: `${warnedPct}% of the reports for ${escHtml(drugName)} include an event term named in its boxed warning.`,
     },
     {
-      icon: '📊', label: 'D — Notoriety Bias / Weber Effect',
+      icon: '📊', label: 'D — Early Peak in Reporting',
       color: weberDetected ? '#e65100' : '#33691e',
       bg:    weberDetected ? '#fff3e0'  : '#f1f8e9',
       value: weberDetected
-        ? `⚡ Weber Effect detected: reporting peaked in ${peakYear}. FAERS spike post-warning may reflect media-driven hyper-reporting, not a true incidence increase.`
-        : 'No significant Weber peak detected. FAERS trends appear consistent around the warning date.',
+        ? `Reports peaked early, in ${peakYear}. Peaks of this shape are described as the Weber effect, but counts alone cannot show why reporting changed.`
+        : 'No early peak above the threshold in the reports available.',
     },
   ];
 
@@ -2115,12 +2118,12 @@ function renderTimelineChart(data) {
   const badge = document.getElementById('bw-timeline-badge');
   if (badge) {
     if (data.pre_slope !== null && data.post_slope !== null) {
-      const reduced = data.post_slope < data.pre_slope;
-      badge.textContent = reduced ? '📉 Warning Reduced Reporting' : '📈 Reporting Continued Rising';
-      badge.style.background = reduced ? '#e8f5e9' : '#fef2f2';
-      badge.style.color = reduced ? '#2e7d32' : '#c0392b';
+      const lower = data.post_slope < data.pre_slope;
+      badge.textContent = lower ? '📉 Slower growth from the warning year' : '📈 Faster growth from the warning year';
+      badge.style.background = '#eceff1';
+      badge.style.color = '#37474f';
     } else {
-      badge.textContent = 'Slope data insufficient';
+      badge.textContent = data.warning_year == null ? 'No sourced warning year' : 'Slope data insufficient';
       badge.style.background = '#f5f5f5';
       badge.style.color = '#888';
     }
@@ -2186,8 +2189,8 @@ function renderViolationsLog(drugName, data) {
   if (!data || data.error) {
     showSecondaryCardMessage(
       'bw-violations-card',
-      '⚠️ Post-Warning Violation Log — Persistent SQLite Record',
-      'Violation analysis is unavailable right now. The backend did not return a usable post-warning report summary.'
+      '⚠️ Post-Warning Reports of Labelled Events',
+      'This analysis is unavailable right now. The backend did not return a usable post-warning report summary.'
     );
     return;
   }
@@ -2203,41 +2206,41 @@ function renderViolationsLog(drugName, data) {
 
   const violations = data.violations || [];
   const stored     = data.stored_violations || [];
-  const warningDate = data.warning_date ?? 'unknown';
+  const hasYear = data.warning_year != null;
   const totalPost = violations.reduce((s, v) => s + (v.post_count || 0), 0);
 
   if (summary) {
     summary.innerHTML = data.has_boxed_warning === false
-      ? `ℹ️ No boxed warning found for this drug — no violations to record.`
-      : `<strong>${violations.length}</strong> warned adverse event type(s) detected with FAERS reports filed <strong>after</strong> the <strong>${warningDate}</strong> boxed warning. Total post-warning reports: <strong style="color:#c0392b;">${totalPost.toLocaleString()}</strong>. Each row is persisted to <code>pharmawatch.db → boxed_warning_violations</code>.`;
+      ? `ℹ️ No boxed warning found for this drug, so there is nothing to compare.`
+      : escHtml(data.message || '') + (hasYear ? ` Total reports received from <strong>${escHtml(String(data.warning_year))}</strong> onward: <strong>${totalPost.toLocaleString()}</strong>.` : '');
   }
 
   if (table) {
     if (violations.length === 0) {
-      table.innerHTML = `<p style="color:#888; font-size:0.83rem; padding:1rem 0;">No warned adverse events detected in top FAERS reports for this drug.</p>`;
+      table.innerHTML = `<p style="color:#888; font-size:0.83rem; padding:1rem 0;">No event term named in the warning was among the most reported terms for this drug.</p>`;
     } else {
       table.innerHTML = `
         <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
           <thead><tr style="border-bottom:2px solid #ddd; text-align:left; background:#fef2f2;">
             <th style="padding:7px 8px;">Adverse Event</th>
-            <th style="padding:7px 8px;" title="FAERS reports filed after the warning date">Post-Warning Reports ↓</th>
-            <th style="padding:7px 8px;" title="FAERS reports filed before the warning date">Pre-Warning Reports</th>
-            <th style="padding:7px 8px;">% of All FAERS</th>
-            <th style="padding:7px 8px;">Warning Date</th>
+            <th style="padding:7px 8px;" title="Reports received from the warning year onward">Reports From Warning Year ↓</th>
+            <th style="padding:7px 8px;" title="Reports received before the warning year">Reports Before</th>
+            <th style="padding:7px 8px;">% of All Reports</th>
+            <th style="padding:7px 8px;">All Years</th>
           </tr></thead>
           <tbody>
             ${violations.map(v => `
               <tr style="border-bottom:1px solid #f0e0e0; background:${v.post_count > 0 ? '#fff9f9' : '#fff'};">
                 <td style="padding:6px 8px; font-weight:600;">${escHtml(v.term)}</td>
-                <td style="padding:6px 8px; color:#c0392b; font-weight:800;">${v.post_count.toLocaleString()}</td>
-                <td style="padding:6px 8px; color:#2e7d32;">${v.pre_count.toLocaleString()}</td>
+                <td style="padding:6px 8px; font-weight:800;">${v.post_count == null ? '—' : v.post_count.toLocaleString()}</td>
+                <td style="padding:6px 8px;">${v.pre_count == null ? '—' : v.pre_count.toLocaleString()}</td>
                 <td style="padding:6px 8px;">${v.percentage}%</td>
-                <td style="padding:6px 8px; color:#666;">${escHtml(v.warning_date)}</td>
+                <td style="padding:6px 8px; color:#666;">${v.total_count.toLocaleString()}</td>
               </tr>`).join('')}
           </tbody>
         </table>
         <div style="margin-top:0.5rem; font-size:0.72rem; color:#888; font-style:italic;">
-          Post-warning count = FAERS reports with receivedate ≥ warning effective_time. Stored in local SQLite DB on each query.
+          Counts are reports received from 1 January of the sourced warning year. Report counts are not rates and depend on reporting behaviour.
         </div>`;
     }
   }
@@ -2251,12 +2254,12 @@ function renderViolationsLog(drugName, data) {
       if (allLog.style.display !== 'none') { allLog.style.display = 'none'; allBtn.textContent = '📋 View Entire DB Log'; return; }
       allBtn.textContent = '⏳ Loading…';
       try {
-        const res = await fetch('/api/boxed-warning/violations/all?limit=100').then(r => r.json());
+        const res = await fetch('/api/boxed-warning/post-warning-reports/all?limit=100').then(r => r.json());
         const rows = res.violations || [];
         if (dbStatus) dbStatus.textContent = `${rows.length} total records in pharmawatch.db`;
         allLog.innerHTML = rows.length === 0
-          ? '<p style="color:#888; font-size:0.82rem;">No violations stored yet.</p>'
-          : `<div style="font-size:0.78rem; font-weight:700; margin-bottom:0.5rem; color:#c0392b;">All Stored Violations — pharmawatch.db (${rows.length} records)</div>
+          ? '<p style="color:#888; font-size:0.82rem;">No records stored yet.</p>'
+          : `<div style="font-size:0.78rem; font-weight:700; margin-bottom:0.5rem; color:#c0392b;">All Stored Records (${rows.length})</div>
              <table style="width:100%; font-size:0.77rem; border-collapse:collapse;">
                <thead><tr style="border-bottom:2px solid #ddd; text-align:left;">
                  <th style="padding:5px 7px;">Drug</th>
@@ -2295,8 +2298,8 @@ function renderBiasChart(data) {
   if (!data || data.error) {
     showSecondaryCardMessage(
       'bw-bias-card',
-      '📊 FAERS Bias Analysis — Weber Effect & Notoriety Bias',
-      'Weber-effect analysis is unavailable right now. The backend did not return a usable bias-analysis response.'
+      '📊 Early Peak in Reporting (Weber-effect pattern)',
+      'This analysis is unavailable right now. The backend did not return a usable bias-analysis response.'
     );
     return;
   }
@@ -2312,14 +2315,13 @@ function renderBiasChart(data) {
 
   // ── Badge ──────────────────────────────────────────────────────────────────
   if (badge) {
-    const tierLabels = {
-      exact:    'Exact window',
-      proxy:    'Historical proxy',
-      relative: 'Relative pattern',
+    const methodLabels = {
+      window:           'Sourced warning-year window',
+      relative_pattern: 'Descriptive relative pattern',
     };
-    const tierLabel = data.weber_tier ? ` · ${tierLabels[data.weber_tier] || data.weber_tier}` : '';
+    const tierLabel = data.method ? ` · ${methodLabels[data.method] || data.method}` : '';
     if (data.weber_peak_detected) {
-      badge.textContent = `⚡ Weber Peak ${data.peak_year}${tierLabel}`;
+      badge.textContent = `Early peak ${data.peak_year}${tierLabel}`;
       badge.style.background = '#fff3e0';
       badge.style.color       = '#e65100';
     } else {
@@ -2355,11 +2357,10 @@ function renderBiasChart(data) {
     const dataFirst = (data.labels || [])[0] || '?';
     coverageBanner.innerHTML = `
       ⚠️ <strong>Data coverage note:</strong>
-      The FDA boxed warning was originally issued in <strong>${escHtml(String(data.warning_year))}</strong>,
-      but openFDA FAERS electronic records only begin at <strong>${escHtml(dataFirst)}</strong>.
-      The chart shows available data (${escHtml(data.data_coverage || dataFirst + '–present')}).
-      Weber Effect analysis uses a <em>${escHtml(data.weber_tier === 'proxy' ? 'historical proxy' : 'relative pattern')}</em>
-      method to infer the early-reporting surge from the shape of available data.
+      The recorded warning year is <strong>${escHtml(String(data.warning_year))}</strong>,
+      but the reports available only begin at <strong>${escHtml(dataFirst)}</strong>.
+      The chart shows available data (${escHtml(data.data_coverage || dataFirst + '–present')});
+      the window around the warning cannot be examined.
     `;
   } else if (coverageBanner) {
     coverageBanner.remove();
