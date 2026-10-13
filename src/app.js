@@ -770,10 +770,6 @@ let throughputChart = null;
 let kafkaLagChart = null;
 let lstmDemoChart = null;
 
-function randomArray(len, min, max) {
-  return Array.from({ length: len }, () => Math.floor(Math.random() * (max - min + 1) + min));
-}
-
 function buildLabels24h() {
   const now = new Date();
   return Array.from({ length: 24 }, (_, i) => {
@@ -794,19 +790,19 @@ function initSignalIntensityChart() {
       labels: emptyLabels,
       datasets: [
         {
-          label: 'Critical Signals',
+          label: 'Strong signals',
           data: new Array(24).fill(0),
           borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.12)',
           tension: 0.4, fill: true, pointRadius: 2,
         },
         {
-          label: 'High Signals',
+          label: 'Signals',
           data: new Array(24).fill(0),
           borderColor: '#e65100', backgroundColor: 'rgba(230,81,0,0.08)',
           tension: 0.4, fill: true, pointRadius: 2,
         },
         {
-          label: 'Moderate Signals',
+          label: 'No signal (computed)',
           data: new Array(24).fill(0),
           borderColor: '#0070c0', backgroundColor: 'rgba(0,112,192,0.08)',
           tension: 0.4, fill: true, pointRadius: 2,
@@ -827,11 +823,11 @@ function initSignalIntensityChart() {
   fetch('/api/dashboard/signal-intensity')
     .then(r => r.json())
     .then(data => {
-      if (!data.labels || !data.critical) return;
+      if (!data.labels || !data.strong_signal) return;
       signalIntensityChart.data.labels = data.labels;
-      signalIntensityChart.data.datasets[0].data = data.critical;
-      signalIntensityChart.data.datasets[1].data = data.high;
-      signalIntensityChart.data.datasets[2].data = data.moderate;
+      signalIntensityChart.data.datasets[0].data = data.strong_signal;
+      signalIntensityChart.data.datasets[1].data = data.signal;
+      signalIntensityChart.data.datasets[2].data = data.none;
       signalIntensityChart.update();
     })
     .catch(() => {}); // silent fail — chart stays zeroed (not random)
@@ -975,19 +971,10 @@ function animateMeters() {
 function updatePipelineMetrics() {
   // Kafka metrics are updated live by distributed_storage.js (startKafkaMetricBar).
   // Spark metrics are driven by distributed_storage.js (startSparkSimulation).
-  // HDFS metrics below provide architectural simulation.
   // LSTM and NLP are fetched from real backend sources.
-  const metrics = [
-    { id: 'hdfs-metric',  vals: ['4.2 TB stored', '4.21 TB stored', '4.19 TB stored'] },
-  ];
-  metrics.forEach(m => {
-    const el = document.getElementById(m.id);
-    if (el) {
-      el.textContent = m.vals[0];
-      let idx = 0;
-      setInterval(() => { idx = (idx + 1) % m.vals.length; el.textContent = m.vals[idx]; }, 3000 + Math.random() * 2000);
-    }
-  });
+  // HDFS/HBase is an architecture illustration: no cluster is connected, so no size is shown.
+  const hdfsEl = document.getElementById('hdfs-metric');
+  if (hdfsEl) hdfsEl.textContent = 'Illustrative (not connected)';
 
   // LSTM metric — fetched from the real backend.
   // Shows real MSE if model is trained, or 'Not trained' if still using fallback.
@@ -1563,7 +1550,7 @@ function initNerPanel() {
       return `
         <div class="dashboard-card" style="margin: 0; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); background: rgba(15, 23, 42, 0.3);">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-            <span class="status-pill status-pill--${s.signal_strength === 'critical' ? 'active' : s.signal_strength === 'high' ? 'review' : 'closed'}">${s.signal_strength.toUpperCase()}</span>
+            <span class="status-pill status-pill--${SIGNAL_CLASS_META[normalizeSignalClass(s.signal_strength)].pill}">${SIGNAL_CLASS_META[normalizeSignalClass(s.signal_strength)].label}</span>
             <span style="font-size: 0.75rem; color: var(--text-muted);">Source: EHR NER</span>
           </div>
           <h4 style="font-size: 1rem; font-weight: 700; margin: 0.2rem 0;">${escHtml(s.drug)}</h4>

@@ -72,7 +72,7 @@ def test_dashboard_endpoints(client):
     assert r2.status_code == 200
     d2 = r2.get_json()
     assert "labels" in d2
-    assert "critical" in d2
+    assert {"strong_signal", "signal", "none"} <= set(d2)
     assert len(d2["labels"]) == 24
 
     # 3. drug-categories

@@ -1,7 +1,6 @@
 # backend/services/dashboard.py
 # Business logic for backend/routes/dashboard.py (no Flask imports).
 
-import math
 from datetime import datetime, timedelta, timezone
 from db.mysql import query, query_one
 import logging
@@ -13,7 +12,10 @@ def local_stats():
         r_drugs = query_one("SELECT COUNT(DISTINCT drug) AS cnt FROM signals_cache")
         drugs_monitored = int(r_drugs["cnt"]) if r_drugs and r_drugs.get("cnt") else 0
 
-        r_signals = query_one("SELECT COUNT(*) AS cnt FROM signals_cache")
+        # Only pairs that meet the signal criteria count as signals; "moderate" is the legacy
+        # label for pairs that do not.
+        r_signals = query_one(
+            "SELECT COUNT(*) AS cnt FROM signals_cache WHERE signal_strength IN ('signal', 'strong_signal', 'critical', 'high')")
         signals_detected = int(r_signals["cnt"]) if r_signals and r_signals.get("cnt") else 0
 
         r_pairs = query_one("SELECT COUNT(*) AS cnt FROM drug_events")
@@ -22,8 +24,8 @@ def local_stats():
         r_inter = query_one("SELECT COUNT(*) AS cnt FROM interaction_predictions")
         interactions_analyzed = int(r_inter["cnt"]) if r_inter and r_inter.get("cnt") else 0
 
-        # Try to get real reports count from local DuckDB FAERS database
-        reports_analyzed = max(signals_detected * 1200, drug_event_pairs * 80)
+        # The number of reports comes from the loaded FAERS data or is not reported at all.
+        reports_analyzed = None
         source_label = "mysql"
         try:
             from faers.analytics import get_data_coverage
@@ -54,13 +56,22 @@ def local_stats():
             "source": "fallback", "error": str(e)
         }, 200
 
+# Rows cached before the classes were renamed carry the old labels.
+_CLASS_OF = {"strong_signal": "strong_signal", "critical": "strong_signal",
+             "signal": "signal", "high": "signal",
+             "none": "none", "moderate": "none"}
+
+
 def dashboard_signal_intensity():
-    """Returns hourly signal counts for the last 24 hours grouped by severity using real computed_at timestamps."""
+    """Signals computed in each of the last 24 hours, by class, from the real computed_at times.
+
+    This charts when pairs were computed, not when events occurred. With no recent rows the
+    series are empty and `source` says so; nothing is distributed over the hours.
+    """
     try:
         now = datetime.now(timezone.utc)
         hours = [(now - timedelta(hours=(23 - i))).strftime("%H:00") for i in range(24)]
 
-        # Aggregate per hour per severity using MySQL DATE_FORMAT
         cutoff = (now - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         sql = """
             SELECT DATE_FORMAT(computed_at, '%%H:00') AS hour, signal_strength AS severity, COUNT(*) AS cnt
@@ -70,53 +81,30 @@ def dashboard_signal_intensity():
         """
         rows = query(sql, (cutoff,))
 
-        # Build hour → severity → count lookup from real data
         hourly = {}
-        has_real_data = len(rows) > 0
         for r in rows:
             h = r.get("hour")
             if not h:
                 continue
-            if h not in hourly:
-                hourly[h] = {"critical": 0, "high": 0, "moderate": 0}
-            sev = r["severity"] if r.get("severity") in ("critical", "high", "moderate") else "moderate"
-            hourly[h][sev] = hourly[h].get(sev, 0) + int(r["cnt"])
+            cls = _CLASS_OF.get(r.get("severity"), "none")
+            bucket = hourly.setdefault(h, {"strong_signal": 0, "signal": 0, "none": 0})
+            bucket[cls] += int(r["cnt"])
 
-        if has_real_data:
-            critical = [hourly.get(h, {}).get("critical", 0) for h in hours]
-            high     = [hourly.get(h, {}).get("high", 0)     for h in hours]
-            moderate = [hourly.get(h, {}).get("moderate", 0) for h in hours]
-            source = "mysql_real_timestamps"
-        else:
-            # Fallback: distribute total counts using diurnal weights
-            total_rows = query("SELECT signal_strength AS severity, COUNT(*) AS cnt FROM signals_cache GROUP BY signal_strength")
-            counts = {r["severity"]: int(r["cnt"]) for r in total_rows if r.get("severity")} if total_rows else {}
-
-            def hour_weight(i):
-                return 0.4 + 0.6 * math.sin(math.pi * max(0, min(i - 6, 12)) / 12)
-            weights = [hour_weight(i) for i in range(24)]
-            w_sum = sum(weights) or 1
-            def distribute(n):
-                return [round(n * w / w_sum) for w in weights]
-
-            critical = distribute(counts.get("critical", 0))
-            high     = distribute(counts.get("high", 0))
-            moderate = distribute(counts.get("moderate", 0))
-            source = "mysql_distributed_fallback"
-
+        series = {c: [hourly.get(h, {}).get(c, 0) for h in hours]
+                  for c in ("strong_signal", "signal", "none")}
         return {
             "labels": hours,
-            "critical": critical,
-            "high": high,
-            "moderate": moderate,
-            "source": source
+            "strong_signal": series["strong_signal"],
+            "signal": series["signal"],
+            "none": series["none"],
+            "source": "mysql_real_timestamps" if rows else "no_data",
         }, 200
     except Exception as e:
         now = datetime.now(timezone.utc)
         hours_fb = [(now - timedelta(hours=(23 - i))).strftime("%H:00") for i in range(24)]
         return {
-            "labels": hours_fb, "critical": [0]*24,
-            "high": [0]*24, "moderate": [0]*24,
+            "labels": hours_fb, "strong_signal": [0] * 24,
+            "signal": [0] * 24, "none": [0] * 24,
             "source": "fallback", "error": str(e)
         }, 200
 

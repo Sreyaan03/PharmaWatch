@@ -3,8 +3,8 @@ import os
 import duckdb
 import numpy as np
 from core.config import data_dir
-from .stats import (AGE_STRATA, SEX_STRATA, contingency, reports_by_country, stratified_metrics,
-                    time_to_onset, unclassified_cases, zscore_spikes)
+from .stats import (SEASONALITY_ALPHA, AGE_STRATA, SEX_STRATA, contingency, drop_incomplete_tail, reports_by_country,
+                    seasonality_test, stratified_metrics, time_to_onset, unclassified_cases, zscore_spikes)
 import logging
 log = logging.getLogger(__name__)
 
@@ -280,6 +280,9 @@ def get_temporal_velocity_duckdb(drug, event):
         months = [r[0] for r in rows]
         counts = [int(r[1]) for r in rows]
 
+        # The newest quarter is still filling in; it is left out rather than read as a drop.
+        months, counts, dropped = drop_incomplete_tail(months, counts)
+
         # Compute Z-score anomaly spikes
         spikes, z_scores = zscore_spikes(counts)
 
@@ -291,6 +294,7 @@ def get_temporal_velocity_duckdb(drug, event):
             "spikes": spikes,
             "z_scores": z_scores,
             "has_spike": any(spikes),
+            "incomplete_months_excluded": dropped,
             "source": "faers_duckdb"
         }
     except Exception as e:
@@ -330,7 +334,11 @@ def get_seasonality_duckdb(drug, event):
         counts = [m_map.get(f"{i+1:02d}", 0) for i in range(12)]
         avg = np.mean(counts) if np.mean(counts) > 0 else 1.0
         seasonality_index = [round(float(c / avg), 2) for c in counts]
-        elevated_months = [months_list[i] for i, si in enumerate(seasonality_index) if si >= 1.15]
+        test = seasonality_test(counts)
+        is_seasonal = bool(test["applicable"] and test["p_value"] < SEASONALITY_ALPHA)
+        # Months are named only when the distribution departs from uniform.
+        elevated_months = ([months_list[i] for i, si in enumerate(seasonality_index) if si >= 1.15]
+                           if is_seasonal else [])
 
         return {
             "drug": drug,
@@ -339,7 +347,8 @@ def get_seasonality_duckdb(drug, event):
             "counts": counts,
             "seasonality_index": seasonality_index,
             "elevated_months": elevated_months,
-            "is_seasonal": len(elevated_months) >= 2,
+            "is_seasonal": is_seasonal,
+            "test": {"name": "chi-square vs days-in-month", "alpha": SEASONALITY_ALPHA, **test},
             "source": "faers_duckdb"
         }
     except Exception as e:

@@ -8,13 +8,6 @@ const MLModels = {
   lstmDemoChart: null,
 
   /**
-   * Generates a smooth, varying sine wave array with some noise.
-   */
-  generateRandomArray(len, min, max) {
-    return Array.from({ length: len }, () => Math.floor(Math.random() * (max - min + 1) + min));
-  },
-
-  /**
    * Initiates the visual counter for BioBERT entities extraction rate
    */
   startBioBERTSimulation() {
@@ -38,9 +31,8 @@ const MLModels = {
           el.textContent = 'BioBERT error — check server';
         }
       } else {
-        // Server not running — keep the simulated number so the page looks normal
-        const rate = 6000 + Math.floor((Math.random() - 0.5) * 800);
-        el.textContent = `${rate.toLocaleString()} entities/min`;
+        // Server not running: there is no throughput to report
+        el.textContent = 'BioBERT not running';
       }
     };
 

@@ -68,6 +68,32 @@ def serve_index():
     resp.headers['Expires'] = '0'
     return resp
 
+@app.after_request
+def attach_provenance(response):
+    """Add `meta` (evidence kind, data version, generated_at) to JSON object responses."""
+    import json
+    from flask import request
+    from core.response import with_meta
+    from services.provenance import current_data_version, describe
+
+    if (response.status_code >= 400 or response.direct_passthrough
+            or response.mimetype != "application/json"):
+        return response
+    kind = describe(request.path)
+    if kind is None:
+        return response
+    try:
+        payload = json.loads(response.get_data(as_text=True))
+    except ValueError:
+        return response
+    evidence, model_version, source = kind
+    data_version = {"faers_local": current_data_version, "openfda_live": lambda: "openFDA (live query)"}.get(source)
+    annotated = with_meta(payload, evidence, data_version() if data_version else None, model_version)
+    if annotated is not payload:
+        response.set_data(json.dumps(annotated))
+    return response
+
+
 # Register Blueprints
 from routes.general import general_bp
 from routes.signals import signals_bp

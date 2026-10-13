@@ -8,6 +8,7 @@
     },
     "GET /api/analytics/data-coverage": {
       "keys": [
+        "meta",
         "source",
         "status",
         "total_drugs",
@@ -41,6 +42,7 @@
         "boxed_warning_percentage",
         "drug",
         "has_boxed_warning",
+        "meta",
         "other_events",
         "total_reports",
         "warned_events"
@@ -53,6 +55,7 @@
         "drug",
         "generic_name",
         "has_warning",
+        "meta",
         "warning_text"
       ],
       "status": 200
@@ -61,6 +64,7 @@
       "keys": [
         "drug",
         "error",
+        "meta",
         "warning_year",
         "weber_peak_detected"
       ],
@@ -69,7 +73,8 @@
     "GET /api/boxed-warning/timeline/<drug_name>": {
       "keys": [
         "drug",
-        "error"
+        "error",
+        "meta"
       ],
       "status": 200
     },
@@ -78,6 +83,7 @@
         "drug",
         "has_boxed_warning",
         "message",
+        "meta",
         "stored_violations",
         "violations"
       ],
@@ -86,6 +92,7 @@
     "GET /api/boxed-warning/violations/all": {
       "keys": [
         "count",
+        "meta",
         "violations"
       ],
       "status": 200
@@ -95,6 +102,7 @@
         "data",
         "error",
         "labels",
+        "meta",
         "source"
       ],
       "status": 200
@@ -104,18 +112,20 @@
         "data",
         "error",
         "labels",
+        "meta",
         "source"
       ],
       "status": 200
     },
     "GET /api/dashboard/signal-intensity": {
       "keys": [
-        "critical",
         "error",
-        "high",
         "labels",
-        "moderate",
-        "source"
+        "meta",
+        "none",
+        "signal",
+        "source",
+        "strong_signal"
       ],
       "status": 200
     },
@@ -123,6 +133,7 @@
       "keys": [
         "events",
         "message",
+        "meta",
         "source",
         "total_cases"
       ],
@@ -136,6 +147,7 @@
         "groups",
         "highest_risk_group",
         "message",
+        "meta",
         "prr_values",
         "source",
         "total_reports"
@@ -150,6 +162,7 @@
         "event",
         "grr_scores",
         "message",
+        "meta",
         "share_pct",
         "source",
         "top_country",
@@ -163,6 +176,7 @@
         "drug",
         "event",
         "geo",
+        "meta",
         "sex"
       ],
       "status": 200
@@ -172,6 +186,7 @@
         "drug",
         "event",
         "message",
+        "meta",
         "source",
         "total_reports"
       ],
@@ -180,6 +195,7 @@
     "GET /api/graph": {
       "keys": [
         "links",
+        "meta",
         "nodes"
       ],
       "status": 200
@@ -187,6 +203,7 @@
     "GET /api/graph/detailed": {
       "keys": [
         "links",
+        "meta",
         "nodes"
       ],
       "status": 200
@@ -200,6 +217,7 @@
     "GET /api/health": {
       "keys": [
         "database",
+        "meta",
         "model",
         "status"
       ],
@@ -207,6 +225,7 @@
     },
     "GET /api/interactions/recent": {
       "keys": [
+        "meta",
         "predictions"
       ],
       "status": 200
@@ -216,6 +235,7 @@
         "cid",
         "found",
         "input_type",
+        "meta",
         "name",
         "smiles"
       ],
@@ -224,6 +244,7 @@
     "GET /api/interactions/uncharted": {
       "keys": [
         "drugs",
+        "meta",
         "min_reports",
         "pairs",
         "total_pairs",
@@ -238,6 +259,7 @@
         "drugs_monitored",
         "error",
         "interactions_analyzed",
+        "meta",
         "reports_analyzed",
         "signals_detected",
         "source",
@@ -252,13 +274,15 @@
         "drug",
         "fallback",
         "labels",
+        "meta",
         "note"
       ],
       "status": 200
     },
     "GET /api/lstm/gap-scan": {
       "keys": [
-        "error"
+        "error",
+        "meta"
       ],
       "status": 200
     },
@@ -266,7 +290,8 @@
       "keys": [
         "alerts",
         "count",
-        "error"
+        "error",
+        "meta"
       ],
       "status": 200
     },
@@ -274,6 +299,7 @@
       "keys": [
         "count",
         "error",
+        "meta",
         "papers"
       ],
       "status": 200
@@ -283,6 +309,7 @@
         "error",
         "ingested",
         "kafka_running",
+        "meta",
         "source",
         "topics"
       ],
@@ -292,6 +319,7 @@
       "keys": [
         "count",
         "error",
+        "meta",
         "trials"
       ],
       "status": 200
@@ -306,6 +334,7 @@
         "event",
         "fallback",
         "is_signal",
+        "meta",
         "note",
         "prr",
         "source"
@@ -324,6 +353,7 @@
         "drug",
         "event",
         "is_signal",
+        "meta",
         "prr",
         "trial_matches"
       ],
@@ -331,6 +361,7 @@
     },
     "GET /api/signals": {
       "keys": [
+        "meta",
         "signals",
         "total"
       ],
@@ -345,6 +376,7 @@
     "GET /api/signals/network": {
       "keys": [
         "links",
+        "meta",
         "nodes"
       ],
       "status": 200
@@ -353,6 +385,7 @@
       "keys": [
         "hbase_ready",
         "message",
+        "meta",
         "status"
       ],
       "status": 200
@@ -365,6 +398,7 @@
         "event",
         "is_seasonal",
         "message",
+        "meta",
         "months",
         "seasonality_index",
         "source"
@@ -379,6 +413,7 @@
         "event",
         "median_days",
         "message",
+        "meta",
         "peak_bucket",
         "source",
         "total_reports"
@@ -392,6 +427,7 @@
         "event",
         "has_spike",
         "message",
+        "meta",
         "months",
         "source",
         "spikes",
@@ -404,6 +440,7 @@
         "active_safety_count",
         "active_safety_monitoring",
         "drug",
+        "meta",
         "recruiting_count",
         "studies",
         "total_studies"
@@ -448,6 +485,7 @@
     },
     "POST /api/signals/ner-mine": {
       "keys": [
+        "meta",
         "task_id"
       ],
       "status": 200

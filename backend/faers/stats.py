@@ -228,3 +228,47 @@ def reports_by_country(con, ingredient_rxcuis, pt, limit=15):
         GROUP BY 1 ORDER BY n DESC, country LIMIT ?
     """, args + [int(limit)]).fetchall()
     return [(r[0], int(r[1])) for r in rows]
+
+
+# ── seasonality and report-month completeness ───────────────────────────────────
+_DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+SEASONALITY_ALPHA = 0.01
+MIN_SEASONALITY_CASES = 60        # keeps every expected monthly count at about 5 or more
+
+
+def seasonality_test(counts):
+    """Chi-square test of monthly counts (Jan..Dec) against a uniform spread over the calendar.
+
+    Expected counts are proportional to the days in each month. Returns chi2, p_value and
+    `applicable`; below MIN_SEASONALITY_CASES the test is not applicable and nothing is called
+    seasonal.
+    """
+    from scipy.stats import chi2 as chi2_dist
+
+    total = int(sum(counts))
+    if len(counts) != 12 or total < MIN_SEASONALITY_CASES:
+        return {"applicable": False, "chi2": None, "p_value": None, "df": 11, "total": total}
+    days = sum(_DAYS_IN_MONTH)
+    stat = sum((c - total * d / days) ** 2 / (total * d / days) for c, d in zip(counts, _DAYS_IN_MONTH))
+    return {"applicable": True, "chi2": round(float(stat), 3),
+            "p_value": float(chi2_dist.sf(stat, 11)), "df": 11, "total": total}
+
+
+def drop_incomplete_tail(months, counts, min_remaining=6):
+    """Remove the months of the most recent calendar quarter present in a monthly series.
+
+    Reports for recent events keep arriving for months, so the newest quarter is under-counted
+    and would otherwise look like a collapse (or distort a spike baseline). `months` are
+    'YYYYMM' strings in ascending order. Nothing is dropped if fewer than `min_remaining`
+    months would be left. Returns (months, counts, dropped_months).
+    """
+    if not months:
+        return months, counts, []
+    last = months[-1]
+    year, month = int(last[:4]), int(last[4:6])
+    quarter_start = f"{year:04d}{3 * ((month - 1) // 3) + 1:02d}"
+    keep = [i for i, m in enumerate(months) if m < quarter_start]
+    if len(keep) < min_remaining:
+        return months, counts, []
+    return ([months[i] for i in keep], [counts[i] for i in keep],
+            [m for m in months if m >= quarter_start])
