@@ -35,9 +35,6 @@ RUN pip install --no-cache-dir \
 # Copy backend Python application
 COPY backend/ /app/backend/
 
-# Copy scripts folder (required by helpers/models.py for GNN model classes)
-COPY scripts/ /app/scripts/
-
 # Copy frontend static files (served by Caddy or Flask send_from_directory)
 COPY src/ /app/src/
 

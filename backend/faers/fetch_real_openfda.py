@@ -4,7 +4,6 @@ Script to fetch 100% REAL adverse event reports directly from openFDA API
 (including global and Indian records) and load them into DuckDB.
 """
 
-import os
 import duckdb
 import pandas as pd
 import requests

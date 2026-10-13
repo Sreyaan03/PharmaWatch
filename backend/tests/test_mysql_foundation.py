@@ -5,7 +5,6 @@ Validates schema definition, DDL statements, clean_row casting, and configuratio
 
 import os
 import sys
-import pytest
 from decimal import Decimal
 
 # Ensure backend is on sys.path
@@ -106,8 +105,8 @@ def test_dockerignore_at_repo_root():
     assert "*.db" in content
     assert "venv/" in content
 
-def test_seed_clean_legacy_data_handles_missing_file():
+def test_seed_clean_legacy_data_handles_missing_file(tmp_path):
     from db.migrate import seed_clean_legacy_data
     # Should not throw exception when sqlite file does not exist
-    seed_clean_legacy_data(None, "non_existent_file.db")
+    seed_clean_legacy_data(None, str(tmp_path / "non_existent_file.db"))
 

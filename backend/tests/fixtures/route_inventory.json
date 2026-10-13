@@ -439,12 +439,6 @@
         "task_id"
       ],
       "status": 200
-    },
-    "POST /api/system/start-bigdata": {
-      "keys": [
-        "error"
-      ],
-      "status": 403
     }
   },
   "rules": [
@@ -717,12 +711,6 @@
         "GET"
       ],
       "rule": "/api/system/bigdata-status"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "rule": "/api/system/start-bigdata"
     },
     {
       "methods": [

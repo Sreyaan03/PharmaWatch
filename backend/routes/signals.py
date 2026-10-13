@@ -82,10 +82,3 @@ def trigger_processing():
     payload, status = svc.trigger_processing()
     return jsonify(payload), status
 
-
-@signals_bp.route("/api/system/start-bigdata", methods=["POST"])
-@require_admin
-def start_bigdata():
-    """HBase launcher — verifies or starts hbase-server and connects to Thrift."""
-    payload, status = svc.start_bigdata()
-    return jsonify(payload), status

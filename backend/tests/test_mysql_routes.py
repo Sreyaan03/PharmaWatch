@@ -6,7 +6,6 @@ Validates zero SQLite imports in application code, endpoint responses, admin aut
 import os
 import sys
 import pytest
-from datetime import datetime, timedelta
 
 # Ensure backend directory is in sys.path
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -107,9 +106,6 @@ def test_admin_endpoints_require_auth(client, monkeypatch):
     monkeypatch.delenv("ADMIN_API_KEY", raising=False)
     r_train = client.post("/api/lstm/train")
     assert r_train.status_code == 403
-
-    r_bigdata = client.post("/api/system/start-bigdata")
-    assert r_bigdata.status_code == 403
 
     r_scrape = client.post("/api/reddit/scrape")
     assert r_scrape.status_code == 403

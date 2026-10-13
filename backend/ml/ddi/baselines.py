@@ -10,16 +10,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
-import sys
 import json
 import random
 import pickle
 import argparse
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix, lil_matrix
+from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score, average_precision_score
 import xgboost as xgb
 
 from core.config import SPLITS_DIR, MODEL_DIR

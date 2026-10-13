@@ -10,7 +10,6 @@
 
 import os
 import sys
-import json
 import pytest
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -18,7 +17,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from app import app
-from database import get_prediction, upsert_prediction
+from database import get_prediction
 
 
 @pytest.fixture

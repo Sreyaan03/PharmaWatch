@@ -2,8 +2,6 @@
 # Business logic for backend/routes/signals.py (no Flask imports).
 
 import json
-import subprocess
-import time
 import traceback
 import uuid
 
@@ -357,40 +355,3 @@ def trigger_processing():
     process_posts_with_ner(run_ner)
     return {"status": "ok"}, 200
 
-
-def start_bigdata():
-    """HBase launcher — verifies or starts hbase-server and connects to Thrift."""
-    try:
-        import happybase
-    except ImportError:
-        return {"status": "not_deployed", "hbase_ready": False, "message": "happybase is not installed."}, 200
-
-    # Quick check if already online
-    try:
-        conn = happybase.Connection('127.0.0.1', port=9090, timeout=1500)
-        conn.open()
-        conn.tables()
-        conn.close()
-        return {"status": "ready", "hbase_ready": True, "message": "HBase is online"}, 200
-    except Exception:
-        pass
-
-    try:
-        subprocess.run(
-            ["docker", "start", "hbase-server"],
-            capture_output=True, text=True, timeout=15
-        )
-    except Exception as e:
-        return {"status": "error", "hbase_ready": False, "message": f"docker start failed: {e}"}, 500
-
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        try:
-            conn = happybase.Connection('127.0.0.1', port=9090, timeout=2000)
-            conn.open()
-            conn.tables()
-            conn.close()
-            return {"status": "ready", "hbase_ready": True, "message": "HBase is online"}, 200
-        except Exception:
-            time.sleep(2)
-    return {"status": "timeout", "hbase_ready": False, "message": "HBase Thrift ready timeout."}, 202

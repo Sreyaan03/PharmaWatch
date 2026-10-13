@@ -3,14 +3,6 @@
 /* ── Big Data status helpers ── */
 let _bigdataReady = false;
 
-async function checkBigdataStatus() {
-  try {
-    const r = await fetch('/api/system/bigdata-status');
-    const d = await r.json();
-    return d.hbase_ready === true || d.status === 'online';
-  } catch { return false; }
-}
-
 function setBigdataUI(state, msg, sub) {
   const dot  = document.getElementById('bigdata-dot');
   const text = document.getElementById('bigdata-status-text');
@@ -23,18 +15,17 @@ function setBigdataUI(state, msg, sub) {
   if (btn) btn.style.display = state === 'offline' ? 'inline-block' : 'none';
 }
 
-async function startBigdata() {
-  setBigdataUI('starting', 'Starting HBase container…', 'docker start hbase-server');
+async function refreshBigdataStatus() {
+  setBigdataUI('starting', 'Checking HBase status…', 'Apache HBase · Thrift port 9090');
   try {
-    const r = await fetch('/api/system/start-bigdata', { method: 'POST' });
+    const r = await fetch('/api/system/bigdata-status');
     const d = await r.json();
-    if (d.status === 'ready') {
+    if (d.hbase_ready === true || d.status === 'online') {
       _bigdataReady = true;
       setBigdataUI('ready', 'HBase Online', 'TWOSIDES dataset ready · 4.6M interactions');
-    } else if (d.status === 'timeout') {
-      setBigdataUI('offline', 'HBase starting — retry in a moment', d.message);
     } else {
-      setBigdataUI('offline', 'Could not start HBase', d.message || '');
+      _bigdataReady = false;
+      setBigdataUI('offline', 'HBase offline', 'Known-interaction lookup is unavailable. Start the hbase container (docker compose up -d hbase), then Recheck.');
     }
   } catch (e) {
     setBigdataUI('offline', 'Backend unreachable', 'Make sure Flask is running on port 5000');
@@ -42,18 +33,12 @@ async function startBigdata() {
 }
 
 async function initInteractionsTab() {
-  // Wire retry button
+  // Wire recheck button
   const retryBtn = document.getElementById('bigdata-retry-btn');
-  if (retryBtn) retryBtn.addEventListener('click', startBigdata);
+  if (retryBtn) retryBtn.addEventListener('click', refreshBigdataStatus);
 
-  // Check status first
-  const ready = await checkBigdataStatus();
-  if (ready) {
-    _bigdataReady = true;
-    setBigdataUI('ready', 'HBase Online', 'TWOSIDES dataset ready · 4.6M interactions');
-  } else {
-    await startBigdata();
-  }
+  // Report HBase status (the page never starts containers)
+  await refreshBigdataStatus();
 
   // Wire tab switcher
   const btnExplorer = document.getElementById('tab-btn-explorer');

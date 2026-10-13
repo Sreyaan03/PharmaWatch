@@ -12,7 +12,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Data
 from torch_geometric.nn import GINEConv, global_mean_pool, global_max_pool, global_add_pool
 from rdkit import Chem
 from rdkit.Chem import AllChem

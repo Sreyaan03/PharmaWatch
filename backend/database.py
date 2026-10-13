@@ -38,55 +38,6 @@ def insert_drug_event(drug, event, source="manual", confidence=1.0, raw_text=Non
         log.error(f"[DB] insert_drug_event failed: {e}")
 
 
-def get_drug_event_counts(drug, limit=10):
-    """Return top adverse events and occurrence counts for a drug."""
-    sql = """
-        SELECT event, COUNT(*) AS count
-        FROM drug_events
-        WHERE drug = %s
-        GROUP BY event
-        ORDER BY count DESC
-        LIMIT %s
-    """
-    try:
-        return query(sql, (drug.strip().lower(), int(limit)))
-    except Exception as e:
-        log.error(f"[DB] get_drug_event_counts failed: {e}")
-        return []
-
-
-def get_prr_data(drug, event):
-    """
-    Compute 2x2 contingency table counts from drug_events:
-      a  = drug + event
-      b  = drug only
-      c  = event only
-      d  = all other reports
-    """
-    d_clean = drug.strip().lower()
-    e_clean = event.strip().lower()
-    try:
-        row_a = query_one("SELECT COUNT(*) AS cnt FROM drug_events WHERE drug = %s AND event = %s", (d_clean, e_clean))
-        row_ab = query_one("SELECT COUNT(*) AS cnt FROM drug_events WHERE drug = %s", (d_clean,))
-        row_ac = query_one("SELECT COUNT(*) AS cnt FROM drug_events WHERE event = %s", (e_clean,))
-        row_tot = query_one("SELECT COUNT(*) AS cnt FROM drug_events")
-
-        a = int(row_a["cnt"]) if row_a else 0
-        ab = int(row_ab["cnt"]) if row_ab else 0
-        ac = int(row_ac["cnt"]) if row_ac else 0
-        total = int(row_tot["cnt"]) if row_tot else 0
-
-        return {
-            "a": a,
-            "b": max(0, ab - a),
-            "c": max(0, ac - a),
-            "d": max(0, total - ab - ac + a)
-        }
-    except Exception as e:
-        log.error(f"[DB] get_prr_data failed: {e}")
-        return {"a": 0, "b": 0, "c": 0, "d": 0}
-
-
 # ── Reddit Mining Helpers ───────────────────────────────────────────────────
 
 def insert_reddit_post(post_id, subreddit, title, body, score):
@@ -191,11 +142,6 @@ def _normalize_pair(drug_a, drug_b):
     """Normalize drug pair alphabetically so (A, B) == (B, A)."""
     a, b = drug_a.strip().lower(), drug_b.strip().lower()
     return (a, b) if a <= b else (b, a)
-
-
-def init_interaction_predictions_table():
-    """Retained for backward compatibility. Schema managed via migrate.py."""
-    pass
 
 
 def upsert_prediction(drug_a, drug_b, is_harmful, confidence,
@@ -320,12 +266,3 @@ def get_cached_signals(limit=100):
         log.error(f"[DB] get_cached_signals failed: {e}")
         return []
 
-
-def get_signal(drug, event):
-    """Retrieve cached signal for a specific drug and event pair."""
-    sql = "SELECT * FROM signals_cache WHERE drug = %s AND event = %s LIMIT 1"
-    try:
-        return query_one(sql, (drug.strip().lower(), event.strip().lower()))
-    except Exception as e:
-        log.error(f"[DB] get_signal failed: {e}")
-        return None

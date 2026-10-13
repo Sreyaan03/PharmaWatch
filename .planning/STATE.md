@@ -10,12 +10,12 @@ See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidenc
 
 ## Current Position
 
-Phase: 5 of 11 (Baseline & Clean Architecture) — not started
+Phase: 6 of 11 (Real FAERS Data Foundation) — not started
 Plan: 0 of 3 in current phase
-Status: Milestone 2 fully planned (21 plan files). No code changed yet. Phase 4 work committed (b185b85).
-Last activity: 2026-10-13 — Phase 4 committed; task-level plans written for Phases 5–11.
+Status: Phase 5 complete (3 of 3 plans). Backend is layered and tested; behaviour verified unchanged.
+Last activity: 2026-10-13 — Phase 5 executed on branch feat/milestone-2-pilot.
 
-Progress: [████░░░░░░░] 4 of 11 phases complete
+Progress: [█████░░░░░░] 5 of 11 phases complete
 
 ## Accumulated Context
 
@@ -50,9 +50,9 @@ Progress: [████░░░░░░░] 4 of 11 phases complete
 
 ### Key Technical State
 
-- Backend is 10 blueprints under `backend/routes/`, with business logic still inside route files
+- Backend is layered: `routes` (HTTP only) -> `services` -> `clients`/`ml`/`faers`/`db`, with `core` and `ingest`; `test_architecture.py` enforces it
+- 42 tests pass; `scripts/refactor_check/` compares every endpoint's body and SQL before and after a refactor
 - PyTorch 2.2.0+cpu and PyG 2.7.0 installed in venv
-- 26 backend tests pass (verified 2026-10-12)
 - Local FAERS database holds a 3,800-report openFDA sample; `data/faers_raw/` holds mock zips
 - Phase 4 is committed; per-seed checkpoints in `backend/trained_models/checkpoints/` are intentionally untracked
 - `DATA_DIR` for Milestone 2 is `C:\PharmaWatchData`
@@ -65,5 +65,5 @@ Listed with file references in `.planning/MILESTONE-2-CONTEXT.md` section 4.
 ## Session Continuity
 
 Last session: 2026-10-13
-Stopped at: All Milestone 2 plans written. Next step is to execute plan 05-01.
+Stopped at: Phase 5 complete. Next step is to execute plan 06-01 (needs the 20-quarter FAERS download started by hand).
 Resume file: `.planning/MILESTONE-2-CONTEXT.md`

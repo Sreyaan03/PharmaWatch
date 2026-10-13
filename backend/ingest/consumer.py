@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(backend_dir, ".env"))
 
-from db.mysql import query, query_one, execute, ping
+from db.mysql import query_one, execute, ping
 from faers.disproportionality import compute_metrics, get_global_event_count, TOTAL_FAERS_POPULATION
 
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")

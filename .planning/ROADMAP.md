@@ -17,7 +17,7 @@ Milestone 2 (Phases 5–11, one phase per day) turns the project into a coherent
 
 ### Milestone 2 — University Pilot Release (planned)
 
-- [ ] **Phase 5 (Day 1): Baseline & Clean Architecture** — Layered structure, duplicate consolidation, dead-code removal, no behaviour change
+- [x] **Phase 5 (Day 1): Baseline & Clean Architecture** — Layered structure, duplicate consolidation, dead-code removal, no behaviour change
 - [ ] **Phase 6 (Day 2): Real FAERS Data Foundation** — 20 real quarters, case de-duplication, RxNorm and Preferred Term identity, single statistics path
 - [ ] **Phase 7 (Day 3): Statistical Correctness** — Real time-to-onset and stratified PRR, no-signal class, no invented numbers, descriptive wording
 - [ ] **Phase 8 (Day 4): Validation Harness** — Reference-set benchmarks for signals, NER and DDI; Methods & Validation page; CI regression gate
@@ -76,9 +76,9 @@ Plans:
   5. No module adds to `sys.path` at import time.
 
 Plans:
-- [ ] 05-01: Commit Phase 4, capture the route inventory snapshot, create `core/`, `services/`, `clients/`, `ml/`, `ingest/`, `validation/` and move code
-- [ ] 05-02: Consolidate duplicates (admin-key decorator, cache helper, z-score, HBase lookup, HTTP wrapper) and merge duplicate routes behind aliases
-- [ ] 05-03: Delete dead code and artefacts, update Docker and CI paths, add the route-inventory test to CI
+- [x] 05-01: Commit Phase 4, capture the route inventory snapshot, create `core/`, `services/`, `clients/`, `ml/`, `ingest/`, `validation/` and move code
+- [x] 05-02: Consolidate duplicates (admin-key decorator, cache helper, z-score, HBase lookup, HTTP wrapper) and merge duplicate routes behind aliases
+- [x] 05-03: Delete dead code and artefacts, update Docker and CI paths, add the route-inventory test to CI
 
 ### Phase 6 (Day 2): Real FAERS Data Foundation
 **Goal**: Replace the 3,800-report sample with 20 real, de-duplicated FAERS quarters and give every drug and event one identity across the app.
@@ -194,7 +194,7 @@ Plans:
 | 2. Hardening & Real Data | 3/3 | Complete | 2026-06-05 |
 | 3. Backend Modularization & MySQL | 2/2 | Complete | 2026-10-11 |
 | 4. DDI Prediction Model Rigor | 4/4 | Complete | 2026-10-12 |
-| 5. Baseline & Clean Architecture | 0/3 | Planned | — |
+| 5. Baseline & Clean Architecture | 3/3 | Complete | 2026-10-13 |
 | 6. Real FAERS Data Foundation | 0/3 | Planned | — |
 | 7. Statistical Correctness | 0/3 | Planned | — |
 | 8. Validation Harness | 0/3 | Planned | — |

@@ -6,15 +6,9 @@
 import logging
 import os
 import pathlib
-import sys
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-
-# Ensure backend directory is in sys.path
-backend_dir = os.path.dirname(os.path.abspath(__file__))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
 
 from database import init_db
 

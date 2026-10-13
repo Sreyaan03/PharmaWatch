@@ -18,8 +18,7 @@ RUN pip install --no-cache-dir \
     "cryptography>=42.0.8" \
     "DBUtils>=3.1.0"
 
-# Copy scripts and backend modules (excluding secrets via .dockerignore)
-COPY scripts/ ./scripts/
+# Copy backend modules (excluding secrets via .dockerignore)
 COPY backend/ ./backend/
 
 ENV PYTHONPATH=/app:/app/backend \
