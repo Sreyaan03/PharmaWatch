@@ -19,8 +19,12 @@ class PayloadCache:
         self.label = label
         self.max_age = max_age
 
-    def get(self, drug, event, kind):
-        """Return the cached payload if present and fresh, else None."""
+    def get(self, drug, event, kind, version=None):
+        """Return the cached payload if present, fresh and of the same version, else None.
+
+        With `version` given, an entry stored without that exact version is a miss, so a payload
+        computed from other data (or by an older algorithm) is never served.
+        """
         try:
             sql = (f"SELECT payload, cached_at FROM {self.table} "
                    f"WHERE drug = %s AND event = %s AND {self.kind_column} = %s LIMIT 1")
@@ -33,14 +37,21 @@ class PayloadCache:
                     except ValueError:
                         cached_at = datetime.strptime(cached_at[:19], "%Y-%m-%d %H:%M:%S")
                 if datetime.now() - cached_at < self.max_age:
-                    return json.loads(row["payload"])
+                    payload = json.loads(row["payload"])
+                    if version is not None:
+                        if not isinstance(payload, dict) or payload.get("_version") != version:
+                            return None
+                        payload.pop("_version", None)
+                    return payload
         except Exception as e:
             log.error(f"[{self.label} CACHE ERROR] {e}")
         return None
 
-    def set(self, drug, event, kind, payload):
+    def set(self, drug, event, kind, payload, version=None):
         """Store a payload, replacing any previous one for the same key."""
         try:
+            if version is not None and isinstance(payload, dict):
+                payload = dict(payload, _version=version)
             sql = (f"INSERT INTO {self.table} (drug, event, {self.kind_column}, payload, cached_at) "
                    f"VALUES (%s, %s, %s, %s, NOW()) "
                    f"ON DUPLICATE KEY UPDATE payload = VALUES(payload), cached_at = NOW()")

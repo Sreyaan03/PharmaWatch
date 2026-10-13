@@ -119,6 +119,15 @@
       ],
       "status": 200
     },
+    "GET /api/dashboard/top-events": {
+      "keys": [
+        "events",
+        "message",
+        "source",
+        "total_cases"
+      ],
+      "status": 200
+    },
     "GET /api/demographics/age": {
       "keys": [
         "counts",
@@ -141,6 +150,7 @@
         "event",
         "grr_scores",
         "message",
+        "share_pct",
         "source",
         "top_country",
         "total_reports"
@@ -527,6 +537,12 @@
         "GET"
       ],
       "rule": "/api/dashboard/signal-intensity"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/dashboard/top-events"
     },
     {
       "methods": [

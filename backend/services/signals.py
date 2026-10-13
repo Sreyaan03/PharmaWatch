@@ -29,6 +29,57 @@ def _identity():
     return _IDENTITY
 
 
+def resolve_drug_event(drug, event):
+    """Resolve a drug and an event once, for any analysis that needs them.
+
+    Returns {'ready', 'ok', 'rxcuis', 'pt', 'identity', 'unresolved', 'note'}:
+      ready       the loaded database has the identity tables (otherwise nothing can be resolved)
+      ok          both resolved and the drug has indexed reports, so counts can be computed
+      unresolved  which of 'drug', 'event', 'drug_not_indexed' blocked it
+    A name that cannot be resolved is reported as such; it is never matched loosely.
+    """
+    from faers import analytics
+
+    out = {"ready": False, "ok": False, "rxcuis": [], "pt": None, "identity": None,
+           "unresolved": [], "note": ""}
+    if not analytics.identity_ready():
+        return out
+    out["ready"] = True
+
+    ident = _identity()
+    try:
+        d = ident.resolve_drug(drug)
+    except Exception as exc:                     # RxNav unreachable: unresolved, not guessed
+        log.warning(f"[IDENTITY] drug lookup failed for {drug!r}: {exc}")
+        d = {"resolved": False, "ingredients": [], "match": None, "source": None, "suggestion": None}
+    e = ident.resolve_event(event)
+
+    out["identity"] = {
+        "drug": {"input": drug, "resolved": d["resolved"], "ingredients": d["ingredients"],
+                 "source": d.get("source"), "suggestion": d.get("suggestion")},
+        "event": {"input": event, "resolved": e["resolved"], "pt": e["pt"], "match": e["match"],
+                  "note": e["note"], "candidates": e["candidates"]},
+    }
+    out["unresolved"] = [k for k in ("drug", "event") if not out["identity"][k]["resolved"]]
+    if out["unresolved"]:
+        return out
+
+    out["rxcuis"] = [i["rxcui"] for i in d["ingredients"]]
+    out["pt"] = e["pt"]
+    indexed = analytics.indexed_ingredients(out["rxcuis"])
+    if indexed is not None and any(r not in indexed for r in out["rxcuis"]):
+        # The drug is known, but no report for it is in the index (a name below the report
+        # threshold, an index built before more data was loaded, or a drug that is not in the
+        # data). That is not the same as zero reports, so it is never shown as zero.
+        out["identity"]["drug"]["indexed"] = False
+        out["unresolved"] = ["drug_not_indexed"]
+        out["note"] = "No reports for this ingredient are in the loaded index; this is not a count of zero."
+        return out
+    out["identity"]["drug"]["indexed"] = True
+    out["ok"] = True
+    return out
+
+
 def _local_metrics(drug, event):
     """Disproportionality from the loaded FAERS data, or None when it is not available.
 
@@ -40,45 +91,19 @@ def _local_metrics(drug, event):
     from faers import analytics
     from faers.disproportionality import compute_metrics
 
-    if not analytics.identity_ready():
+    ctx = resolve_drug_event(drug, event)
+    if not ctx["ready"]:
         return analytics.compute_prr_duckdb(drug, event)
-
-    ident = _identity()
-    try:
-        d = ident.resolve_drug(drug)
-    except Exception as exc:                     # RxNav unreachable: unresolved, not guessed
-        log.warning(f"[IDENTITY] drug lookup failed for {drug!r}: {exc}")
-        d = {"resolved": False, "ingredients": [], "match": None, "source": None, "suggestion": None}
-    e = ident.resolve_event(event)
-
-    identity = {
-        "drug": {"input": drug, "resolved": d["resolved"], "ingredients": d["ingredients"],
-                 "source": d.get("source"), "suggestion": d.get("suggestion")},
-        "event": {"input": event, "resolved": e["resolved"], "pt": e["pt"], "match": e["match"],
-                  "note": e["note"], "candidates": e["candidates"]},
-    }
-    if not (d["resolved"] and e["resolved"]):
+    if not ctx["ok"]:
         res = compute_metrics(0, 0, 0, 0)
-        res.update(source="faers_local", identity=identity,
-                   unresolved=[k for k in ("drug", "event") if not identity[k]["resolved"]])
+        res.update(source="faers_local", identity=ctx["identity"], unresolved=ctx["unresolved"])
+        if ctx["note"]:
+            res["note"] = ctx["note"]
         return res
 
-    rxcuis = [i["rxcui"] for i in d["ingredients"]]
-    indexed = analytics.indexed_ingredients(rxcuis)
-    if indexed is not None and any(r not in indexed for r in rxcuis):
-        # The drug is known, but no report for it is in the index (a name below the report
-        # threshold, an index built before more data was loaded, or a drug that is not in the
-        # data). That is not the same as zero reports, so it is never shown as zero.
-        res = compute_metrics(0, 0, 0, 0)
-        identity["drug"]["indexed"] = False
-        res.update(source="faers_local", identity=identity, unresolved=["drug_not_indexed"],
-                   note="No reports for this ingredient are in the loaded index; this is not a count of zero.")
-        return res
-
-    res = analytics.compute_prr_ingredients(rxcuis, e["pt"])
+    res = analytics.compute_prr_ingredients(ctx["rxcuis"], ctx["pt"])
     if res is not None:
-        identity["drug"]["indexed"] = True
-        res["identity"] = identity
+        res["identity"] = ctx["identity"]
     return res
 
 
@@ -305,7 +330,7 @@ def get_prr(drug, event, source):
         "event": event,
         "a": metrics["a"], "b": metrics["b"], "c": metrics["c"], "d": metrics["d"],
         "prr": metrics["prr"],
-        "is_signal": metrics["prr"] > 2.0 and metrics["a"] >= 3,
+        "is_signal": metrics.get("signal_strength", "none") != "none",
         "source": metrics.get("source", "openfda")
     }
     for key in ("identity", "unresolved", "fallback", "note"):

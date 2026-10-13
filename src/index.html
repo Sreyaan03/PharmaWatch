@@ -97,8 +97,7 @@
     <div class="container alert-banner__inner">
       <span class="alert-banner__icon">⚠</span>
       <span class="alert-banner__text" id="alert-text">
-        <strong>ACTIVE SIGNAL:</strong> Elevated PRR detected for <strong>Metformin + Empagliflozin</strong> combination
-        — lactic acidosis signal. PRR = 3.24. Under review by pharmacovigilance team.
+        <strong>Checking signal status…</strong>
       </span>
       <button class="alert-banner__close" id="alert-close" aria-label="Dismiss alert">✕</button>
     </div>
@@ -234,14 +233,9 @@
               <h2 class="card-title">Top Reported Events</h2>
             </div>
             <ol class="top-events-list" id="top-events-list">
-              <li><span class="event-name">Nausea / Vomiting</span><span class="event-count">284,120</span></li>
-              <li><span class="event-name">Dizziness</span><span class="event-count">198,430</span></li>
-              <li><span class="event-name">Hepatotoxicity</span><span class="event-count">141,280</span></li>
-              <li><span class="event-name">QT Prolongation</span><span class="event-count">112,900</span></li>
-              <li><span class="event-name">Anaphylaxis</span><span class="event-count">98,340</span></li>
-              <li><span class="event-name">Rhabdomyolysis</span><span class="event-count">72,110</span></li>
-              <li><span class="event-name">Lactic Acidosis</span><span class="event-count">63,880</span></li>
+              <li><span class="event-name">Loading from the loaded FAERS data…</span><span class="event-count"></span></li>
             </ol>
+            <p id="top-events-note" style="font-size:0.75rem; color:var(--text-muted, #6b7280); margin:0.5rem 0 0;"></p>
           </div>
         </div>
 
@@ -324,12 +318,15 @@
         <div class="filter-bar" role="search">
           <input type="text" id="signal-search" class="filter-input" placeholder="Filter by drug name or event…"
             aria-label="Search signals" />
-          <select id="signal-severity" class="filter-select" aria-label="Filter by severity">
-            <option value="all">All Severities</option>
-            <option value="critical">Critical (PRR &gt; 5)</option>
-            <option value="high">High (PRR 3–5)</option>
-            <option value="moderate">Moderate (PRR 2–3)</option>
+          <select id="signal-severity" class="filter-select" aria-label="Filter by signal class">
+            <option value="all">All signals</option>
+            <option value="strong_signal">Strong signal (PRR, ROR and IC all agree)</option>
+            <option value="signal">Signal (3+ cases, PRR ≥ 2, χ² ≥ 4)</option>
+            <option value="none">No signal</option>
           </select>
+          <label style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.85rem;">
+            <input type="checkbox" id="signal-show-none" /> Show pairs with no signal
+          </label>
           <select id="signal-source" class="filter-select" aria-label="Filter by source">
             <option value="all">All Sources</option>
             <option value="faers_local">FAERS Local (DuckDB)</option>

@@ -4,17 +4,30 @@
 from clients.http import http_requests
 from core.cache import PayloadCache
 from faers.stats import zscore_spikes
+from faers import analytics
 from faers.analytics import (
     get_temporal_velocity_duckdb,
-    get_tto_duckdb,
     get_seasonality_duckdb
 )
 import logging
 log = logging.getLogger(__name__)
 
+ALGORITHM = "temporal-v2"      # bump when a calculation changes, so older cache entries are not served
+
 _cache = PayloadCache("temporal_cache", "data_type", "TEMPORAL")
-get_cached_payload = _cache.get
-set_cached_payload = _cache.set
+
+
+def _version():
+    from faers.registry import data_version
+    return f"{data_version()}|{ALGORITHM}"
+
+
+def get_cached_payload(drug, event, kind):
+    return _cache.get(drug, event, kind, version=_version())
+
+
+def set_cached_payload(drug, event, kind, payload):
+    _cache.set(drug, event, kind, payload, version=_version())
 
 def api_temporal_velocity(drug, event):
     """Calculates monthly report velocity and detects velocity spikes (Z-score > 2.0)."""
@@ -87,7 +100,11 @@ def api_temporal_velocity(drug, event):
     return payload, 200
 
 def api_temporal_tto(drug, event):
-    """Generates Time-To-Onset (TTO) distribution for drug-event pair from FAERS DuckDB or fallback."""
+    """Time to onset: days from the start of the suspect drug to the event, from the reports' own dates.
+
+    Only reports with a complete event date and therapy start date contribute; the response says
+    how many of the pair's reports that is, and how many were left out and why.
+    """
     if not drug:
         return {"error": "Parameter 'drug' is required."}, 400
 
@@ -95,24 +112,36 @@ def api_temporal_tto(drug, event):
     if cached:
         return cached, 200
 
-    # 1. Try DuckDB local FAERS dataset first
-    duck_res = get_tto_duckdb(drug, event)
-    if duck_res and sum(duck_res.get("counts", [])) > 0:
-        set_cached_payload(drug, event, "tto", duck_res)
-        return duck_res, 200
-
-    # 2. No data — return empty
-    return {
-        "drug": drug,
-        "event": event,
+    from services.signals import resolve_drug_event
+    ctx = resolve_drug_event(drug, event)
+    base = {
+        "drug": drug, "event": event,
         "buckets": ["0-30 days", "31-60 days", "61-90 days", "91-180 days", "181-365 days", ">365 days"],
-        "counts": [0, 0, 0, 0, 0, 0],
-        "total_reports": 0,
-        "median_days": None,
-        "peak_bucket": None,
-        "source": "no_data",
-        "message": f"No FAERS reports found for '{drug}' + '{event}'."
-    }, 200
+        "counts": [0, 0, 0, 0, 0, 0], "total_reports": 0, "median_days": None, "peak_bucket": None,
+    }
+    if ctx["ready"] and not ctx["ok"]:
+        return {**base, "source": "no_data", "unresolved": ctx["unresolved"], "identity": ctx["identity"],
+                "message": ctx["note"] or "The drug or event could not be resolved."}, 200
+
+    if ctx["ok"]:
+        res = analytics.get_time_to_onset(ctx["rxcuis"], ctx["pt"])
+        if res is not None:
+            payload = {
+                **base, **res,
+                "total_reports": res["usable_cases"],
+                "identity": ctx["identity"],
+                "source": "faers_local",
+            }
+            if res["usable_cases"] < 10:
+                payload["source"] = "no_data"
+                payload["message"] = (
+                    f"Only {res['usable_cases']} of {res['cases']} reports for this pair have a complete "
+                    "event date and therapy start date; at least 10 are needed for a time-to-onset result."
+                )
+            set_cached_payload(drug, event, "tto", payload)
+            return payload, 200
+
+    return {**base, "source": "no_data", "message": f"No FAERS reports found for '{drug}' + '{event}'."}, 200
 
 def api_temporal_seasonality(drug, event):
     """Calculates 12-month seasonality index for reporting patterns from FAERS DuckDB or fallback."""

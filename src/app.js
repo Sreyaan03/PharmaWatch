@@ -39,17 +39,52 @@ const ADE_EVENTS = [
   'Nausea', 'Hepatotoxicity', 'Anaphylaxis', 'Rhabdomyolysis', 'Dizziness'
 ];
 
-const SOURCES = ['fda', 'ehr', 'social', 'ct'];
-const SOURCE_LABELS = { fda: 'openFDA/FAERS', ehr: 'EHR', social: 'Social Media', ct: 'ClinicalTrials' };
+/* Signal classes returned by the backend (see backend/faers/disproportionality.py):
+   strong_signal  3+ cases, PRR >= 2, chi-square >= 4, and ROR lower bound > 1 and IC025 > 0
+   signal         3+ cases, PRR >= 2, chi-square >= 4
+   none           the criteria are not met
+   unavailable    no counts: the drug or event could not be resolved or is not indexed */
+const SIGNAL_CLASS_META = {
+  strong_signal: { label: 'STRONG SIGNAL', prr: 'prr-critical', pill: 'active', alert: 'critical', icon: '🚨' },
+  signal:        { label: 'SIGNAL',        prr: 'prr-high',     pill: 'review', alert: 'high',     icon: '⚠️' },
+  none:          { label: 'NO SIGNAL',     prr: 'prr-moderate', pill: 'closed', alert: 'moderate', icon: 'ℹ️' },
+  unavailable:   { label: 'NOT AVAILABLE', prr: 'prr-moderate', pill: 'closed', alert: 'moderate', icon: 'ℹ️' }
+};
 
-const SIGNAL_STATUS = ['Active', 'Under Review', 'Closed'];
-
-const RECENT_ALERTS_DATA = [
-  { drug: 'Metformin + Empagliflozin', event: 'Lactic Acidosis', prr: 3.24, time: '2 min ago', sev: 'critical' },
-  { drug: 'Warfarin + Ciprofloxacin', event: 'GI Bleeding', prr: 4.81, time: '7 min ago', sev: 'critical' }
-];
+/* Rows cached before the classes were renamed carry the old labels; "moderate" meant no signal. */
+function normalizeSignalClass(value) {
+  const legacy = { critical: 'strong_signal', high: 'signal', moderate: 'none' };
+  const key = String(value || 'none').toLowerCase();
+  if (SIGNAL_CLASS_META[key]) return key;
+  return legacy[key] || 'none';
+}
 
 /* ──────────────── INTERACTIONS (replaced with live data) ──── */
+
+/* ──────────────── TOP REPORTED EVENTS (live) ─────────────── */
+async function loadTopEvents() {
+  const list = document.getElementById('top-events-list');
+  const note = document.getElementById('top-events-note');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/dashboard/top-events?limit=7');
+    const data = await res.json();
+    if (!data.events || data.events.length === 0) {
+      list.innerHTML = '<li><span class="event-name">No FAERS data is loaded</span><span class="event-count"></span></li>';
+      if (note) note.textContent = '';
+      return;
+    }
+    list.innerHTML = data.events.map(e =>
+      `<li><span class="event-name">${escHtml(e.event)}</span><span class="event-count">${e.reports.toLocaleString()}</span></li>`
+    ).join('');
+    if (note) {
+      note.textContent = `Cases reporting each term · ${data.data_version}. Excludes product-use terms: ` +
+        `${data.excluded_terms.join(', ')}.`;
+    }
+  } catch (err) {
+    list.innerHTML = '<li><span class="event-name">Could not load top events</span><span class="event-count"></span></li>';
+  }
+}
 
 /* ──────────────── SIGNALS TABLE ──────────────────────────── */
 let signalsData = [];
@@ -76,7 +111,8 @@ async function fetchAndRenderSignals(forceRefresh = false) {
         bcpnn_ic: s.bcpnn_ic,
         reports: s.n_reports,
         source: s.source,
-        sev: s.signal_strength,
+        sev: (s.unresolved && s.unresolved.length) ? 'unavailable' : normalizeSignalClass(s.signal_strength),
+        note: s.note || '',
         a: s.a, b: s.b, c: s.c, d: s.d
       }));
       filterSignals();
@@ -115,20 +151,22 @@ function renderSignalsTable(data) {
     }
     
     // Clean formatting for disproportionality metrics
-    const prrDisplay = s.prr !== undefined ? s.prr.toFixed(2) : 'N/A';
-    const rorDisplay = s.ror !== undefined ? s.ror.toFixed(2) : 'N/A';
+    const unavailable = s.sev === 'unavailable';
+    const meta = SIGNAL_CLASS_META[s.sev] || SIGNAL_CLASS_META.none;
+    const prrDisplay = unavailable ? '—' : (s.prr !== undefined ? s.prr.toFixed(2) : 'N/A');
+    const rorDisplay = unavailable ? '—' : (s.ror !== undefined ? s.ror.toFixed(2) : 'N/A');
 
     return `
       <tr data-rank="${s.rank}" class="signal-row" style="cursor: pointer;">
         <td><strong>${s.rank}</strong></td>
         <td><strong>${escHtml(s.drug)}</strong></td>
         <td><span class="illness-hover" data-illness="${escHtml(s.event)}" style="cursor:help; border-bottom:1px dashed #bbb;">${escHtml(s.event)}</span></td>
-        <td class="${s.sev === 'critical' ? 'prr-critical' : s.sev === 'high' ? 'prr-high' : 'prr-moderate'}">${prrDisplay}</td>
+        <td class="${meta.prr}">${prrDisplay}</td>
         <td>${rorDisplay}</td>
-        <td>${s.bcpnn_ic !== undefined ? s.bcpnn_ic.toFixed(2) : 'N/A'}</td>
-        <td>${s.reports.toLocaleString()}</td>
+        <td>${unavailable ? '—' : (s.bcpnn_ic !== undefined ? s.bcpnn_ic.toFixed(2) : 'N/A')}</td>
+        <td>${unavailable ? '—' : (s.reports || 0).toLocaleString()}</td>
         <td><span class="source-chip source-chip--${srcClass}">${srcLabel}</span></td>
-        <td><span class="status-pill status-pill--${s.sev === 'critical' ? 'active' : s.sev === 'high' ? 'review' : 'closed'}">${s.sev.toUpperCase()}</span></td>
+        <td><span class="status-pill status-pill--${meta.pill}" title="${escHtml(s.note)}">${meta.label}</span></td>
       </tr>
     `;
   }).join('');
@@ -282,10 +320,15 @@ function filterSignals() {
   const sev = document.getElementById('signal-severity')?.value || 'all';
   const src = document.getElementById('signal-source')?.value || 'all';
   
+  const showNone = document.getElementById('signal-show-none')?.checked === true;
+
   let filtered = signalsData;
   if (query) filtered = filtered.filter(s => s.drug.toLowerCase().includes(query) || s.event.toLowerCase().includes(query));
   if (sev !== 'all') {
     filtered = filtered.filter(s => s.sev === sev);
+  } else if (!showNone) {
+    // pairs that do not meet the signal criteria are hidden unless asked for
+    filtered = filtered.filter(s => s.sev !== 'none');
   }
   if (src !== 'all') {
     filtered = filtered.filter(s => {
@@ -693,8 +736,8 @@ async function loadDrugProfile(name) {
   const sigList = document.getElementById('drug-signals-list');
   if (sigList) {
     sigList.innerHTML = eventsData.ades.slice(0, 3).map((event, i) => `
-      <div class="alert-item alert-item--${i === 0 ? 'critical' : i === 1 ? 'high' : 'moderate'}" style="margin-bottom:0.5rem;">
-        <div class="alert-item__icon">${i === 0 ? '🚨' : i === 1 ? '⚠️' : '✅'}</div>
+      <div class="alert-item alert-item--moderate" style="margin-bottom:0.5rem;">
+        <div class="alert-item__icon">ℹ️</div>
         <div class="alert-item__body">
           <div class="alert-item__drug">
             <span class="illness-hover" data-illness="${escHtml(event)}" style="cursor:help;border-bottom:1px dashed #999;">${escHtml(event)}</span>
@@ -702,7 +745,6 @@ async function loadDrugProfile(name) {
           <div class="alert-item__meta">
             <span class="alert-item__prr">FAERS reports: ${eventsData.adeCounts[i].toLocaleString()}</span>
             <span class="alert-item__time">Source: openFDA/FAERS</span>
-            <span class="status-pill status-pill--${i === 0 ? 'active' : 'review'}">${i === 0 ? 'Active' : 'Under Review'}</span>
           </div>
         </div>
       </div>
@@ -999,7 +1041,9 @@ async function renderRecentAlerts() {
     if (badge) badge.textContent = signals.length;
 
     // Take top 5
-    const topSignals = signals.slice(0, 5);
+    const actual = signals.filter(s => ['strong_signal', 'signal'].includes(normalizeSignalClass(s.signal_strength))
+                                       && !(s.unresolved && s.unresolved.length));
+    const topSignals = actual.slice(0, 5);
     
     if (topSignals.length === 0) {
       list.innerHTML = `<li class="alert-item" style="color:var(--text-muted); padding:1rem; text-align:center;">No recent safety alerts</li>`;
@@ -1007,16 +1051,16 @@ async function renderRecentAlerts() {
     }
 
     list.innerHTML = topSignals.map(s => {
-      const sev = s.signal_strength || 'moderate';
+      const meta = SIGNAL_CLASS_META[normalizeSignalClass(s.signal_strength)];
       return `
-        <li class="alert-item alert-item--${sev}">
-          <div class="alert-item__icon">${sev === 'critical' ? '🚨' : sev === 'high' ? '⚠️' : 'ℹ️'}</div>
+        <li class="alert-item alert-item--${meta.alert}">
+          <div class="alert-item__icon">${meta.icon}</div>
           <div class="alert-item__body">
             <div class="alert-item__drug">${escHtml(s.drug)}</div>
             <div class="alert-item__event">${escHtml(s.event)}</div>
             <div class="alert-item__meta">
               <span class="alert-item__prr">PRR ${s.prr.toFixed(2)}</span>
-              <span class="alert-item__time">Active</span>
+              <span class="alert-item__time">${meta.label.toLowerCase()}</span>
             </div>
           </div>
         </li>
@@ -1025,9 +1069,13 @@ async function renderRecentAlerts() {
 
     // Also update the top warning banner with the highest PRR signal!
     const alertText = document.getElementById('alert-text');
-    if (alertText && signals.length > 0) {
-      const topSig = signals[0];
-      alertText.innerHTML = `<strong>ACTIVE SIGNAL:</strong> Elevated PRR detected for <strong>${escHtml(topSig.drug)}</strong> — <strong>${escHtml(topSig.event)}</strong> signal. PRR = ${topSig.prr.toFixed(2)}. Under review by pharmacovigilance team.`;
+    if (alertText) {
+      if (actual.length > 0) {
+        const topSig = actual[0];
+        alertText.innerHTML = `<strong>HIGHEST PRR IN THE LOADED DATA:</strong> <strong>${escHtml(topSig.drug)}</strong> — <strong>${escHtml(topSig.event)}</strong>, PRR ${topSig.prr.toFixed(2)} from ${(topSig.n_reports || topSig.a || 0).toLocaleString()} reports. A statistical signal, not a confirmed causal link.`;
+      } else {
+        alertText.innerHTML = `<strong>No monitored pair currently meets the signal criteria.</strong>`;
+      }
     }
   } catch (e) {
     console.error("Failed to render recent alerts:", e);
@@ -1290,6 +1338,7 @@ function initNavigation() {
 function initSignalsPage() {
   document.getElementById('signal-search')?.addEventListener('input', filterSignals);
   document.getElementById('signal-severity')?.addEventListener('change', filterSignals);
+  document.getElementById('signal-show-none')?.addEventListener('change', filterSignals);
   document.getElementById('signal-source')?.addEventListener('change', filterSignals);
   document.getElementById('refresh-signals-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('refresh-signals-btn');
@@ -2397,29 +2446,21 @@ function initAlertBanner() {
 
 
 
-/* ──────────────── LIVE SIMULATION LOOP ────────────────────── */
-function startLiveSimulation() {
-  const alerts = [
-    'Elevated PRR detected for <strong>Warfarin + Aspirin</strong> — haemorrhage risk. PRR = 4.81.',
-    'New signal: <strong>Amiodarone</strong> — Torsades de Pointes. PRR = 5.13. Critical.',
-    'Accelerating signal: <strong>Simvastatin + Amiodarone</strong> — Rhabdomyolysis. PRR = 3.67.',
-    '<strong>ACTIVE SIGNAL:</strong> Elevated PRR detected for <strong>Metformin + Empagliflozin</strong> — lactic acidosis. PRR = 3.24.',
-    'High confidence alert: <strong>Sertraline + Tramadol</strong> — Serotonin Syndrome. PRR = 2.94.',
-  ];
-  let alertIdx = 0;
-  setInterval(() => {
-    alertIdx = (alertIdx + 1) % alerts.length;
-    const txt = document.getElementById('alert-text');
-    if (txt) { txt.style.opacity = '0'; setTimeout(() => { txt.innerHTML = alerts[alertIdx]; txt.style.opacity = '1'; }, 400); }
-  }, 8000);
-
-  // Live system status
-  const dot = document.getElementById('system-status-dot');
-  let odd = false;
-  setInterval(() => {
-    odd = !odd;
-    if (dot) dot.style.color = odd ? '#7fff7f' : '#00c853';
-  }, 1200);
+/* ──────────────── SYSTEM STATUS (real) ─────────────────────── */
+async function updateSystemStatus() {
+  const el = document.getElementById('system-status-dot');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    const data = await res.json();
+    const ok = res.ok && data.status === 'ok';
+    el.textContent = ok ? '● Backend connected' : '● Backend degraded';
+    el.style.color = ok ? '#00c853' : '#f0c040';
+    el.title = data.database || '';
+  } catch (e) {
+    el.textContent = '● Backend unreachable';
+    el.style.color = '#ef4444';
+  }
 }
 
 /* ──────────────── UTILITIES ───────────────────────────────── */
@@ -2437,10 +2478,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initBoxedWarnings();
   initPRRCalculator();
   initCounters();
+  loadTopEvents();
 
   // Boot the dashboard section (default)
   navigateTo('dashboard');
-  startLiveSimulation();
+  updateSystemStatus();
+  setInterval(updateSystemStatus, 30000);
 
   // Boot the modular Javascript logic
   if (typeof MLModels !== 'undefined') MLModels.boot();

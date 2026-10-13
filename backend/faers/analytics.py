@@ -3,7 +3,8 @@ import os
 import duckdb
 import numpy as np
 from core.config import data_dir
-from .stats import contingency, zscore_spikes
+from .stats import (AGE_STRATA, SEX_STRATA, contingency, reports_by_country, stratified_metrics,
+                    time_to_onset, unclassified_cases, zscore_spikes)
 import logging
 log = logging.getLogger(__name__)
 
@@ -298,64 +299,6 @@ def get_temporal_velocity_duckdb(drug, event):
             conn.close()
         return None
 
-def get_tto_duckdb(drug, event):
-    """Computes Time-To-Onset (TTO) distribution from local FAERS DuckDB based on report event timing."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        drug_terms = get_drug_terms(conn, drug)
-        drug_cond, drug_params = build_drug_where_clause(drug_terms)
-        event_lower = event.lower().strip()
-
-        # Extract day component or event timing distribution from FAERS
-        q = f"""
-            SELECT CAST(SUBSTR(d.event_dt, 7, 2) AS INTEGER) as day_num, COUNT(DISTINCT d.primaryid) as cnt
-            FROM faers_demo d
-            JOIN faers_drug dr ON d.primaryid = dr.primaryid
-            JOIN faers_reac r ON d.primaryid = r.primaryid
-            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.event_dt) >= 8
-            GROUP BY day_num
-            ORDER BY day_num
-        """
-        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        total_reports = sum(r[1] for r in rows)
-        buckets = ["0-30 days", "31-60 days", "61-90 days", "91-180 days", "181-365 days", ">365 days"]
-
-        # Aggregate into onset buckets
-        # Map day_num (1-31) and report intensity to buckets
-        day_map = {r[0]: r[1] for r in rows if r[0] is not None}
-        b0_30 = sum(day_map.get(d, 0) for d in range(1, 15)) + int(total_reports * 0.4)
-        b31_60 = sum(day_map.get(d, 0) for d in range(15, 25)) + int(total_reports * 0.25)
-        b61_90 = sum(day_map.get(d, 0) for d in range(25, 32)) + int(total_reports * 0.15)
-        b91_180 = int(total_reports * 0.12)
-        b181_365 = int(total_reports * 0.05)
-        b365_plus = max(1, int(total_reports * 0.03))
-
-        counts = [b0_30, b31_60, b61_90, b91_180, b181_365, b365_plus]
-        peak_idx = int(np.argmax(counts))
-
-        return {
-            "drug": drug,
-            "event": event,
-            "buckets": buckets,
-            "counts": counts,
-            "total_reports": total_reports,
-            "median_days": 18 if peak_idx == 0 else (45 if peak_idx == 1 else 75),
-            "peak_bucket": buckets[peak_idx],
-            "source": "faers_duckdb"
-        }
-    except Exception as e:
-        log.error(f"[-] Error querying TTO from DuckDB: {e}")
-        if conn:
-            conn.close()
-        return None
-
 def get_seasonality_duckdb(drug, event):
     """Computes monthly seasonality index (Jan-Dec) from local FAERS DuckDB."""
     conn = get_connection()
@@ -404,175 +347,6 @@ def get_seasonality_duckdb(drug, event):
         if conn:
             conn.close()
         return None
-
-def get_demographics_sex_duckdb(drug, event):
-    """Computes sex-stratified PRR and counts (Male, Female, Overall) from local DuckDB."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        drug_terms = get_drug_terms(conn, drug)
-        drug_cond, drug_params = build_drug_where_clause(drug_terms)
-        event_lower = event.lower().strip()
-
-        q = f"""
-            SELECT UPPER(d.sex) as s, COUNT(DISTINCT d.primaryid) as cnt
-            FROM faers_demo d
-            JOIN faers_drug dr ON d.primaryid = dr.primaryid
-            JOIN faers_reac r ON d.primaryid = r.primaryid
-            WHERE {drug_cond} AND LOWER(r.pt) = ?
-            GROUP BY s
-        """
-        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        sex_map = {r[0]: int(r[1]) for r in rows if r[0]}
-        f_count = sex_map.get('F', 0)
-        m_count = sex_map.get('M', 0)
-        u_count = sex_map.get('U', 0)
-        total = f_count + m_count + u_count
-
-        if total == 0:
-            return None
-
-        # Stratified PRR estimates
-        f_prr = round(float((f_count / max(1, total)) * 3.2), 2)
-        m_prr = round(float((m_count / max(1, total)) * 3.0), 2)
-        overall_prr = round(float(((f_count + m_count) / max(1, total)) * 3.1), 2)
-        risk_ratio_sex = round(float(f_prr / max(0.1, m_prr)), 2)
-
-        return {
-            "drug": drug,
-            "event": event,
-            "female_count": f_count,
-            "male_count": m_count,
-            "unknown_count": u_count,
-            "total_reports": total,
-            "female_prr": f_prr,
-            "male_prr": m_prr,
-            "overall_prr": overall_prr,
-            "sex_risk_ratio": risk_ratio_sex,
-            "higher_risk_group": "Female" if risk_ratio_sex > 1.1 else ("Male" if risk_ratio_sex < 0.9 else "Balanced"),
-            "source": "faers_duckdb"
-        }
-    except Exception as e:
-        log.error(f"[-] Error querying sex demographics from DuckDB: {e}")
-        if conn:
-            conn.close()
-        return None
-
-def get_demographics_age_duckdb(drug, event):
-    """Computes age-stratified PRR and counts (Pediatric, Adult, Geriatric) from local DuckDB."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        drug_terms = get_drug_terms(conn, drug)
-        drug_cond, drug_params = build_drug_where_clause(drug_terms)
-        event_lower = event.lower().strip()
-
-        q = f"""
-            SELECT 
-                CASE 
-                    WHEN TRY_CAST(d.age AS DOUBLE) < 18 THEN 'Pediatric'
-                    WHEN TRY_CAST(d.age AS DOUBLE) BETWEEN 18 AND 64 THEN 'Adult'
-                    WHEN TRY_CAST(d.age AS DOUBLE) >= 65 THEN 'Geriatric'
-                    ELSE 'Unknown'
-                END as age_group,
-                COUNT(DISTINCT d.primaryid) as cnt
-            FROM faers_demo d
-            JOIN faers_drug dr ON d.primaryid = dr.primaryid
-            JOIN faers_reac r ON d.primaryid = r.primaryid
-            WHERE {drug_cond} AND LOWER(r.pt) = ?
-            GROUP BY age_group
-        """
-        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        age_map = {r[0]: int(r[1]) for r in rows if r[0]}
-        ped_count = age_map.get('Pediatric', 0)
-        adult_count = age_map.get('Adult', 0)
-        geri_count = age_map.get('Geriatric', 0)
-        total = ped_count + adult_count + geri_count
-
-        if total == 0:
-            return None
-
-        ped_prr = round(float((ped_count / max(1, total)) * 3.5), 2)
-        adult_prr = round(float((adult_count / max(1, total)) * 2.8), 2)
-        geri_prr = round(float((geri_count / max(1, total)) * 3.8), 2)
-
-        return {
-            "drug": drug,
-            "event": event,
-            "groups": ["Pediatric (<18)", "Adult (18-64)", "Geriatric (>=65)"],
-            "counts": [ped_count, adult_count, geri_count],
-            "prr_values": [ped_prr, adult_prr, geri_prr],
-            "total_reports": total,
-            "highest_risk_group": "Geriatric (>=65)" if geri_prr >= max(ped_prr, adult_prr) else ("Pediatric (<18)" if ped_prr > adult_prr else "Adult (18-64)"),
-            "source": "faers_duckdb"
-        }
-    except Exception as e:
-        log.error(f"[-] Error querying age demographics from DuckDB: {e}")
-        if conn:
-            conn.close()
-        return None
-
-def get_demographics_geo_duckdb(drug, event):
-    """Computes geographic report distribution and normalized reporting rate by country from local DuckDB."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        drug_terms = get_drug_terms(conn, drug)
-        drug_cond, drug_params = build_drug_where_clause(drug_terms)
-        event_lower = event.lower().strip()
-
-        q = f"""
-            SELECT UPPER(d.occr_country) as country, COUNT(DISTINCT d.primaryid) as cnt
-            FROM faers_demo d
-            JOIN faers_drug dr ON d.primaryid = dr.primaryid
-            JOIN faers_reac r ON d.primaryid = r.primaryid
-            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.occr_country) >= 2
-            GROUP BY country
-            ORDER BY cnt DESC
-            LIMIT 15
-        """
-        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        countries = [r[0] for r in rows]
-        counts = [int(r[1]) for r in rows]
-        total = sum(counts)
-
-        mean_cnt = np.mean(counts) if counts else 1.0
-        grr_scores = [round(float(c / max(1.0, mean_cnt)), 2) for c in counts]
-
-        return {
-            "drug": drug,
-            "event": event,
-            "countries": countries,
-            "counts": counts,
-            "grr_scores": grr_scores,
-            "total_reports": total,
-            "top_country": countries[0] if countries else "US",
-            "source": "faers_duckdb"
-        }
-    except Exception as e:
-        log.error(f"[-] Error querying geo demographics from DuckDB: {e}")
-        if conn:
-            conn.close()
-        return None
-
 
 IDENTITY_TABLES = {"drug_identity", "case_drug", "pt_dictionary"}
 
@@ -643,3 +417,77 @@ def indexed_ingredients(ingredient_rxcuis):
         return None
     finally:
         conn.close()
+
+
+def get_top_events(limit=7, exclude=()):
+    """Most reported Preferred Terms, by number of distinct cases.
+
+    `exclude` is a collection of lower-case terms to leave out; the caller states them to the
+    user. Returns {'events': [{'event', 'reports'}], 'total_cases': int}, or None when the
+    database is not available.
+    """
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        total = conn.execute("SELECT count(*) FROM faers_demo").fetchone()[0]
+        tables = {t[0] for t in conn.execute("SHOW TABLES").fetchall()}
+        skip = [str(t).lower() for t in exclude]
+        marks = ", ".join("?" for _ in skip) or "''"
+        if "pt_dictionary" in tables:
+            sql = (f"SELECT pt, n_reports FROM pt_dictionary WHERE pt_lower NOT IN ({marks}) "
+                   f"ORDER BY n_reports DESC, pt LIMIT ?")
+        else:
+            sql = (f"SELECT any_value(pt), count(DISTINCT primaryid) AS n FROM faers_reac "
+                   f"WHERE lower(pt) NOT IN ({marks}) GROUP BY lower(pt) ORDER BY n DESC LIMIT ?")
+        rows = conn.execute(sql, skip + [int(limit)]).fetchall()
+        return {"events": [{"event": r[0], "reports": int(r[1])} for r in rows], "total_cases": int(total)}
+    except Exception as e:
+        log.error(f"[-] Error fetching top events: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def _with_identity_connection(work):
+    """Run work(conn) on the loaded database when it has the identity tables, else return None."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        tables = {t[0] for t in conn.execute("SHOW TABLES").fetchall()}
+        if not IDENTITY_TABLES <= tables:
+            return None
+        return work(conn)
+    except Exception as e:
+        log.error(f"[-] Error in analytics query: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def get_time_to_onset(ingredient_rxcuis, pt):
+    """Time to onset from therapy start and event dates (see stats.time_to_onset)."""
+    return _with_identity_connection(lambda c: time_to_onset(c, ingredient_rxcuis, pt))
+
+
+def get_sex_strata(ingredient_rxcuis, pt):
+    """Per-sex 2x2 metrics plus the number of cases with unknown sex."""
+    def work(c):
+        strata = stratified_metrics(c, ingredient_rxcuis, pt, SEX_STRATA)
+        unknown = unclassified_cases(c, ingredient_rxcuis, pt, "coalesce(sex, '') NOT IN ('F', 'M')")
+        return {"strata": strata, "unknown": unknown}
+    return _with_identity_connection(work)
+
+
+def get_age_strata(ingredient_rxcuis, pt):
+    """Per-age-group 2x2 metrics plus the number of cases with unknown age."""
+    def work(c):
+        strata = stratified_metrics(c, ingredient_rxcuis, pt, AGE_STRATA)
+        unknown = unclassified_cases(c, ingredient_rxcuis, pt, "age_years IS NULL")
+        return {"strata": strata, "unknown": unknown}
+    return _with_identity_connection(work)
+
+
+def get_country_counts(ingredient_rxcuis, pt, limit=15):
+    return _with_identity_connection(lambda c: reports_by_country(c, ingredient_rxcuis, pt, limit))

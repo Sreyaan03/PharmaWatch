@@ -1,7 +1,7 @@
 # backend/routes/dashboard.py
 # HTTP layer only: parse the request, call the service, return JSON.
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from services import dashboard as svc
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -31,4 +31,12 @@ def dashboard_drug_categories():
 def prr_distribution():
     """Returns counts of signals bucketed by PRR ranges."""
     payload, status = svc.prr_distribution()
+    return jsonify(payload), status
+
+
+@dashboard_bp.route("/api/dashboard/top-events", methods=["GET"])
+def dashboard_top_events():
+    """Most reported adverse event terms with real case counts from the loaded FAERS data."""
+    limit = request.args.get("limit", 7, type=int)
+    payload, status = svc.top_events(limit)
     return jsonify(payload), status

@@ -201,3 +201,34 @@ def prr_distribution():
             "source": "fallback_error",
             "error": str(e)
         }, 200
+
+
+# Product-use and administrative terms: reported often, but they describe how a product was
+# used or recorded, not a patient's adverse reaction. They are left out of "top reported
+# events" and the response lists them so the exclusion is visible.
+NON_CLINICAL_EVENT_TERMS = [
+    "off label use", "drug ineffective", "product dose omission issue",
+    "product use in unapproved indication", "intentional product use issue",
+    "product use issue", "wrong technique in product usage process",
+    "inappropriate schedule of product administration", "incorrect dose administered",
+    "drug dose omission",
+]
+
+
+def top_events(limit=7):
+    """Most reported adverse event terms in the loaded FAERS data, with real case counts."""
+    from faers.analytics import get_top_events
+    from faers.registry import data_version
+
+    limit = max(1, min(int(limit), 25))
+    res = get_top_events(limit, exclude=NON_CLINICAL_EVENT_TERMS)
+    if res is None or not res["events"]:
+        return {"events": [], "total_cases": 0, "source": "no_data",
+                "message": "No FAERS data is loaded."}, 200
+    return {
+        "events": res["events"],
+        "total_cases": res["total_cases"],
+        "excluded_terms": NON_CLINICAL_EVENT_TERMS,
+        "data_version": data_version(),
+        "source": "faers_local",
+    }, 200
