@@ -12,8 +12,8 @@ See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidenc
 
 Phase: 5 of 11 (Baseline & Clean Architecture) — not started
 Plan: 0 of 3 in current phase
-Status: Milestone 2 planned. No code changed yet. Phase 4 work is still uncommitted.
-Last activity: 2026-10-12 — Full audit of the codebase; Milestone 2 roadmap, requirements and context written.
+Status: Milestone 2 fully planned (21 plan files). No code changed yet. Phase 4 work committed (b185b85).
+Last activity: 2026-10-13 — Phase 4 committed; task-level plans written for Phases 5–11.
 
 Progress: [████░░░░░░░] 4 of 11 phases complete
 
@@ -54,7 +54,8 @@ Progress: [████░░░░░░░] 4 of 11 phases complete
 - PyTorch 2.2.0+cpu and PyG 2.7.0 installed in venv
 - 26 backend tests pass (verified 2026-10-12)
 - Local FAERS database holds a 3,800-report openFDA sample; `data/faers_raw/` holds mock zips
-- Phase 4 files are untracked in git
+- Phase 4 is committed; per-seed checkpoints in `backend/trained_models/checkpoints/` are intentionally untracked
+- `DATA_DIR` for Milestone 2 is `C:\PharmaWatchData`
 - Deployed DDI model (GINE) is outperformed by the XGBoost baseline in S0, S1 and S2
 
 ### Known defects carried into Milestone 2
@@ -63,6 +64,6 @@ Listed with file references in `.planning/MILESTONE-2-CONTEXT.md` section 4.
 
 ## Session Continuity
 
-Last session: 2026-10-12
-Stopped at: Milestone 2 planned. Next step is to commit Phase 4, then plan and execute Phase 5.
+Last session: 2026-10-13
+Stopped at: All Milestone 2 plans written. Next step is to execute plan 05-01.
 Resume file: `.planning/MILESTONE-2-CONTEXT.md`

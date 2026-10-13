@@ -105,7 +105,7 @@ Sources for the move:
 | `validation/` | `scripts/eval_ddi_model.py`, `scripts/calibrate_model.py`, plus new runners |
 
 ### Portability (local now, server later)
-- All paths, hosts, keys and feature switches come from environment variables. `DATA_DIR` points outside the OneDrive folder.
+- All paths, hosts, keys and feature switches come from environment variables. `DATA_DIR` is `C:\PharmaWatchData` on the development machine, outside the OneDrive folder.
 - Data and models are mounted volumes, never copied into the image.
 - Compose profiles: `core` (web, MySQL, Caddy), `kafka` (ZooKeeper, Kafka, producer, consumer), `demo` (HBase).
 - The existing deploy job stays, gated on the `PROD_SERVER_IP` secret as it is today.
@@ -122,16 +122,17 @@ Sources for the move:
 |---|---|
 | `backend/check_db.py`, `scripts/fix_prr_stale.py`, `scripts/download_twosides.py`, `scripts/test_ner.py` | Referenced nowhere |
 | `backend/trained_models/twosides_gnn_model.pth`, `non_existent_file.db`, `scratch/`, root `requirements.txt` | Stale artefacts |
-| `get_prr_data`, `get_drug_event_counts`, `get_prediction`, `get_signal`, `init_interaction_predictions_table` in `backend/database.py` | Never called |
+| `get_prr_data`, `get_drug_event_counts`, `get_signal`, `init_interaction_predictions_table` in `backend/database.py` | Never called (`get_prediction` stays; a test uses it) |
 | `PatchedRequests` in `backend/lstm_model.py` | Duplicate of `helpers/http_client.py` |
 | `/api/system/start-bigdata` | Runs `docker start` from a web request |
 | Duplicate routes: `/api/prr` vs `/api/analytics/prr`; `/api/graph` vs `/api/graph/detailed` | Merge to one each, keep the old path as an alias until the frontend is switched |
-| Five overlapping ML guides in `docs/` | Replaced by one methods document in Phase 8 |
 
 Removed later, when their replacement lands:
 
 | Remove | Phase |
 |---|---|
+| Five overlapping ML guides in `docs/` (replaced by `docs/METHODS.md`) | 8 |
+| `get_cached_fda_response`, `cache_fda_response` once the forecaster uses the shared HTTP client; the `fda_cache` table | 5, table in 11 |
 | `generate_mock_quarter` from the live downloader (moves to test fixtures) | 6 |
 | `INITIAL_GLOBAL_BACKGROUND`, `TOTAL_FAERS_POPULATION`, `get_global_event_count`, `faers_background_events` table, `scripts/recalculate_signals.py` | 10 |
 | `HISTORICAL_WARNING_YEARS` | 7 |
@@ -160,3 +161,7 @@ Signal review workflow (open, assess, close), handwriting-specific accuracy targ
 - Reference sets (OMOP, EU-ADR) need a drug and outcome mapping to RxNorm ingredients and Preferred Term groups; budget half of Day 4 for it.
 - DDI retraining time on CPU is unknown. Fallback: deploy XGBoost as the modelled tier and keep GINE as a labelled experimental score.
 - The cloud vision model needs `ANTHROPIC_API_KEY`; without it the tab falls back to local OCR and says so.
+
+## 11. Plan files
+
+Task-level plans are in `.planning/phases/05-*` to `11-*`, three per phase (21 in total). Plans marked `autonomous: false` contain a step that needs a person: the 20-quarter load (06-03), obtaining and reviewing reference sets (08-01), the paid cloud extraction benchmark (09-03) and the fresh-clone release check (11-03).
