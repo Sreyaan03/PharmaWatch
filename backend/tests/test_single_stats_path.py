@@ -293,3 +293,21 @@ def test_a_cached_signal_is_reused_only_for_the_data_it_was_computed_from(monkey
     assert by_drug["ibuprofen"]["a"] == 0                    # unversioned: recomputed, not trusted
     assert [w[0] for w in written] == ["Metformin", "Ibuprofen"]
     assert all(w[2]["data_version"] == current for w in written)
+
+
+def test_a_resolved_drug_with_no_indexed_reports_is_not_reported_as_zero(client, monkeypatch):
+    """Ibuprofen resolves (RxNav knows it) but its only case was deleted, so nothing is indexed."""
+    monkeypatch.setattr(signals_service, "_IDENTITY",
+                        IdentityService(db_file=analytics.DB_PATH, synonyms=load_synonyms(),
+                                        rxnav=RxNavClient(session=FakeRxNav(), min_interval=0, sleep=lambda s: None)))
+    body = client.get("/api/analytics/prr?drug=ibuprofen&event=Nausea").get_json()
+    assert body["unresolved"] == ["drug_not_indexed"]
+    assert body["identity"]["drug"]["resolved"] is True and body["identity"]["drug"]["indexed"] is False
+    assert "not a count of zero" in body["note"]
+
+
+def test_an_indexed_drug_with_genuinely_zero_event_reports_is_a_real_zero(client):
+    body = client.get("/api/analytics/prr?drug=warfarin&event=Cough").get_json()
+    assert "unresolved" not in body
+    assert body["a"] == 0 and body["b"] == 2                 # warfarin is indexed: 2 exposed cases
+    assert body["identity"]["drug"]["indexed"] is True

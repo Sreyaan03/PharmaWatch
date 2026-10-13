@@ -63,8 +63,21 @@ def _local_metrics(drug, event):
                    unresolved=[k for k in ("drug", "event") if not identity[k]["resolved"]])
         return res
 
-    res = analytics.compute_prr_ingredients([i["rxcui"] for i in d["ingredients"]], e["pt"])
+    rxcuis = [i["rxcui"] for i in d["ingredients"]]
+    indexed = analytics.indexed_ingredients(rxcuis)
+    if indexed is not None and any(r not in indexed for r in rxcuis):
+        # The drug is known, but no report for it is in the index (a name below the report
+        # threshold, an index built before more data was loaded, or a drug that is not in the
+        # data). That is not the same as zero reports, so it is never shown as zero.
+        res = compute_metrics(0, 0, 0, 0)
+        identity["drug"]["indexed"] = False
+        res.update(source="faers_local", identity=identity, unresolved=["drug_not_indexed"],
+                   note="No reports for this ingredient are in the loaded index; this is not a count of zero.")
+        return res
+
+    res = analytics.compute_prr_ingredients(rxcuis, e["pt"])
     if res is not None:
+        identity["drug"]["indexed"] = True
         res["identity"] = identity
     return res
 

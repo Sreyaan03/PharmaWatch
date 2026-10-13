@@ -5,6 +5,7 @@
 #   python -m faers.downloader --latest 20 --dry-run  # list them, check only the newest
 #   python -m faers.downloader --quarters 2024q1 2024q2
 #   python -m faers.downloader --year 2024 --qtr 3
+#   python -m faers.downloader --adopt                # register zips you downloaded by hand
 #
 # Run from the backend directory. Only the FDA's published files are accepted: a download is
 # checked against the size the server reports, tested as a zip, and given a SHA-256 sidecar.
@@ -229,9 +230,50 @@ def download_quarter(year, qtr, directory=None, session=None, log=print):
     return dest
 
 
+def adopt_existing(directory=None, log=print):
+    """Verify zips placed in the raw folder by hand and record their checksum.
+
+    A zip is accepted when its name is faers_ascii_YYYYqN.zip, it is a valid zip, and it holds
+    the five FAERS tables. Returns ([adopted labels], [(label or name, reason)]).
+    """
+    directory = directory or raw_dir()
+    adopted, rejected = [], []
+    for name in sorted(os.listdir(directory)):
+        if not (name.lower().startswith("faers_ascii_") and name.lower().endswith(".zip")):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            label = quarter_label(*parse_label(name[len("faers_ascii_"):-len(".zip")]))
+        except ValueError as exc:
+            rejected.append((name, str(exc)))
+            continue
+        if is_verified(path):
+            continue
+        try:
+            with zipfile.ZipFile(path) as zf:
+                bad = zf.testzip()
+                members = {os.path.basename(n).upper()[:4] for n in zf.namelist()}
+            if bad:
+                raise RuntimeError(f"corrupt member {bad}")
+            missing = {"DEMO", "DRUG", "REAC", "THER", "OUTC"} - members
+            if missing:
+                raise RuntimeError(f"missing tables {sorted(missing)}")
+        except (zipfile.BadZipFile, RuntimeError) as exc:
+            rejected.append((label, f"not accepted: {exc}"))
+            log(f"[-] {label}: not accepted ({exc})")
+            continue
+        digest = sha256_of(path)
+        with open(sidecar_path(path), "w", encoding="utf-8") as f:
+            f.write(f"{digest}  {name}" + chr(10))
+        adopted.append(label)
+        log(f"[+] {label}: adopted, sha256 {digest[:16]}...")
+    return adopted, rejected
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Download real FDA FAERS quarterly ASCII files.")
     group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--adopt", action="store_true", help="verify and register zips already in faers_raw")
     group.add_argument("--latest", type=int, metavar="N", help="the N most recent released quarters")
     group.add_argument("--quarters", nargs="+", metavar="YYYYqN", help="specific quarters, e.g. 2024q1 2024q2")
     group.add_argument("--year", type=int, help="year of a single quarter (use with --qtr)")
@@ -245,6 +287,11 @@ def main(argv=None):
         load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
     except ImportError:
         pass
+
+    if args.adopt:
+        adopted, rejected = adopt_existing()
+        print(f"[*] adopted {len(adopted)}: {', '.join(adopted) or '-'}; rejected {len(rejected)}")
+        return 1 if rejected else 0
 
     if args.latest:
         quarters = latest_released(args.latest)

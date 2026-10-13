@@ -616,3 +616,30 @@ def compute_prr_ingredients(ingredient_rxcuis, pt):
     res = compute_metrics(counts["a"], counts["b"], counts["c"], counts["d"])
     res["source"] = "faers_local"
     return res
+
+
+def indexed_ingredients(ingredient_rxcuis):
+    """The ingredients among `ingredient_rxcuis` that have at least one indexed case.
+
+    An ingredient that is not indexed has no counts, which is different from having zero
+    reports: callers must say so rather than report zero. Returns None when the database or
+    its identity tables are not available.
+    """
+    ingredient_rxcuis = list(ingredient_rxcuis)
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        tables = {t[0] for t in conn.execute("SHOW TABLES").fetchall()}
+        if "case_drug" not in tables or not ingredient_rxcuis:
+            return None
+        marks = ", ".join("?" for _ in ingredient_rxcuis)
+        rows = conn.execute(
+            f"SELECT DISTINCT ingredient_rxcui FROM case_drug WHERE ingredient_rxcui IN ({marks})",
+            ingredient_rxcuis).fetchall()
+        return {r[0] for r in rows}
+    except Exception as e:
+        log.error(f"[-] Error checking indexed ingredients: {e}")
+        return None
+    finally:
+        conn.close()

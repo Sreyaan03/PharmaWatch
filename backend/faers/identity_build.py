@@ -12,6 +12,9 @@
 # loading another quarter) only looks up names it has not seen. Combination products
 # ("lamivudine\zidovudine") are split on the backslash and each part resolved on its own.
 # Only exact name matches resolve; unresolved names stay unresolved.
+#
+# The slow step (the RxNav lookups) runs with no database connection open, so the running app
+# keeps reading the database while it works; the tables are written in one short step at the end.
 
 import argparse
 import os
@@ -59,7 +62,7 @@ def build_case_drug(con):
 
     The per-case ingredient set is what every disproportionality count joins against.
     """
-    name = f"lower(trim(coalesce(nullif(trim(d.prod_ai), ''), d.drugname)))"
+    name = "lower(trim(coalesce(nullif(trim(d.prod_ai), ''), d.drugname)))"
     con.execute(f"""
         CREATE OR REPLACE TABLE case_drug AS
         SELECT d.primaryid, i.ingredient_rxcui, bool_or(d.role_cod IN ('PS', 'SS')) AS suspect
@@ -71,15 +74,15 @@ def build_case_drug(con):
     return con.execute("SELECT count(*) FROM case_drug").fetchone()[0]
 
 
-def build_drug_identity(con, client, min_reports=10, limit=None, log=print, workers=8):
-    """Resolve the drug names that matter and store the result. Returns a summary dict."""
+# ── the three phases of the drug identity build ────────────────────────────────
+def drug_names(con, min_reports=10, limit=None):
+    """[(name, n_reports)] for the drug names that matter, most reported first."""
     names = con.execute(NAME_SQL, [min_reports]).fetchall()
-    if limit:
-        names = names[:limit]
-    total_reports = sum(n for _, n in names)
-    log(f"[*] Resolving {len(names):,} drug names (>= {min_reports} reports each, "
-        f"{total_reports:,} name-report pairs)")
+    return names[:limit] if limit else names
 
+
+def resolve_drug_names(client, names, workers=8, log=print):
+    """Look every distinct name part up (no database connection needed). Returns {part: result|None}."""
     started = time.time()
     unique_parts = list(dict.fromkeys(p for name, _ in names for p in (split_parts(name) or [name])))
     log(f"[*] {len(unique_parts):,} distinct names to look up ({workers} concurrent requests)")
@@ -88,7 +91,12 @@ def build_drug_identity(con, client, min_reports=10, limit=None, log=print, work
         resolved.update(client.resolve_many(unique_parts[start:start + 500], workers=workers))
         log(f"    {min(start + 500, len(unique_parts)):,}/{len(unique_parts):,} looked up, "
             f"{client.live_calls:,} live calls, {time.time() - started:.0f}s")
+    return resolved
 
+
+def store_drug_identity(con, names, resolved, min_reports=10, log=print):
+    """Write drug_identity and identity_build_info. Returns the coverage summary."""
+    total_reports = sum(n for _, n in names)
     rows = []
     resolved_reports = 0
     unresolved = []
@@ -128,6 +136,26 @@ def build_drug_identity(con, client, min_reports=10, limit=None, log=print, work
     return summary
 
 
+def build_drug_identity(con, client, min_reports=10, limit=None, log=print, workers=8):
+    """All three phases on one connection (used by tests and small databases)."""
+    names = drug_names(con, min_reports, limit)
+    log(f"[*] Resolving {len(names):,} drug names (>= {min_reports} reports each, "
+        f"{sum(n for _, n in names):,} name-report pairs)")
+    resolved = resolve_drug_names(client, names, workers, log)
+    return store_drug_identity(con, names, resolved, min_reports, log)
+
+
+def _connect_for_write(db_file, attempts=30, wait=2.0):
+    """Open the database for writing, waiting out the app's momentary read connections."""
+    for attempt in range(attempts):
+        try:
+            return duckdb.connect(db_file)
+        except duckdb.IOException:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(wait)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Build drug and event identity tables in the FAERS database.")
     parser.add_argument("--min-reports", type=int, default=10, help="resolve names appearing in at least N reports")
@@ -145,11 +173,22 @@ def main(argv=None):
     if not os.path.exists(db_file):
         print(f"[-] No database at {db_file}. Run faers.loader first.", file=sys.stderr)
         return 1
-    con = duckdb.connect(db_file)
+
+    con = duckdb.connect(db_file, read_only=True)          # short: just read the names
+    try:
+        names = drug_names(con, args.min_reports, args.limit)
+    finally:
+        con.close()
+    print(f"[*] Resolving {len(names):,} drug names (>= {args.min_reports} reports each, "
+          f"{sum(n for _, n in names):,} name-report pairs)")
+
+    client = RxNavClient(cache_path=cache_path())
+    resolved = resolve_drug_names(client, names, args.workers)   # slow; no database connection held
+
+    con = _connect_for_write(db_file)                      # short: write the tables
     try:
         print(f"[+] pt_dictionary: {build_pt_dictionary(con):,} Preferred Terms")
-        build_drug_identity(con, RxNavClient(cache_path=cache_path()), args.min_reports, args.limit,
-                            workers=args.workers)
+        store_drug_identity(con, names, resolved, args.min_reports)
         print(f"[+] case_drug: {build_case_drug(con):,} case-ingredient rows")
         con.execute("CHECKPOINT")
     finally:

@@ -258,3 +258,19 @@ def test_interrupted_download_resumes_and_verifies(tmp_path, monkeypatch):
     session.calls.clear()
     downloader.download_quarter(2024, 1, directory=str(tmp_path / "raw"), session=session, log=lambda *_: None)
     assert session.calls == []
+
+
+# ── adopting hand-downloaded zips ─────────────────────────────────────────────
+def test_adopt_registers_valid_zips_and_rejects_bad_ones(tmp_path):
+    z1, _ = make_fixture.two_quarter_fixture(str(tmp_path))
+    (tmp_path / "faers_ascii_2024q3.zip").write_bytes(b"this is not a zip")
+    with zipfile.ZipFile(tmp_path / "faers_ascii_2024q4.zip", "w") as zf:      # a zip without the tables
+        zf.writestr("ASCII/DEMO24Q4.txt", "primaryid\n1\n")
+    adopted, rejected = downloader.adopt_existing(str(tmp_path), log=lambda *_: None)
+
+    assert sorted(adopted) == ["2024q1", "2024q2"]
+    assert {r[0] for r in rejected} == {"2024q3", "2024q4"}
+    assert downloader.is_verified(z1)
+    assert not os.path.exists(str(tmp_path / "faers_ascii_2024q3.zip.sha256"))
+    # a second run adopts nothing new and does not re-hash the verified files
+    assert downloader.adopt_existing(str(tmp_path), log=lambda *_: None)[0] == []
