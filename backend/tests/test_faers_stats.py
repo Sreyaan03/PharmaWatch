@@ -289,3 +289,86 @@ def test_cache_entries_are_only_served_for_the_same_version(monkeypatch):
     cache.set("D", "E", "tto", {"x": 2})                                 # an entry written without a version
     assert cache.get("D", "E", "tto", version="v1") is None              # is never served to a versioned reader
     assert cache.get("D", "E", "tto") == {"x": 2}
+
+
+# ── timing is judged only inside the window the loaded data covers ────────────
+def _timing_db(tmp_path, rows, name="timing.duckdb"):
+    """rows: [(primaryid, fda_dt, event_dt)] all with drug 'drugx' (9001) and event 'E'."""
+    db = str(tmp_path / name)
+    c = duckdb.connect(db)
+    c.execute("CREATE TABLE faers_demo (primaryid VARCHAR, sex VARCHAR, age_years DOUBLE, "
+              "occr_country VARCHAR, event_dt VARCHAR, fda_dt VARCHAR)")
+    c.execute("CREATE TABLE faers_reac (primaryid VARCHAR, pt VARCHAR)")
+    c.execute("CREATE TABLE case_drug (primaryid VARCHAR, ingredient_rxcui VARCHAR, suspect BOOLEAN)")
+    c.execute("CREATE TABLE drug_identity (raw_name VARCHAR, part VARCHAR, rxcui VARCHAR, ingredient_rxcui VARCHAR, "
+              "ingredient_name VARCHAR, match_type VARCHAR, n_reports BIGINT)")
+    c.execute("CREATE TABLE pt_dictionary (pt VARCHAR, pt_lower VARCHAR, n_reports BIGINT)")
+    c.execute("INSERT INTO drug_identity VALUES ('drugx', 'drugx', '9001', '9001', 'drugx', 'exact', 1)")
+    c.execute("INSERT INTO pt_dictionary VALUES ('E', 'e', 1)")
+    for pid, fda, event in rows:
+        c.execute("INSERT INTO faers_demo VALUES (?, 'F', 40.0, 'US', ?, ?)", [pid, event, fda])
+        c.execute("INSERT INTO faers_reac VALUES (?, 'E')", [pid])
+        c.execute("INSERT INTO case_drug VALUES (?, '9001', TRUE)", [pid])
+    c.close()
+    return db
+
+
+def test_a_year_counts_only_when_the_loaded_window_covers_it_with_reporting_lag(tmp_path):
+    from faers.stats import complete_event_years
+    five_years = [("a", "20210701", "20210601"), ("b", "20260630", "20260601")]
+    c = duckdb.connect(_timing_db(tmp_path, five_years), read_only=True)
+    assert complete_event_years(c) == [2022, 2023, 2024, 2025]
+    c.close()
+    one_quarter = [("a", "20260401", "20260301"), ("b", "20260630", "20260601")]
+    c = duckdb.connect(_timing_db(tmp_path, one_quarter, "q.duckdb"), read_only=True)
+    assert complete_event_years(c) == []
+    c.close()
+
+
+def test_event_months_use_only_complete_years(tmp_path):
+    from faers.stats import event_month_counts
+    rows = [("a", "20210701", "20210801"),       # 2021: before the first full year, excluded
+            ("b", "20220301", "20220215"),       # 2022 Feb
+            ("c", "20230301", "20230215"),       # 2023 Feb
+            ("d", "20240901", "20240701"),       # 2024 Jul
+            ("e", "20260630", "20260601")]       # 2026: not complete, excluded
+    c = duckdb.connect(_timing_db(tmp_path, rows), read_only=True)
+    counts = event_month_counts(c, ["9001"], "E", [2022, 2023, 2024, 2025])
+    c.close()
+    assert counts == [0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+
+
+def test_receipt_velocity_fills_empty_months_with_zero(tmp_path):
+    from faers.stats import receipt_velocity
+    rows = [("a", "20240110", ""), ("b", "20240120", ""), ("c", "20240415", "")]
+    c = duckdb.connect(_timing_db(tmp_path, rows), read_only=True)
+    r = receipt_velocity(c, ["9001"], "E")
+    c.close()
+    assert r["months"] == ["202401", "202402", "202403", "202404"]
+    assert r["counts"] == [2, 0, 0, 1] and r["span_months"] == 4
+
+
+def test_one_quarter_of_data_makes_no_seasonality_or_spike_claim(tmp_path, api):
+    rows = [(f"p{i}", f"2026{4 + i % 3:02d}15", f"2026{1 + i % 6:02d}10") for i in range(150)]
+    client = api(_timing_db(tmp_path, rows))
+    season = client.get("/api/temporal/seasonality?drug=drugx&event=E").get_json()
+    assert season["source"] == "no_data" and season["is_seasonal"] is False
+    assert season["years_used"] == [] and "complete calendar" in season["message"]
+    velocity = client.get("/api/temporal/velocity?drug=drugx&event=E").get_json()
+    assert velocity["source"] == "no_data" and velocity["has_spike"] is False
+    assert "at least 12" in velocity["message"]
+
+
+def test_spike_in_a_long_window_is_found_on_the_receipt_month(tmp_path, api):
+    rows, n = [], 0
+    for year in (2022, 2023, 2024):
+        for month in range(1, 13):
+            k = 30 if (year, month) == (2023, 6) else 3
+            for _ in range(k):
+                n += 1
+                rows.append((f"p{n}", f"{year}{month:02d}15", f"{year}{month:02d}01"))
+    client = api(_timing_db(tmp_path, rows))
+    v = client.get("/api/temporal/velocity?drug=drugx&event=E").get_json()
+    assert v["source"] == "faers_local" and v["span_months"] == 36
+    assert v["has_spike"] is True
+    assert v["months"][v["spikes"].index(True)] == "202306"

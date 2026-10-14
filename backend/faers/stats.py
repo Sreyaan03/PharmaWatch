@@ -305,3 +305,91 @@ def monthly_report_share(con, ingredient_rxcuis):
     drug = [int(r[2]) for r in rows]
     return {"months": months, "drug": drug, "total": total,
             "share": [round(100.0 * d / t, 6) if t else 0.0 for d, t in zip(drug, total)]}
+
+
+# ── report timing inside the loaded window ───────────────────────────────────
+MIN_VELOCITY_MONTHS = 12
+MIN_SEASONALITY_YEARS = 2
+EVENT_REPORTING_LAG_DAYS = 90
+
+
+def receipt_coverage(con):
+    """(first, last) FDA receipt date of the loaded reports as dates, or None when empty."""
+    from datetime import datetime
+    row = con.execute("""
+        SELECT min(fda_dt), max(fda_dt) FROM faers_demo WHERE length(fda_dt) = 8
+    """).fetchone()
+    if not row or not row[0]:
+        return None
+    return datetime.strptime(row[0], "%Y%m%d"), datetime.strptime(row[1], "%Y%m%d")
+
+
+def receipt_velocity(con, ingredient_rxcuis, pt):
+    """Reports for the pair by month of FDA receipt, over every month of the loaded window.
+
+    Receipt months are covered evenly by the loaded quarters, so the series is comparable from
+    month to month; months with no report for the pair are zeros. Returns None without data.
+    """
+    coverage = receipt_coverage(con)
+    if coverage is None:
+        return None
+    rxcuis, args = _cohort_args(ingredient_rxcuis, pt)
+    rows = con.execute(f"""
+        WITH {_exposed_with_event_sql(len(rxcuis))}
+        SELECT substr(d.fda_dt, 1, 6) AS ym, count(*)
+        FROM hits h JOIN faers_demo d USING (primaryid)
+        WHERE length(d.fda_dt) = 8
+        GROUP BY ym
+    """, args).fetchall()
+    found = {r[0]: int(r[1]) for r in rows}
+
+    first, last = coverage
+    months, y, m = [], first.year, first.month
+    while (y, m) <= (last.year, last.month):
+        months.append(f"{y:04d}{m:02d}")
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+    return {"months": months, "counts": [found.get(x, 0) for x in months],
+            "span_months": len(months), "first_receipt": first.strftime("%Y-%m-%d"),
+            "last_receipt": last.strftime("%Y-%m-%d")}
+
+
+def complete_event_years(con):
+    """Calendar years whose events the loaded window could have received in full.
+
+    A year qualifies when it starts on or after the first receipt date and ends at least
+    EVENT_REPORTING_LAG_DAYS before the last one (events keep being reported for weeks to months).
+    """
+    from datetime import timedelta
+    coverage = receipt_coverage(con)
+    if coverage is None:
+        return []
+    first, last = coverage
+    cutoff = last - timedelta(days=EVENT_REPORTING_LAG_DAYS)
+    years = []
+    for y in range(first.year, last.year + 1):
+        from datetime import datetime
+        if datetime(y, 1, 1) >= first and datetime(y, 12, 31) <= cutoff:
+            years.append(y)
+    return years
+
+
+def event_month_counts(con, ingredient_rxcuis, pt, years):
+    """Reports for the pair by calendar month of the event, for events in the given years only."""
+    if not years:
+        return [0] * 12
+    rxcuis, args = _cohort_args(ingredient_rxcuis, pt)
+    rows = con.execute(f"""
+        WITH {_exposed_with_event_sql(len(rxcuis))}
+        SELECT CAST(substr(d.event_dt, 5, 2) AS INTEGER) AS m, count(*)
+        FROM hits h JOIN faers_demo d USING (primaryid)
+        WHERE length(d.event_dt) = 8
+          AND CAST(substr(d.event_dt, 1, 4) AS INTEGER) IN ({_marks(years)})
+        GROUP BY m
+    """, args + list(years)).fetchall()
+    counts = [0] * 12
+    for m, n in rows:
+        if 1 <= m <= 12:
+            counts[m - 1] = int(n)
+    return counts

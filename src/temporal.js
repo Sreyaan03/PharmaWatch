@@ -249,8 +249,8 @@ function renderTemporalSummaryCards(vel, tto, season) {
     const hasSeries = Array.isArray(vel.counts) && vel.counts.length > 0;
     const excluded = (vel.incomplete_months_excluded || []).length
       ? ` Newest ${vel.incomplete_months_excluded.length} month(s) left out: still filling in.` : '';
-    elVelocity.innerHTML = !hasSeries ?
-      `<div class="stat-card"><div class="stat-title">Velocity</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">No dated reports for this pair.</div></div>` :
+    elVelocity.innerHTML = (vel.source === 'no_data' || !hasSeries) ?
+      `<div class="stat-card"><div class="stat-title">Velocity</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">${vel.message || 'No dated reports for this pair.'}</div></div>` :
       vel.has_spike ?
       `<div class="stat-card stat-card--red"><div class="stat-title">Velocity Spike</div><div class="stat-value">ALERT</div><div class="stat-desc">Z-score > 2.0 in at least one month.${excluded}</div></div>` :
       `<div class="stat-card"><div class="stat-title">Velocity Status</div><div class="stat-value">NO SPIKE</div><div class="stat-desc">No month exceeds Z-score 2.0.${excluded}</div></div>`;
@@ -258,7 +258,7 @@ function renderTemporalSummaryCards(vel, tto, season) {
 
   if (elTTO) {
     const usable = tto.usable_cases ?? 0;
-    elTTO.innerHTML = tto.median_days == null ?
+    elTTO.innerHTML = (tto.source === 'no_data' || tto.median_days == null) ?
       `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">${usable} report(s) with complete therapy-start and event dates; at least 10 are needed.</div></div>` :
       `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">${tto.peak_bucket}</div><div class="stat-desc">Median ${tto.median_days} days after start, from ${usable} report(s) with complete dates.</div></div>`;
   }
@@ -267,7 +267,10 @@ function renderTemporalSummaryCards(vel, tto, season) {
     const elevated = season.elevated_months || [];
     const t = season.test || {};
     let value, text;
-    if (t.applicable === false || !season.counts) {
+    if (season.source === 'no_data') {
+      value = 'NOT AVAILABLE';
+      text = season.message || 'No dated reports for this pair.';
+    } else if (t.applicable === false || !season.counts) {
       value = 'NOT AVAILABLE';
       text = `${t.total ?? 0} dated report(s); at least 60 are needed for a test.`;
     } else if (season.is_seasonal) {

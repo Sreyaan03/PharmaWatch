@@ -3,7 +3,8 @@ import os
 import duckdb
 import numpy as np
 from core.config import data_dir
-from .stats import (SEASONALITY_ALPHA, AGE_STRATA, SEX_STRATA, contingency, drop_incomplete_tail, reports_by_country,
+from .stats import (complete_event_years, event_month_counts, receipt_velocity,
+                    SEASONALITY_ALPHA, AGE_STRATA, SEX_STRATA, contingency, drop_incomplete_tail, reports_by_country,
                     monthly_report_share, seasonality_test, stratified_metrics, time_to_onset, unclassified_cases, zscore_spikes)
 import logging
 log = logging.getLogger(__name__)
@@ -505,3 +506,16 @@ def get_country_counts(ingredient_rxcuis, pt, limit=15):
 def get_monthly_share(ingredient_rxcuis):
     """Monthly reporting share for an ingredient set (see stats.monthly_report_share)."""
     return _with_identity_connection(lambda c: monthly_report_share(c, ingredient_rxcuis))
+
+
+def get_receipt_velocity(ingredient_rxcuis, pt):
+    """Monthly reports for the pair by FDA receipt month (see stats.receipt_velocity)."""
+    return _with_identity_connection(lambda c: receipt_velocity(c, ingredient_rxcuis, pt))
+
+
+def get_event_seasonality(ingredient_rxcuis, pt):
+    """Event-month counts over the calendar years the loaded window covers completely."""
+    def work(c):
+        years = complete_event_years(c)
+        return {"years": years, "counts": event_month_counts(c, ingredient_rxcuis, pt, years)}
+    return _with_identity_connection(work)
