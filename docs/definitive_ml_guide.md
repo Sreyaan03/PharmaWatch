@@ -1,3 +1,5 @@
+> **Superseded in part (Phase 7).** This is an early ideas document. The implemented statistics, signal classes (`none` / `signal` / `strong_signal`) and boxed-warning behaviour are described in [statistical_methods.md](statistical_methods.md). In particular: a warning year is no longer taken from the label's `effective_time`, the "Critical Signal" rule below is replaced by the Evans criteria plus ROR and IC025 for `strong_signal`, and report counts are not read as evidence that a warning was or was not effective.
+
 # Definitive Guide: Implementing All ML Models (No Hardcoding)
 
 This is your single, final guide. It references the exact files and line numbers in your current codebase. Every piece of data will come from the **openFDA API** — nothing is hardcoded.
