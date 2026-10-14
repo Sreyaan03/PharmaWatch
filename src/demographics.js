@@ -257,24 +257,39 @@ function renderGeoChart(data) {
   });
 }
 
+function escapeDemoHtml(text) {
+  const el = document.createElement('div');
+  el.textContent = String(text ?? '');
+  return el.innerHTML;
+}
+
 function renderDemographicsSummaryCards(sex, age, geo) {
   const elSex = document.getElementById("demo-card-sex");
   const elAge = document.getElementById("demo-card-age");
   const elGeo = document.getElementById("demo-card-geo");
 
   if (elSex) {
-    const higherRisk = sex.higher_risk_group || 'Balanced';
-    elSex.innerHTML = `<div class="stat-card"><div class="stat-title">Sex Risk Stratification</div><div class="stat-value">${higherRisk.toUpperCase()} RISK</div><div class="stat-desc">Risk Ratio (F/M): ${sex.sex_risk_ratio || 1.0} (${sex.female_count || 0} Female / ${sex.male_count || 0} Male / ${sex.unknown_count || 0} Unknown)</div></div>`;
+    const counts = `${sex.female_count || 0} Female / ${sex.male_count || 0} Male / ${sex.unknown_count || 0} Unknown`;
+    if (sex.source === 'no_data' || !sex.higher_risk_group) {
+      elSex.innerHTML = `<div class="stat-card"><div class="stat-title">Sex Risk Stratification</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">${sex.source === 'no_data' ? 'Too few reports to compare.' : 'Intervals overlap.'} (${counts})</div></div>`;
+    } else if (sex.higher_risk_group === 'No difference shown') {
+      elSex.innerHTML = `<div class="stat-card"><div class="stat-title">Sex Risk Stratification</div><div class="stat-value">NO DIFFERENCE SHOWN</div><div class="stat-desc">PRR intervals for women and men overlap. (${counts})</div></div>`;
+    } else {
+      elSex.innerHTML = `<div class="stat-card"><div class="stat-title">Sex Risk Stratification</div><div class="stat-value">${escapeDemoHtml(sex.higher_risk_group).toUpperCase()} HIGHER</div><div class="stat-desc">PRR ratio (F/M): ${sex.sex_risk_ratio != null ? sex.sex_risk_ratio : 'n/a'} (${counts})</div></div>`;
+    }
   }
 
   if (elAge) {
-    const highestRiskAge = age.highest_risk_group || 'Adult (18-64)';
-    elAge.innerHTML = `<div class="stat-card"><div class="stat-title">Highest-Risk Age Group</div><div class="stat-value">${highestRiskAge.toUpperCase()}</div><div class="stat-desc">Subgroup represents peak reporting vulnerability.</div></div>`;
+    if (age.highest_risk_group) {
+      elAge.innerHTML = `<div class="stat-card"><div class="stat-title">Highest-Risk Age Group</div><div class="stat-value">${escapeDemoHtml(age.highest_risk_group).toUpperCase()}</div><div class="stat-desc">Its PRR interval lies entirely above the other groups'.</div></div>`;
+    } else {
+      elAge.innerHTML = `<div class="stat-card"><div class="stat-title">Highest-Risk Age Group</div><div class="stat-value">NONE SHOWN</div><div class="stat-desc">${age.source === 'no_data' ? 'Too few reports to compare.' : 'No group has an interval clearly above the others.'}</div></div>`;
+    }
   }
 
   if (elGeo) {
-    const topFull = COUNTRY_NAMES[geo.top_country] || geo.top_country || 'United States (US)';
-    elGeo.innerHTML = `<div class="stat-card"><div class="stat-title">Top Reporting Region</div><div class="stat-value">${topFull}</div><div class="stat-desc">Highest geographical concentration of co-reports.</div></div>`;
+    const topFull = geo.top_country ? (COUNTRY_NAMES[geo.top_country] || geo.top_country) : 'NOT AVAILABLE';
+    elGeo.innerHTML = `<div class="stat-card"><div class="stat-title">Top Reporting Country</div><div class="stat-value">${escapeDemoHtml(topFull)}</div><div class="stat-desc">Largest share of reports; reflects where reports are filed, not where risk is higher.</div></div>`;
   }
 }
 

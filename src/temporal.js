@@ -246,19 +246,38 @@ function renderTemporalSummaryCards(vel, tto, season) {
   const elSeason = document.getElementById("temp-card-season");
 
   if (elVelocity) {
-    elVelocity.innerHTML = vel.has_spike ?
-      `<div class="stat-card stat-card--red"><div class="stat-title">Velocity Spike</div><div class="stat-value">ALERT</div><div class="stat-desc">Z-score > 2.0 detected in recent months.</div></div>` :
-      `<div class="stat-card"><div class="stat-title">Velocity Status</div><div class="stat-value">STABLE</div><div class="stat-desc">No sudden report surge detected.</div></div>`;
+    const hasSeries = Array.isArray(vel.counts) && vel.counts.length > 0;
+    const excluded = (vel.incomplete_months_excluded || []).length
+      ? ` Newest ${vel.incomplete_months_excluded.length} month(s) left out: still filling in.` : '';
+    elVelocity.innerHTML = !hasSeries ?
+      `<div class="stat-card"><div class="stat-title">Velocity</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">No dated reports for this pair.</div></div>` :
+      vel.has_spike ?
+      `<div class="stat-card stat-card--red"><div class="stat-title">Velocity Spike</div><div class="stat-value">ALERT</div><div class="stat-desc">Z-score > 2.0 in at least one month.${excluded}</div></div>` :
+      `<div class="stat-card"><div class="stat-title">Velocity Status</div><div class="stat-value">NO SPIKE</div><div class="stat-desc">No month exceeds Z-score 2.0.${excluded}</div></div>`;
   }
 
   if (elTTO) {
-    elTTO.innerHTML = `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">${tto.peak_bucket || 'N/A'}</div><div class="stat-desc">Median onset ~${tto.median_days || 0} days after start.</div></div>`;
+    const usable = tto.usable_cases ?? 0;
+    elTTO.innerHTML = tto.median_days == null ?
+      `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">${usable} report(s) with complete therapy-start and event dates; at least 10 are needed.</div></div>` :
+      `<div class="stat-card"><div class="stat-title">Peak Time-To-Onset</div><div class="stat-value">${tto.peak_bucket}</div><div class="stat-desc">Median ${tto.median_days} days after start, from ${usable} report(s) with complete dates.</div></div>`;
   }
 
   if (elSeason) {
     const elevated = season.elevated_months || [];
-    const text = season.is_seasonal ? `Elevated in ${elevated.join(', ')}` : 'Uniform across months';
-    elSeason.innerHTML = `<div class="stat-card"><div class="stat-title">Seasonality</div><div class="stat-value">${season.is_seasonal ? 'CYCLICAL' : 'NORMAL'}</div><div class="stat-desc">${text}</div></div>`;
+    const t = season.test || {};
+    let value, text;
+    if (t.applicable === false || !season.counts) {
+      value = 'NOT AVAILABLE';
+      text = `${t.total ?? 0} dated report(s); at least 60 are needed for a test.`;
+    } else if (season.is_seasonal) {
+      value = 'CYCLICAL';
+      text = `Elevated in ${elevated.join(', ')} (chi-square p = ${Number(t.p_value).toExponential(1)})`;
+    } else {
+      value = 'NO SEASONALITY SHOWN';
+      text = `Not different from an even spread (chi-square p = ${Number(t.p_value).toFixed(2)})`;
+    }
+    elSeason.innerHTML = `<div class="stat-card"><div class="stat-title">Seasonality</div><div class="stat-value">${value}</div><div class="stat-desc">${text}</div></div>`;
   }
 }
 
