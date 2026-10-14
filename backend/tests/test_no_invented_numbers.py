@@ -9,8 +9,7 @@ any other number would have been made up. Every result must also say how it was 
 import pytest
 
 from core.response import EVIDENCE_KINDS, with_meta
-from faers.stats import (MIN_SEASONALITY_CASES, drop_incomplete_tail,  # noqa: E402
-                         seasonality_test)
+from faers.stats import MIN_SEASONALITY_CASES, seasonality_test  # noqa: E402
 from services.provenance import describe
 from test_route_inventory import (PATH_VALUE, QUERY, _concrete, _rules,  # noqa: F401
                                   app, isolated)
@@ -114,18 +113,3 @@ def test_too_few_cases_gives_no_verdict():
     assert sum(counts) < MIN_SEASONALITY_CASES
     t = seasonality_test(counts)
     assert t["applicable"] is False and t["p_value"] is None
-
-
-# ── velocity: the newest quarter is still filling in ──────────────────────────
-def test_the_newest_quarter_is_dropped():
-    months = [f"2025{m:02d}" for m in range(1, 13)] + ["202601", "202602"]
-    counts = list(range(1, 15))
-    m, c, dropped = drop_incomplete_tail(months, counts)
-    assert m[-1] == "202512" and len(m) == len(c) == 12
-    assert dropped == ["202601", "202602"]
-
-
-def test_a_short_series_is_left_alone():
-    months = ["202601", "202602", "202603", "202604"]
-    m, c, dropped = drop_incomplete_tail(months, [1, 2, 3, 4])
-    assert m == months and dropped == []

@@ -247,8 +247,7 @@ function renderTemporalSummaryCards(vel, tto, season) {
 
   if (elVelocity) {
     const hasSeries = Array.isArray(vel.counts) && vel.counts.length > 0;
-    const excluded = (vel.incomplete_months_excluded || []).length
-      ? ` Newest ${vel.incomplete_months_excluded.length} month(s) left out: still filling in.` : '';
+    const excluded = '';
     elVelocity.innerHTML = (vel.source === 'no_data' || !hasSeries) ?
       `<div class="stat-card"><div class="stat-title">Velocity</div><div class="stat-value">NOT AVAILABLE</div><div class="stat-desc">${vel.message || 'No dated reports for this pair.'}</div></div>` :
       vel.has_spike ?

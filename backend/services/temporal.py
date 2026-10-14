@@ -6,10 +6,6 @@ from core.cache import PayloadCache
 from faers.stats import (MIN_SEASONALITY_YEARS, MIN_VELOCITY_MONTHS, SEASONALITY_ALPHA,
                         seasonality_test, zscore_spikes)
 from faers import analytics
-from faers.analytics import (
-    get_temporal_velocity_duckdb,
-    get_seasonality_duckdb
-)
 import logging
 log = logging.getLogger(__name__)
 
@@ -64,12 +60,7 @@ def api_temporal_velocity(drug, event):
         set_cached_payload(drug, event, "velocity", payload)
         return payload, 200
 
-    # 2. A database without drug identity: the older text-matched query, then openFDA live
-    duck_res = get_temporal_velocity_duckdb(drug, event)
-    if duck_res and len(duck_res.get("counts", [])) > 0:
-        set_cached_payload(drug, event, "velocity", duck_res)
-        return duck_res, 200
-
+    # 2. No drug identity in the loaded database: openFDA live, by month of receipt
     FDA_BASE = "https://api.fda.gov/drug/event.json"
     url = f'{FDA_BASE}?search=patient.drug.medicinalproduct:"{drug}"+AND+patient.reaction.reactionmeddrapt:"{event}"&count=receivedate'
 
@@ -217,13 +208,7 @@ def api_temporal_seasonality(drug, event):
         set_cached_payload(drug, event, "seasonality", payload)
         return payload, 200
 
-    # 2. A database without drug identity: the older text-matched query
-    duck_res = get_seasonality_duckdb(drug, event)
-    if duck_res and sum(duck_res.get("counts", [])) > 0:
-        set_cached_payload(drug, event, "seasonality", duck_res)
-        return duck_res, 200
-
-    # 3. No data — return empty
+    # 2. No drug identity in the loaded database: nothing to judge seasonality on
     return {
         "drug": drug,
         "event": event,

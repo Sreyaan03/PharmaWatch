@@ -254,27 +254,6 @@ def seasonality_test(counts):
             "p_value": float(chi2_dist.sf(stat, 11)), "df": 11, "total": total}
 
 
-def drop_incomplete_tail(months, counts, min_remaining=6):
-    """Remove the months of the most recent calendar quarter present in a monthly series.
-
-    Reports for recent events keep arriving for months, so the newest quarter is under-counted
-    and would otherwise look like a collapse (or distort a spike baseline). `months` are
-    'YYYYMM' strings in ascending order. Nothing is dropped if fewer than `min_remaining`
-    months would be left. Returns (months, counts, dropped_months).
-    """
-    if not months:
-        return months, counts, []
-    last = months[-1]
-    year, month = int(last[:4]), int(last[4:6])
-    quarter_start = f"{year:04d}{3 * ((month - 1) // 3) + 1:02d}"
-    keep = [i for i, m in enumerate(months) if m < quarter_start]
-    if len(keep) < min_remaining:
-        return months, counts, []
-    return ([months[i] for i in keep], [counts[i] for i in keep],
-            [m for m in months if m >= quarter_start])
-
-
-# ── reporting share over time ────────────────────────────────────────────────
 def monthly_report_share(con, ingredient_rxcuis):
     """Reports with the drug as suspect, as a share of all reports, by month received.
 

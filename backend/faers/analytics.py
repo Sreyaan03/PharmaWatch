@@ -1,11 +1,10 @@
 # backend/faers/analytics.py
 import os
 import duckdb
-import numpy as np
 from core.config import data_dir
 from .stats import (complete_event_years, event_month_counts, receipt_velocity,
-                    SEASONALITY_ALPHA, AGE_STRATA, SEX_STRATA, contingency, drop_incomplete_tail, reports_by_country,
-                    monthly_report_share, seasonality_test, stratified_metrics, time_to_onset, unclassified_cases, zscore_spikes)
+                    AGE_STRATA, SEX_STRATA, contingency, reports_by_country,
+                    monthly_report_share, stratified_metrics, time_to_onset, unclassified_cases)
 import logging
 log = logging.getLogger(__name__)
 
@@ -252,111 +251,6 @@ def get_data_coverage():
             "source": "none",
             "error": str(e)
         }
-
-def get_temporal_velocity_duckdb(drug, event):
-    """Computes monthly report counts and anomaly velocity spikes from local FAERS DuckDB."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        drug_terms = get_drug_terms(conn, drug)
-        drug_cond, drug_params = build_drug_where_clause(drug_terms)
-        event_lower = event.lower().strip()
-
-        q = f"""
-            SELECT SUBSTR(d.event_dt, 1, 6) as ym, COUNT(DISTINCT d.primaryid) as cnt
-            FROM faers_demo d
-            JOIN faers_drug dr ON d.primaryid = dr.primaryid
-            JOIN faers_reac r ON d.primaryid = r.primaryid
-            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.event_dt) >= 6
-            GROUP BY ym
-            ORDER BY ym
-        """
-        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        months = [r[0] for r in rows]
-        counts = [int(r[1]) for r in rows]
-
-        # The newest quarter is still filling in; it is left out rather than read as a drop.
-        months, counts, dropped = drop_incomplete_tail(months, counts)
-
-        # Compute Z-score anomaly spikes
-        spikes, z_scores = zscore_spikes(counts)
-
-        return {
-            "drug": drug,
-            "event": event,
-            "months": months,
-            "counts": counts,
-            "spikes": spikes,
-            "z_scores": z_scores,
-            "has_spike": any(spikes),
-            "incomplete_months_excluded": dropped,
-            "source": "faers_duckdb"
-        }
-    except Exception as e:
-        log.error(f"[-] Error querying velocity from DuckDB: {e}")
-        if conn:
-            conn.close()
-        return None
-
-def get_seasonality_duckdb(drug, event):
-    """Computes monthly seasonality index (Jan-Dec) from local FAERS DuckDB."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        drug_terms = get_drug_terms(conn, drug)
-        drug_cond, drug_params = build_drug_where_clause(drug_terms)
-        event_lower = event.lower().strip()
-
-        q = f"""
-            SELECT SUBSTR(d.event_dt, 5, 2) as m, COUNT(DISTINCT d.primaryid) as cnt
-            FROM faers_demo d
-            JOIN faers_drug dr ON d.primaryid = dr.primaryid
-            JOIN faers_reac r ON d.primaryid = r.primaryid
-            WHERE {drug_cond} AND LOWER(r.pt) = ? AND LENGTH(d.event_dt) >= 6
-            GROUP BY m
-            ORDER BY m
-        """
-        rows = conn.execute(q, drug_params + [event_lower]).fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        months_list = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        m_map = {r[0]: int(r[1]) for r in rows if r[0]}
-
-        counts = [m_map.get(f"{i+1:02d}", 0) for i in range(12)]
-        avg = np.mean(counts) if np.mean(counts) > 0 else 1.0
-        seasonality_index = [round(float(c / avg), 2) for c in counts]
-        test = seasonality_test(counts)
-        is_seasonal = bool(test["applicable"] and test["p_value"] < SEASONALITY_ALPHA)
-        # Months are named only when the distribution departs from uniform.
-        elevated_months = ([months_list[i] for i, si in enumerate(seasonality_index) if si >= 1.15]
-                           if is_seasonal else [])
-
-        return {
-            "drug": drug,
-            "event": event,
-            "months": months_list,
-            "counts": counts,
-            "seasonality_index": seasonality_index,
-            "elevated_months": elevated_months,
-            "is_seasonal": is_seasonal,
-            "test": {"name": "chi-square vs days-in-month", "alpha": SEASONALITY_ALPHA, **test},
-            "source": "faers_duckdb"
-        }
-    except Exception as e:
-        log.error(f"[-] Error querying seasonality from DuckDB: {e}")
-        if conn:
-            conn.close()
-        return None
 
 IDENTITY_TABLES = {"drug_identity", "case_drug", "pt_dictionary"}
 
