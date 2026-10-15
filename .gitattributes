@@ -1,0 +1,2 @@
+backend/validation/reference/* -text
+reports/validation/*.json -text
