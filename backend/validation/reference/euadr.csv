@@ -1,0 +1,94 @@
+drug,outcome,label,omop_exposure_id,omop_outcome_id,source_outcome_name
+acetaminophen,acute_kidney_injury,1,1125315,500000401,OMOP Acute Renal Failure 1
+captopril,acute_kidney_injury,1,1340128,500000401,OMOP Acute Renal Failure 1
+ciprofloxacin,acute_kidney_injury,1,1797513,500000401,OMOP Acute Renal Failure 1
+ibuprofen,acute_kidney_injury,1,1177480,500000401,OMOP Acute Renal Failure 1
+lithium carbonate,acute_kidney_injury,1,751246,500000401,OMOP Acute Renal Failure 1
+ferrous sulfate,acute_kidney_injury,0,1396131,500000401,OMOP Acute Renal Failure 1
+fexofenadine,acute_kidney_injury,0,1153428,500000401,OMOP Acute Renal Failure 1
+levodopa,acute_kidney_injury,0,789578,500000401,OMOP Acute Renal Failure 1
+mometasone,acute_kidney_injury,0,905233,500000401,OMOP Acute Renal Failure 1
+thyroxine,acute_kidney_injury,0,1501700,500000401,OMOP Acute Renal Failure 1
+amoxicillin,acute_liver_injury,1,1713332,500000301,OMOP Acute Liver Failure 1
+carbamazepine,acute_liver_injury,1,740275,500000301,OMOP Acute Liver Failure 1
+sulfasalazine,acute_liver_injury,1,964339,500000301,OMOP Acute Liver Failure 1
+valproate,acute_liver_injury,1,745466,500000301,OMOP Acute Liver Failure 1
+carteolol,acute_liver_injury,0,950370,500000301,OMOP Acute Liver Failure 1
+formoterol,acute_liver_injury,0,1196677,500000301,OMOP Acute Liver Failure 1
+levodopa,acute_liver_injury,0,789578,500000301,OMOP Acute Liver Failure 1
+nitroglycerin,acute_liver_injury,0,1361711,500000301,OMOP Acute Liver Failure 1
+terazosin,acute_liver_injury,0,1341238,500000301,OMOP Acute Liver Failure 1
+levonorgestrel,acute_myocardial_infarction,1,1589505,500000801,OMOP Acute myocardial Infarction  1
+rofecoxib,acute_myocardial_infarction,1,1189754,500000801,OMOP Acute myocardial Infarction  1
+rosiglitazone,acute_myocardial_infarction,1,1547504,500000801,OMOP Acute myocardial Infarction  1
+sumatriptan,acute_myocardial_infarction,1,1140643,500000801,OMOP Acute myocardial Infarction  1
+valdecoxib,acute_myocardial_infarction,1,1103374,500000801,OMOP Acute myocardial Infarction  1
+amoxicillin,acute_myocardial_infarction,0,1713332,500000801,OMOP Acute myocardial Infarction  1
+ferrous sulfate,acute_myocardial_infarction,0,1396131,500000801,OMOP Acute myocardial Infarction  1
+gemfibrozil,acute_myocardial_infarction,0,1558242,500000801,OMOP Acute myocardial Infarction  1
+"regular insulin, human",acute_myocardial_infarction,0,1596977,500000801,OMOP Acute myocardial Infarction  1
+valacyclovir,acute_myocardial_infarction,0,1717704,500000801,OMOP Acute myocardial Infarction  1
+acetaminophen,anaphylaxis,1,1125315,500001101,Anaphylaxis #1
+amoxicillin,anaphylaxis,1,1713332,500001101,Anaphylaxis #1
+aspirin,anaphylaxis,1,1112807,500001101,Anaphylaxis #1
+ciprofloxacin,anaphylaxis,1,1797513,500001101,Anaphylaxis #1
+diclofenac,anaphylaxis,1,1124300,500001101,Anaphylaxis #1
+clonidine,anaphylaxis,0,1398937,500001101,Anaphylaxis #1
+doxazosin,anaphylaxis,0,1363053,500001101,Anaphylaxis #1
+mirtazapine,anaphylaxis,0,725131,500001101,Anaphylaxis #1
+oxazepam,anaphylaxis,0,724816,500001101,Anaphylaxis #1
+thyroxine,anaphylaxis,0,1501700,500001101,Anaphylaxis #1
+allopurinol,aplastic_anaemia,1,1167322,500000201,OMOP Aplastic Anemia 1
+captopril,aplastic_anaemia,1,1340128,500000201,OMOP Aplastic Anemia 1
+carbamazepine,aplastic_anaemia,1,740275,500000201,OMOP Aplastic Anemia 1
+methimazole,aplastic_anaemia,1,1504620,500000201,OMOP Aplastic Anemia 1
+ticlopidine,aplastic_anaemia,1,1302398,500000201,OMOP Aplastic Anemia 1
+desloratadine,aplastic_anaemia,0,1103006,500000201,OMOP Aplastic Anemia 1
+fluvastatin,aplastic_anaemia,0,1549686,500000201,OMOP Aplastic Anemia 1
+irbesartan,aplastic_anaemia,0,1347384,500000201,OMOP Aplastic Anemia 1
+latanoprost,aplastic_anaemia,0,954688,500000201,OMOP Aplastic Anemia 1
+timolol,aplastic_anaemia,0,902427,500000201,OMOP Aplastic Anemia 1
+estradiol,cardiac_valve_fibrosis,0,1548195,500002501,Cardiac Valve Fibrosis #1
+fluvoxamine,cardiac_valve_fibrosis,0,751412,500002501,Cardiac Valve Fibrosis #1
+furosemide,cardiac_valve_fibrosis,0,956874,500002501,Cardiac Valve Fibrosis #1
+irbesartan,cardiac_valve_fibrosis,0,1347384,500002501,Cardiac Valve Fibrosis #1
+methotrexate,cardiac_valve_fibrosis,0,1305058,500002501,Cardiac Valve Fibrosis #1
+captopril,leukopenia_neutropenia_agranulocytosis,1,1340128,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+carbamazepine,leukopenia_neutropenia_agranulocytosis,1,740275,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+methimazole,leukopenia_neutropenia_agranulocytosis,1,1504620,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+ticlopidine,leukopenia_neutropenia_agranulocytosis,1,1302398,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+valproate,leukopenia_neutropenia_agranulocytosis,1,745466,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+atorvastatin,leukopenia_neutropenia_agranulocytosis,0,1545958,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+isosorbide,leukopenia_neutropenia_agranulocytosis,0,1383815,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+sotalol,leukopenia_neutropenia_agranulocytosis,0,1370109,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+tamsulosin,leukopenia_neutropenia_agranulocytosis,0,924566,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+thyroxine,leukopenia_neutropenia_agranulocytosis,0,1501700,500001601,Leukopenia Including Neutropenia and Agranulocytosis
+atorvastatin,rhabdomyolysis,1,1545958,500001901,Rhabdomyolysis #1
+pravastatin,rhabdomyolysis,1,1551860,500001901,Rhabdomyolysis #1
+rosuvastatin,rhabdomyolysis,1,1510813,500001901,Rhabdomyolysis #1
+simvastatin,rhabdomyolysis,1,1539403,500001901,Rhabdomyolysis #1
+doxazosin,rhabdomyolysis,0,1363053,500001901,Rhabdomyolysis #1
+estradiol,rhabdomyolysis,0,1548195,500001901,Rhabdomyolysis #1
+glimepiride,rhabdomyolysis,0,1597756,500001901,Rhabdomyolysis #1
+nitroglycerin,rhabdomyolysis,0,1361711,500001901,Rhabdomyolysis #1
+timolol,rhabdomyolysis,0,902427,500001901,Rhabdomyolysis #1
+allopurinol,stevens_johnson_syndrome,1,1167322,500001301,Stevens-Johnson Syndrome #1
+carbamazepine,stevens_johnson_syndrome,1,740275,500001301,Stevens-Johnson Syndrome #1
+furosemide,stevens_johnson_syndrome,1,956874,500001301,Stevens-Johnson Syndrome #1
+lamotrigine,stevens_johnson_syndrome,1,705103,500001301,Stevens-Johnson Syndrome #1
+sulfamethoxazole,stevens_johnson_syndrome,1,1836430,500001301,Stevens-Johnson Syndrome #1
+atenolol,stevens_johnson_syndrome,0,1314002,500001301,Stevens-Johnson Syndrome #1
+felodipine,stevens_johnson_syndrome,0,1353776,500001301,Stevens-Johnson Syndrome #1
+ipratropium,stevens_johnson_syndrome,0,1112921,500001301,Stevens-Johnson Syndrome #1
+propafenone,stevens_johnson_syndrome,0,1353256,500001301,Stevens-Johnson Syndrome #1
+tiotropium,stevens_johnson_syndrome,0,1106776,500001301,Stevens-Johnson Syndrome #1
+aspirin,upper_gi_bleeding,1,1112807,500001003,HOI Upper GI #3
+heparin,upper_gi_bleeding,1,1367571,500001003,HOI Upper GI #3
+ibuprofen,upper_gi_bleeding,1,1177480,500001003,HOI Upper GI #3
+indomethacin,upper_gi_bleeding,1,1178663,500001003,HOI Upper GI #3
+prednisolone,upper_gi_bleeding,1,1550557,500001003,HOI Upper GI #3
+dorzolamide,upper_gi_bleeding,0,981709,500001003,HOI Upper GI #3
+eszopiclone,upper_gi_bleeding,0,757352,500001003,HOI Upper GI #3
+fexofenadine,upper_gi_bleeding,0,1153428,500001003,HOI Upper GI #3
+goserelin,upper_gi_bleeding,0,1366310,500001003,HOI Upper GI #3
+simvastatin,upper_gi_bleeding,0,1539403,500001003,HOI Upper GI #3

@@ -1,0 +1,38 @@
+outcome,pt,status,source
+acute_myocardial_infarction,Myocardial infarction,draft,MedDRA PT in HLT Acute myocardial infarction; drafted by assistant from MedDRA knowledge - needs clinical review
+acute_myocardial_infarction,Acute myocardial infarction,draft,MedDRA PT in HLT Acute myocardial infarction; drafted by assistant - needs clinical review
+upper_gi_bleeding,Gastrointestinal haemorrhage,draft,MedDRA PT; broad (includes lower GI); drafted by assistant - needs clinical review
+upper_gi_bleeding,Upper gastrointestinal haemorrhage,draft,MedDRA PT; drafted by assistant - needs clinical review
+upper_gi_bleeding,Gastric haemorrhage,draft,MedDRA PT; drafted by assistant - needs clinical review
+upper_gi_bleeding,Duodenal ulcer haemorrhage,draft,MedDRA PT; drafted by assistant - needs clinical review
+upper_gi_bleeding,Gastric ulcer haemorrhage,draft,MedDRA PT; drafted by assistant - needs clinical review
+upper_gi_bleeding,Peptic ulcer haemorrhage,draft,MedDRA PT; drafted by assistant - needs clinical review
+upper_gi_bleeding,Haematemesis,draft,MedDRA PT; drafted by assistant - needs clinical review
+upper_gi_bleeding,Melaena,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Hepatic failure,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Acute hepatic failure,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Hepatotoxicity,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Drug-induced liver injury,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Liver injury,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Hepatocellular injury,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Hepatic necrosis,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_liver_injury,Hepatitis fulminant,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_kidney_injury,Acute kidney injury,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_kidney_injury,Renal failure,draft,MedDRA PT; drafted by assistant - needs clinical review
+acute_kidney_injury,Renal tubular necrosis,draft,MedDRA PT; drafted by assistant - needs clinical review
+anaphylaxis,Anaphylactic reaction,draft,MedDRA PT; drafted by assistant - needs clinical review
+anaphylaxis,Anaphylactic shock,draft,MedDRA PT; drafted by assistant - needs clinical review
+anaphylaxis,Anaphylactoid reaction,draft,MedDRA PT; drafted by assistant - needs clinical review
+anaphylaxis,Anaphylactoid shock,draft,MedDRA PT; drafted by assistant - needs clinical review
+cardiac_valve_fibrosis,Cardiac valve disease,draft,MedDRA PT; uncertain fit - this outcome has no positive controls in the EU-ADR copy; needs clinical review
+cardiac_valve_fibrosis,Mitral valve incompetence,draft,MedDRA PT; uncertain fit; needs clinical review
+cardiac_valve_fibrosis,Aortic valve incompetence,draft,MedDRA PT; uncertain fit; needs clinical review
+leukopenia_neutropenia_agranulocytosis,Leukopenia,draft,MedDRA PT; drafted by assistant - needs clinical review
+leukopenia_neutropenia_agranulocytosis,Neutropenia,draft,MedDRA PT; drafted by assistant - needs clinical review
+leukopenia_neutropenia_agranulocytosis,Agranulocytosis,draft,MedDRA PT; drafted by assistant - needs clinical review
+aplastic_anaemia,Aplastic anaemia,draft,MedDRA PT; drafted by assistant - needs clinical review
+aplastic_anaemia,Bone marrow failure,draft,MedDRA PT; drafted by assistant - needs clinical review
+aplastic_anaemia,Pancytopenia,draft,MedDRA PT; drafted by assistant - needs clinical review
+rhabdomyolysis,Rhabdomyolysis,draft,MedDRA PT; drafted by assistant - needs clinical review
+stevens_johnson_syndrome,Stevens-Johnson syndrome,draft,MedDRA PT; drafted by assistant - needs clinical review
+stevens_johnson_syndrome,Toxic epidermal necrolysis,draft,MedDRA PT; SJS/TEN spectrum; drafted by assistant - needs clinical review

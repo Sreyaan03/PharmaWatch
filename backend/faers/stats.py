@@ -35,7 +35,8 @@ def contingency(con, ingredient_rxcuis, pt, where=None):
 
     `ingredient_rxcuis`  one RxNorm ingredient, or several that must all be suspect in the same
                          case (a combination product).
-    `pt`                 a MedDRA Preferred Term, matched case-insensitively.
+    `pt`                 a MedDRA Preferred Term, matched case-insensitively, or a list of terms
+                         (the event is then any of them, for example one outcome's definition).
     `where`              optional (sql, params) restricting the cohort, for example a sex or age
                          stratum: ("sex = ?", ["F"]). Written by the application, never by users.
 
@@ -49,8 +50,12 @@ def contingency(con, ingredient_rxcuis, pt, where=None):
     if not ingredient_rxcuis:
         raise ValueError("at least one ingredient is required")
 
+    terms = [pt] if isinstance(pt, str) else list(dict.fromkeys(pt))
+    if not terms:
+        raise ValueError("at least one event term is required")
     cohort_where, cohort_params = (where if where else ("TRUE", []))
     marks = ", ".join("?" for _ in ingredient_rxcuis)
+    term_marks = ", ".join("lower(?)" for _ in terms)
     row = con.execute(f"""
         WITH cohort AS (
             SELECT primaryid FROM faers_demo WHERE {cohort_where}
@@ -65,13 +70,13 @@ def contingency(con, ingredient_rxcuis, pt, where=None):
         event AS (
             SELECT DISTINCT r.primaryid FROM faers_reac r
             JOIN cohort USING (primaryid)
-            WHERE lower(r.pt) = lower(?)
+            WHERE lower(r.pt) IN ({term_marks})
         )
         SELECT (SELECT count(*) FROM cohort),
                (SELECT count(*) FROM exposed),
                (SELECT count(*) FROM event),
                (SELECT count(*) FROM exposed JOIN event USING (primaryid))
-    """, list(cohort_params) + ingredient_rxcuis + [len(ingredient_rxcuis), pt]).fetchone()
+    """, list(cohort_params) + ingredient_rxcuis + [len(ingredient_rxcuis)] + terms).fetchone()
     n, exposed, event, a = (int(x) for x in row)
     return {"a": a, "b": exposed - a, "c": event - a, "d": n - exposed - event + a, "n": n}
 
