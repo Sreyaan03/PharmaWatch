@@ -29,7 +29,11 @@ CONCEPTS = {
     "metformin hydrochloride": ("861004", "SCD", [("6809", "metformin")]),
     "lamivudine": ("68735", "IN", [("68735", "lamivudine")]),
     "zidovudine": ("10109", "IN", [("10109", "zidovudine")]),
+    "sulfamethoxazole": ("10180", "IN", [("10180", "sulfamethoxazole")]),
+    "sulfamethazine": ("10178", "IN", [("10178", "sulfamethazine")]),
 }
+# RxNav's normalised search (search=1) also returns similarly named concepts, ahead of the right one.
+NEIGHBOURS = {"sulfamethoxazole": ["10178"]}
 PROPS = {c[0]: {"rxcui": c[0], "name": n, "tty": c[1]} for n, c in CONCEPTS.items()}
 
 
@@ -50,7 +54,12 @@ class FakeRxNav:
         params = params or {}
         if path == "/rxcui.json":
             name = params["name"].lower()
-            return _Resp(200, {"idGroup": {"rxnormId": [CONCEPTS[name][0]]} if name in CONCEPTS else {"idGroup": {}}["idGroup"]})
+            if name not in CONCEPTS:
+                return _Resp(200, {"idGroup": {}})
+            ids = [CONCEPTS[name][0]]
+            if str(params.get("search")) == "1":
+                ids = NEIGHBOURS.get(name, []) + ids
+            return _Resp(200, {"idGroup": {"rxnormId": ids}})
         if path == "/approximateTerm.json":
             if params["term"].lower() == "metfromin":              # the real, dangerous case
                 return _Resp(200, {"approximateGroup": {"candidate": [
@@ -99,6 +108,33 @@ def test_a_fuzzy_match_is_only_a_suggestion_never_a_resolution():
     result = client().resolve("metfromin")
     assert result["ingredients"] == [] and result["match"] is None
     assert result["suggestion"]["name"] == "merbromin"
+
+
+def test_a_similar_name_returned_first_by_the_normalised_search_is_not_taken():
+    """RxNav's search=1 lists sulfamethazine ahead of sulfamethoxazole; the exact name must win."""
+    r = client().resolve("sulfamethoxazole")
+    assert [i["name"] for i in r["ingredients"]] == ["sulfamethoxazole"] and r["rxcui"] == "10180"
+
+
+def test_exact_search_is_used_first_and_normalised_search_only_as_a_fallback():
+    c = client()
+    c.resolve("warfarin")
+    searches = [p.get("search") for u, p in c.session.calls if u.endswith("/rxcui.json")]
+    assert searches == [0]
+
+
+def test_a_normalised_match_naming_several_concepts_is_not_resolved():
+    class Ambiguous(FakeRxNav):
+        def get(self, url, params=None, headers=None, timeout=None):
+            if url.endswith("/rxcui.json"):
+                self.calls.append((url, dict(params or {})))
+                ids = [] if str(params.get("search")) == "0" else ["10178", "10180"]
+                return _Resp(200, {"idGroup": {"rxnormId": ids} if ids else {}})
+            return super().get(url, params, headers, timeout)
+
+    c = RxNavClient(session=Ambiguous(), min_interval=0, sleep=lambda s: None)
+    r = c.resolve("sulfa-thing")
+    assert r["match"] is None and r["ingredients"] == []
 
 
 def test_unknown_name_is_unresolved():
@@ -290,3 +326,28 @@ def test_synonym_table_is_well_formed():
     for term, row in table.items():
         assert row["pt"] and row["source"], term
         assert term == term.lower()
+
+
+def test_data_version_changes_when_the_identity_build_changes(tmp_path):
+    import duckdb
+    from faers.registry import data_version, identity_fingerprint
+    db = str(tmp_path / "v.duckdb")
+    c = duckdb.connect(db)
+    c.execute("CREATE TABLE faers_quarters (quarter VARCHAR, zip_file VARCHAR, zip_sha256 VARCHAR, "
+              "reports_in_file BIGINT, deleted_cases BIGINT, cases_kept BIGINT, drug_rows BIGINT, "
+              "reac_rows BIGINT, is_fixture BOOLEAN, loaded_at TIMESTAMP)")
+    c.execute("INSERT INTO faers_quarters VALUES ('2024q1', 'z', 'h', 10, 0, 10, 1, 1, FALSE, now())")
+    c.close()
+    assert identity_fingerprint(db) is None
+    assert data_version(db) == "FAERS 2024Q1-2024Q1 (1 quarter, 10 cases)"
+    c = duckdb.connect(db)
+    c.execute("CREATE TABLE drug_identity (raw_name VARCHAR, part VARCHAR, rxcui VARCHAR, "
+              "ingredient_rxcui VARCHAR, ingredient_name VARCHAR, match_type VARCHAR, n_reports BIGINT)")
+    c.execute("INSERT INTO drug_identity VALUES ('sulfamethoxazole', 'x', '10178', '10178', 'sulfamethazine', 'exact', 5)")
+    c.close()
+    before = data_version(db)
+    assert "identity " in before
+    c = duckdb.connect(db)
+    c.execute("UPDATE drug_identity SET ingredient_rxcui = '10180', ingredient_name = 'sulfamethoxazole'")
+    c.close()
+    assert data_version(db) != before

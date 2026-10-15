@@ -62,14 +62,38 @@ def list_quarters(db_file=None):
     return [dict(zip(keys, r)) for r in rows]
 
 
+def identity_fingerprint(db_file=None):
+    """Short hash of the drug identity table, or None when it has not been built.
+
+    The same quarters resolved with different identity logic give different counts, so this is
+    part of the data version: cached results made from an earlier identity build are not reused.
+    """
+    import hashlib
+    db_file = db_file or database_path()
+    if not os.path.exists(db_file):
+        return None
+    con = duckdb.connect(db_file, read_only=True)
+    try:
+        row = con.execute(
+            "SELECT count(*), coalesce(sum(n_reports), 0), count(DISTINCT ingredient_rxcui), "
+            "string_agg(DISTINCT ingredient_rxcui, ',' ORDER BY ingredient_rxcui) FROM drug_identity").fetchone()
+    except duckdb.Error:
+        return None
+    finally:
+        con.close()
+    return hashlib.sha256("|".join(str(x) for x in row).encode()).hexdigest()[:6]
+
+
 def data_version(db_file=None):
-    """e.g. 'FAERS 2021Q3-2026Q2 (20 quarters, 6,912,331 cases)', or 'FAERS data not loaded'."""
+    """e.g. 'FAERS 2021Q3-2026Q2 (20 quarters, 6,912,331 cases, identity 3fa91c)'."""
     quarters = list_quarters(db_file)
     if not quarters:
         return "FAERS data not loaded"
     first, last = quarters[0]["quarter"].upper(), quarters[-1]["quarter"].upper()
     cases = sum(q["cases_kept"] for q in quarters)
-    text = f"FAERS {first}-{last} ({len(quarters)} quarter{'s' if len(quarters) != 1 else ''}, {cases:,} cases)"
+    ident = identity_fingerprint(db_file)
+    detail = f"{cases:,} cases" + (f", identity {ident}" if ident else "")
+    text = f"FAERS {first}-{last} ({len(quarters)} quarter{'s' if len(quarters) != 1 else ''}, {detail})"
     if any(q["is_fixture"] for q in quarters):
         text += " [test fixture]"
     return text

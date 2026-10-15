@@ -103,9 +103,19 @@ class RxNavClient:
 
     # ── lookups ──────────────────────────────────────────────────────────────
     def rxcui_for_name(self, name):
-        """RxCUIs whose normalised name equals `name` (brand, ingredient, salt or clinical drug)."""
+        """RxCUIs whose name is exactly `name` (brand, ingredient, salt or clinical drug).
+
+        The exact search (search=0) is used first. The normalised search (search=1) returns every
+        concept with a similar name, for example sulfamethoxazole together with sulfamethazine, so
+        it is only a fallback and is accepted only when it names a single concept.
+        """
+        data = self._get_json("/rxcui.json", {"name": name, "search": 0})
+        ids = (data.get("idGroup") or {}).get("rxnormId") or []
+        if ids:
+            return ids
         data = self._get_json("/rxcui.json", {"name": name, "search": 1})
-        return (data.get("idGroup") or {}).get("rxnormId") or []
+        ids = (data.get("idGroup") or {}).get("rxnormId") or []
+        return ids if len(ids) == 1 else []
 
     def approximate(self, name):
         """Best fuzzy match as {'rxcui', 'name', 'score'}, or None. A suggestion only; see above."""
@@ -157,10 +167,19 @@ class RxNavClient:
                                         "score": cand["score"]}
             return result
 
-        rxcui = ids[0]
-        ingredients = self.ingredients(rxcui)
-        if not ingredients:
+        # An exact name that maps to several concepts is only accepted when they all lead to the
+        # same ingredient(s); otherwise it is ambiguous and is not resolved.
+        resolved = []
+        for rxcui in ids:
+            ingredients = self.ingredients(rxcui)
+            if ingredients:
+                resolved.append((rxcui, ingredients))
+        if not resolved:
             return result            # e.g. a dose form or a non-drug concept
+        first = {i["rxcui"] for i in resolved[0][1]}
+        if any({i["rxcui"] for i in ings} != first for _, ings in resolved[1:]):
+            return result
+        rxcui, ingredients = resolved[0]
         result.update(match="exact", rxcui=rxcui, ingredients=ingredients)
         return result
 
