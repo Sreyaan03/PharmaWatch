@@ -31,6 +31,7 @@ _EVIDENCE = [
     ("/api/boxed-warning", "measured", None, "openfda_live"),
     ("/api/dashboard", "measured", None, "faers_local"),
     ("/api/local-stats", "measured", None, "faers_local"),
+    ("/api/validation", "measured", None, None),
 ]
 
 _VERSION_TTL_SECONDS = 60

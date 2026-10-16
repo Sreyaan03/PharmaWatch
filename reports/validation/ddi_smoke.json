@@ -1,0 +1,38 @@
+{
+  "benchmark": "ddi_deployed",
+  "calibrated": true,
+  "calibration_method": "isotonic",
+  "dataset": "TDC DrugBank DDI, drug-level inductive splits; 1:1 sampled negatives (base rate 0.5)",
+  "model": "GINE (full), best of 5 seeds",
+  "model_version": "ddi-gine-42",
+  "predicted_interaction_threshold": 0.6074,
+  "regimes": {
+    "S0 (Warm)": {
+      "AUPRC": 0.9777,
+      "AUROC": 0.9817,
+      "P@100": 1.0,
+      "P@1000": 0.997,
+      "ece_served": 0.1506,
+      "pairs": 5000
+    },
+    "S1 (One Unseen)": {
+      "AUPRC": 0.856,
+      "AUROC": 0.8578,
+      "P@100": 0.95,
+      "P@1000": 0.931,
+      "ece_served": 0.0294,
+      "pairs": 5000
+    },
+    "S2 (Both Unseen)": {
+      "AUPRC": 0.7167,
+      "AUROC": 0.7042,
+      "P@100": 0.96,
+      "P@1000": 0.82,
+      "ece_served": 0.0842,
+      "pairs": 5000
+    }
+  },
+  "run_at": "2026-10-16T21:48:58Z",
+  "selected_by": "highest AUPRC on the validation selection half (S1-style)",
+  "smoke": true
+}

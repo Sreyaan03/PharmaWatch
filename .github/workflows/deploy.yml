@@ -65,6 +65,25 @@ jobs:
         run: |
           pytest backend/tests/ -v
 
+      - name: Validation smoke run (interaction model)
+        working-directory: backend
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: pharmawatch_test
+        run: |
+          python -m validation.run_all --smoke --only ddi
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: reports/validation/
+          if-no-files-found: ignore
+
   build-and-push:
     name: Build & Push Docker Images
     needs: test

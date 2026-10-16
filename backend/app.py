@@ -105,6 +105,7 @@ from routes.analytics import analytics_bp
 from routes.temporal import temporal_bp
 from routes.demographics import demographics_bp
 from routes.pipeline import pipeline_bp
+from routes.validation import validation_bp
 
 app.register_blueprint(general_bp)
 app.register_blueprint(signals_bp)
@@ -116,6 +117,7 @@ app.register_blueprint(analytics_bp)
 app.register_blueprint(temporal_bp)
 app.register_blueprint(demographics_bp)
 app.register_blueprint(pipeline_bp)
+app.register_blueprint(validation_bp)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

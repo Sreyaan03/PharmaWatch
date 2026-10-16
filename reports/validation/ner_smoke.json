@@ -1,0 +1,97 @@
+{
+  "benchmark": "ner",
+  "dataset": {
+    "citation": "Gurulingappa H et al. J Biomed Inform 2012;45(5):885-92",
+    "file": "ade_drug_ade_relation.parquet",
+    "licence": "not stated on the dataset card; data not committed",
+    "name": "ADE Corpus V2, drug-adverse-effect relations",
+    "sentences_scored": 200,
+    "sha256": "f7c34957a1d9e7c0977df67d490d60422937ecd027336b40b92c419708b038b7",
+    "source": "https://huggingface.co/datasets/ade-benchmark-corpus/ade_corpus_v2"
+  },
+  "entities": {
+    "drugs": {
+      "exact": {
+        "f1": 0.1912,
+        "gold": 237,
+        "precision": 0.1811,
+        "predicted": 265,
+        "recall": 0.2025,
+        "tp": 48
+      },
+      "fragment_share": 0.6566,
+      "fragments": 174,
+      "overlap": {
+        "f1": 0.6375,
+        "gold": 237,
+        "precision": 0.6038,
+        "predicted": 265,
+        "recall": 0.6751,
+        "tp": 160
+      }
+    },
+    "effects": {
+      "exact": {
+        "f1": 0.1689,
+        "gold": 286,
+        "precision": 0.1634,
+        "predicted": 306,
+        "recall": 0.1748,
+        "tp": 50
+      },
+      "fragment_share": 0.5621,
+      "fragments": 172,
+      "overlap": {
+        "f1": 0.6014,
+        "gold": 286,
+        "precision": 0.5817,
+        "predicted": 306,
+        "recall": 0.6224,
+        "tp": 178
+      }
+    }
+  },
+  "label_mapping": {
+    "drug": [
+      "Medication",
+      "Drug"
+    ],
+    "effect": [
+      "Disease_disorder",
+      "Sign_symptom"
+    ]
+  },
+  "limitations": [
+    "ADE annotates only entities that take part in a relation, so precision is a lower bound.",
+    "Scores apply to this corpus (case reports and abstracts), not to prescriptions or social media."
+  ],
+  "matching": {
+    "exact": "same character span",
+    "overlap": "any shared characters, one-to-one"
+  },
+  "model": "d4data/biomedical-ner-all",
+  "pairing": {
+    "all_pairs_rule (current)": {
+      "f1": 0.0217,
+      "gold": 312,
+      "precision": 0.0135,
+      "predicted": 1256,
+      "recall": 0.0545,
+      "tp": 17
+    },
+    "matching": "lowercase text of the drug and of the effect",
+    "passages": 66,
+    "seed": 17,
+    "sentence_level_rule": {
+      "f1": 0.0468,
+      "gold": 312,
+      "precision": 0.041,
+      "predicted": 415,
+      "recall": 0.0545,
+      "tp": 17
+    },
+    "sentences_per_passage": 3
+  },
+  "run_at": "2026-10-16T21:49:08Z",
+  "smoke": true
+}

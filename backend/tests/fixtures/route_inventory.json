@@ -489,6 +489,17 @@
       ],
       "status": 200
     },
+    "GET /api/validation/summary": {
+      "keys": [
+        "components",
+        "generated_at",
+        "known_limitations",
+        "meta",
+        "not_run",
+        "smoke"
+      ],
+      "status": 200
+    },
     "POST /api/graph/predict": {
       "keys": [
         "error"
@@ -845,6 +856,12 @@
         "GET"
       ],
       "rule": "/api/trials/<drug_name>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/validation/summary"
     }
   ]
 }

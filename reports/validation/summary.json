@@ -1,0 +1,235 @@
+{
+  "generated_at": "2026-10-16T21:49:08Z",
+  "smoke": true,
+  "components": {
+    "ddi": {
+      "title": "Drug interaction model",
+      "reference": "TDC DrugBank DDI, drug-level inductive splits; 1:1 sampled negatives (base rate 0.5)",
+      "model": "GINE (full), best of 5 seeds (ddi-gine-42)",
+      "calibrated": true,
+      "run_at": "2026-10-16T21:48:58Z",
+      "rows": [
+        {
+          "set": "S0 (Warm)",
+          "pairs": 5000,
+          "metrics": {
+            "AUROC": [
+              0.9817,
+              null
+            ],
+            "AUPRC": [
+              0.9777,
+              null
+            ],
+            "Precision@100": [
+              1.0,
+              null
+            ],
+            "ECE (served score)": [
+              0.1506,
+              null
+            ]
+          }
+        },
+        {
+          "set": "S1 (One Unseen)",
+          "pairs": 5000,
+          "metrics": {
+            "AUROC": [
+              0.8578,
+              null
+            ],
+            "AUPRC": [
+              0.856,
+              null
+            ],
+            "Precision@100": [
+              0.95,
+              null
+            ],
+            "ECE (served score)": [
+              0.0294,
+              null
+            ]
+          }
+        },
+        {
+          "set": "S2 (Both Unseen)",
+          "pairs": 5000,
+          "metrics": {
+            "AUROC": [
+              0.7042,
+              null
+            ],
+            "AUPRC": [
+              0.7167,
+              null
+            ],
+            "Precision@100": [
+              0.96,
+              null
+            ],
+            "ECE (served score)": [
+              0.0842,
+              null
+            ]
+          }
+        }
+      ],
+      "data_version": null,
+      "caveat": null,
+      "smoke": true
+    },
+    "ner": {
+      "title": "Text mining (NER)",
+      "reference": "ADE Corpus V2, drug-adverse-effect relations",
+      "model": "d4data/biomedical-ner-all",
+      "data_version": "f7c34957a1d9",
+      "run_at": "2026-10-16T21:49:08Z",
+      "rows": [
+        {
+          "set": "Drug mentions - exact match",
+          "pairs": 237,
+          "metrics": {
+            "Precision": [
+              0.1811,
+              null
+            ],
+            "Recall": [
+              0.2025,
+              null
+            ],
+            "F1": [
+              0.1912,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Drug mentions - overlap match",
+          "pairs": 237,
+          "metrics": {
+            "Precision": [
+              0.6038,
+              null
+            ],
+            "Recall": [
+              0.6751,
+              null
+            ],
+            "F1": [
+              0.6375,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Drug mentions - fragments",
+          "pairs": 174,
+          "metrics": {
+            "Predictions that are only part of an entity": [
+              0.6566,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Adverse-effect mentions - exact match",
+          "pairs": 286,
+          "metrics": {
+            "Precision": [
+              0.1634,
+              null
+            ],
+            "Recall": [
+              0.1748,
+              null
+            ],
+            "F1": [
+              0.1689,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Adverse-effect mentions - overlap match",
+          "pairs": 286,
+          "metrics": {
+            "Precision": [
+              0.5817,
+              null
+            ],
+            "Recall": [
+              0.6224,
+              null
+            ],
+            "F1": [
+              0.6014,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Adverse-effect mentions - fragments",
+          "pairs": 172,
+          "metrics": {
+            "Predictions that are only part of an entity": [
+              0.5621,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Drug-effect pairing - all_pairs_rule (current)",
+          "pairs": 312,
+          "metrics": {
+            "Precision": [
+              0.0135,
+              null
+            ],
+            "Recall": [
+              0.0545,
+              null
+            ],
+            "F1": [
+              0.0217,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Drug-effect pairing - sentence_level_rule",
+          "pairs": 312,
+          "metrics": {
+            "Precision": [
+              0.041,
+              null
+            ],
+            "Recall": [
+              0.0545,
+              null
+            ],
+            "F1": [
+              0.0468,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "Precision is a lower bound (see limitations).",
+      "smoke": true
+    }
+  },
+  "not_run": [
+    "signals"
+  ],
+  "known_limitations": [
+    "FAERS holds spontaneous reports. Disproportionality finds reporting patterns; it cannot show causation, incidence or relative risk in patients.",
+    "The signal benchmark's outcome definitions (MedDRA Preferred Terms per outcome) are a draft that no clinical reviewer has signed off.",
+    "The OMOP reference set's negative controls are imperfect; a published audit found a substantial share (about 17%) may be misclassified.",
+    "The EU-ADR copy used has 93 pairs; the original paper reports 94.",
+    "Interaction-model test sets use sampled negatives (unlabelled pairs, not confirmed non-interactions) at a 1:1 ratio, so precision at k is read against a base rate of 0.5.",
+    "NER precision is a lower bound: the ADE corpus annotates only entities in annotated relations.",
+    "NER results come from published case-report text, not from prescriptions or social media."
+  ]
+}

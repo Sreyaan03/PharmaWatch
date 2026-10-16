@@ -1230,6 +1230,9 @@ function navigateTo(sectionId) {
       MLModels.initLSTMDemoChart('Metformin');
     }
   }
+  if (sectionId === 'validation' && typeof loadValidation === 'function') {
+    loadValidation();
+  }
   if (sectionId === 'temporal-analysis') {
     if (!chartsInitialized.temporal) {
       chartsInitialized.temporal = true;

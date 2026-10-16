@@ -5,7 +5,7 @@ from transformers import AutoTokenizer, AutoModelForTokenClassification, pipelin
 import logging
 log = logging.getLogger(__name__)
 
-# ── BioBERT NER Model Lazy Loader ─────────────────────────────────────────────
+# ── Biomedical NER model (d4data/biomedical-ner-all) lazy loader ─────────────────────────────────────────────
 MODEL_NAME = "d4data/biomedical-ner-all"
 ner_pipeline = None
 
@@ -38,11 +38,7 @@ def clean_and_validate_entity(token: str) -> str:
         return ""
     return cleaned
 
-def run_ner(text: str):
-    """
-    Run the fine-tuned biomedical NER pipeline on text.
-    Returns grouped entities with word, label, score, start, end.
-    """
+def _load_pipeline():
     global ner_pipeline
     if ner_pipeline is None:
         log.info("Lazy loading Biomedical NER model — first run downloads ~260MB...")
@@ -50,8 +46,11 @@ def run_ner(text: str):
         model = AutoModelForTokenClassification.from_pretrained(MODEL_NAME)
         ner_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, aggregation_strategy="simple")
         log.info("Biomedical NER model loaded OK")
+    return ner_pipeline
 
-    results = ner_pipeline(text)
+
+def _to_entities(results):
+    """Raw pipeline output -> cleaned entities (the same rules for single and batch calls)."""
     entities = []
     for ent in results:
         cleaned_word = clean_and_validate_entity(ent["word"])
@@ -64,3 +63,16 @@ def run_ner(text: str):
                 "end": ent["end"]
             })
     return entities
+
+
+def run_ner(text: str):
+    """
+    Run the fine-tuned biomedical NER pipeline on text.
+    Returns grouped entities with word, label, score, start, end.
+    """
+    return _to_entities(_load_pipeline()(text))
+
+
+def run_ner_batch(texts, batch_size=16):
+    """run_ner for many texts at once; one entity list per text, same cleaning rules."""
+    return [_to_entities(r) for r in _load_pipeline()(list(texts), batch_size=batch_size)]

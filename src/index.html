@@ -87,6 +87,7 @@
             data-section="methodology">Methodology</a></li>
         <li class="main-nav__item"><a href="#temporal-analysis" class="main-nav__link" data-section="temporal-analysis">Temporal Analysis</a></li>
         <li class="main-nav__item"><a href="#demographics" class="main-nav__link" data-section="demographics">Demographics</a></li>
+        <li class="main-nav__item"><a href="#validation" class="main-nav__link" data-section="validation">Methods &amp; Validation</a></li>
         <li class="main-nav__item"><a href="#research-guide" class="main-nav__link" data-section="research-guide" style="color: #f0c040;">Research Guide</a></li>
       </ul>
     </div>
@@ -1670,6 +1671,16 @@
     <!-- ============================
          SECTION: RESEARCH GUIDE (PHASE 0)
     ============================= -->
+    <section id="validation" class="page-section" style="display:none;">
+      <div class="page-header">
+        <h1>Methods &amp; Validation</h1>
+        <p>How accurate each part of PharmaWatch is, measured against published reference data. The tables below
+          are read from the last recorded benchmark run; they are regenerated with one command
+          (<code>python -m validation.run_all</code>).</p>
+      </div>
+      <div id="validation-content"></div>
+    </section>
+
     <section id="research-guide" class="page-section" style="display:none;">
       <div class="section-hero section-hero--navy">
         <div class="container">
@@ -1735,6 +1746,7 @@
   <script src="/static/guide.js"></script>
   <script src="/static/temporal.js"></script>
   <script src="/static/demographics.js"></script>
+  <script src="/static/validation.js"></script>
 
 </body>
 

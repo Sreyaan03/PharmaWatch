@@ -1,0 +1,63 @@
+{
+  "_note": "Smoke-run baselines. Updating one is a deliberate commit that states why.",
+  "ddi_smoke": {
+    "S0 (Warm).AUPRC": {
+      "baseline": 0.9777,
+      "tolerance": 0.02
+    },
+    "S0 (Warm).AUROC": {
+      "baseline": 0.9817,
+      "tolerance": 0.02
+    },
+    "S0 (Warm).P@100": {
+      "baseline": 1.0,
+      "tolerance": 0.02
+    },
+    "S1 (One Unseen).AUPRC": {
+      "baseline": 0.856,
+      "tolerance": 0.02
+    },
+    "S1 (One Unseen).AUROC": {
+      "baseline": 0.8578,
+      "tolerance": 0.02
+    },
+    "S1 (One Unseen).P@100": {
+      "baseline": 0.95,
+      "tolerance": 0.02
+    },
+    "S2 (Both Unseen).AUPRC": {
+      "baseline": 0.7167,
+      "tolerance": 0.02
+    },
+    "S2 (Both Unseen).AUROC": {
+      "baseline": 0.7042,
+      "tolerance": 0.02
+    },
+    "S2 (Both Unseen).P@100": {
+      "baseline": 0.96,
+      "tolerance": 0.02
+    }
+  },
+  "ner_smoke": {
+    "drugs.exact.f1": {
+      "baseline": 0.1912,
+      "tolerance": 0.03
+    },
+    "drugs.overlap.f1": {
+      "baseline": 0.6375,
+      "tolerance": 0.03
+    },
+    "effects.exact.f1": {
+      "baseline": 0.1689,
+      "tolerance": 0.03
+    },
+    "effects.overlap.f1": {
+      "baseline": 0.6014,
+      "tolerance": 0.03
+    },
+    "pairing.sentence_level.f1": {
+      "baseline": 0.0468,
+      "tolerance": 0.03
+    }
+  }
+}
