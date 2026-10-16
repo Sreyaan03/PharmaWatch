@@ -117,6 +117,55 @@ def sample_negative_pairs(candidate_drugs_a, candidate_drugs_b, pos_pairs_set, n
     return list(neg_pairs)
 
 
+def split_validation_halves(val_df, val_drugs, seed=42):
+    """Split the validation pairs into a model-selection half and a calibration half, by drug.
+
+    Every validation pair has exactly one validation drug (the other is a training drug), so
+    halving the validation drugs puts each pair in exactly one half and no validation drug in
+    both. The model is chosen on one half and its probabilities are calibrated on the other, so
+    the calibration is never fitted on the data that chose the model.
+    """
+    rng = random.Random(seed + 7)
+    drugs = sorted(val_drugs)
+    rng.shuffle(drugs)
+    select_drugs = set(drugs[:len(drugs) // 2])
+    calib_drugs = set(drugs[len(drugs) // 2:])
+    assert not select_drugs & calib_drugs
+
+    def in_half(row, half):
+        return (row.drug_a in half) or (row.drug_b in half)
+
+    select_df = val_df[[in_half(r, select_drugs) for r in val_df.itertuples(index=False)]].reset_index(drop=True)
+    calib_df = val_df[[in_half(r, calib_drugs) for r in val_df.itertuples(index=False)]].reset_index(drop=True)
+    assert len(select_df) + len(calib_df) == len(val_df), "a validation pair lies in neither or both halves"
+    return select_df, calib_df, sorted(select_drugs), sorted(calib_drugs)
+
+
+def migrate_existing_splits():
+    """Bring split files made before Phase 8 up to date without re-sampling anything.
+
+    Drops the SMILES columns (they are in drug_metadata.json) and writes the two validation
+    halves from the existing validation pairs.
+    """
+    meta_path = os.path.join(SPLITS_DIR, 'drug_metadata.json')
+    with open(meta_path) as f:
+        metadata = json.load(f)
+    for name in ('train_pairs', 'val_pairs', 'test_s0_pairs', 'test_s1_pairs', 'test_s2_pairs'):
+        path = os.path.join(SPLITS_DIR, f'{name}.csv')
+        df = pd.read_csv(path)
+        df = df[[c for c in df.columns if c in ('drug_a', 'drug_b', 'label')]]
+        df.to_csv(path, index=False)
+    val_df = pd.read_csv(os.path.join(SPLITS_DIR, 'val_pairs.csv'))
+    select_df, calib_df, select_drugs, calib_drugs = split_validation_halves(val_df, metadata['val_drugs'])
+    select_df.to_csv(os.path.join(SPLITS_DIR, 'val_select_pairs.csv'), index=False)
+    calib_df.to_csv(os.path.join(SPLITS_DIR, 'val_calib_pairs.csv'), index=False)
+    metadata['val_select_drugs'], metadata['val_calib_drugs'] = select_drugs, calib_drugs
+    with open(meta_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    print(f"[MIGRATE] val halves: select={len(select_df)} pairs / {len(select_drugs)} drugs, "
+          f"calibration={len(calib_df)} pairs / {len(calib_drugs)} drugs")
+
+
 def generate_drug_level_splits(valid_drugs, pos_pairs, test_ratio=0.15, val_ratio=0.10, seed=42):
     """
     Partitions drugs into 75% train, 10% val, 15% test.
@@ -181,9 +230,9 @@ def generate_drug_level_splits(valid_drugs, pos_pairs, test_ratio=0.15, val_rati
     def build_df(pos_list, neg_list):
         rows = []
         for d1, d2 in pos_list:
-            rows.append({'drug_a': d1, 'drug_b': d2, 'smiles_a': valid_drugs[d1], 'smiles_b': valid_drugs[d2], 'label': 1.0})
+            rows.append({'drug_a': d1, 'drug_b': d2, 'label': 1.0})
         for d1, d2 in neg_list:
-            rows.append({'drug_a': d1, 'drug_b': d2, 'smiles_a': valid_drugs[d1], 'smiles_b': valid_drugs[d2], 'label': 0.0})
+            rows.append({'drug_a': d1, 'drug_b': d2, 'label': 0.0})
         df = pd.DataFrame(rows)
         return df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
@@ -193,13 +242,16 @@ def generate_drug_level_splits(valid_drugs, pos_pairs, test_ratio=0.15, val_rati
     test_s2_df = build_df(pos_test_s2, neg_test_s2)
 
     # Train pairs dataframe (positives only, negatives will be sampled fresh per epoch)
-    train_rows = [{'drug_a': d1, 'drug_b': d2, 'smiles_a': valid_drugs[d1], 'smiles_b': valid_drugs[d2], 'label': 1.0} for d1, d2 in train_pos_pairs]
+    train_rows = [{'drug_a': d1, 'drug_b': d2, 'label': 1.0} for d1, d2 in train_pos_pairs]
     train_df = pd.DataFrame(train_rows).sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
     # ── Save Artifacts ────────────────────────────────────────────────────────
     os.makedirs(SPLITS_DIR, exist_ok=True)
     train_df.to_csv(os.path.join(SPLITS_DIR, 'train_pairs.csv'), index=False)
     val_df.to_csv(os.path.join(SPLITS_DIR, 'val_pairs.csv'), index=False)
+    select_df, calib_df, select_drugs, calib_drugs = split_validation_halves(val_df, val_drugs, seed)
+    select_df.to_csv(os.path.join(SPLITS_DIR, 'val_select_pairs.csv'), index=False)
+    calib_df.to_csv(os.path.join(SPLITS_DIR, 'val_calib_pairs.csv'), index=False)
     test_s0_df.to_csv(os.path.join(SPLITS_DIR, 'test_s0_pairs.csv'), index=False)
     test_s1_df.to_csv(os.path.join(SPLITS_DIR, 'test_s1_pairs.csv'), index=False)
     test_s2_df.to_csv(os.path.join(SPLITS_DIR, 'test_s2_pairs.csv'), index=False)
@@ -208,6 +260,8 @@ def generate_drug_level_splits(valid_drugs, pos_pairs, test_ratio=0.15, val_rati
         'total_valid_drugs': len(valid_drugs),
         'train_drugs': sorted(list(train_drugs)),
         'val_drugs': sorted(list(val_drugs)),
+        'val_select_drugs': select_drugs,
+        'val_calib_drugs': calib_drugs,
         'test_drugs': sorted(list(test_drugs)),
         'drug_smiles': valid_drugs
     }
@@ -222,8 +276,14 @@ def main():
     parser = argparse.ArgumentParser(description="Curate TDC DrugBank DDI dataset and generate clean inductive splits.")
     parser.add_argument("--check-only", action="store_true", help="Only validate SMILES without writing splits.")
     parser.add_argument("--generate-splits", action="store_true", help="Generate and save train/val/test splits.")
+    parser.add_argument("--migrate-splits", action="store_true",
+                        help="Drop SMILES columns from existing split files and write the validation halves.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for splitting.")
     args = parser.parse_args()
+
+    if args.migrate_splits:
+        migrate_existing_splits()
+        return
 
     df_raw = fetch_or_load_raw_drugbank()
     valid_drugs, pos_pairs = curate_drugs_and_pairs(df_raw)

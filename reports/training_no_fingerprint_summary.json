@@ -1,0 +1,62 @@
+{
+  "variant": "no_fingerprint",
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "mean_val_select_auprc": 0.7429,
+  "std_val_select_auprc": 0.0098,
+  "mean_val_select_auroc": 0.7487,
+  "best_seed": 42,
+  "seed_details": [
+    {
+      "variant": "no_fingerprint",
+      "seed": 42,
+      "config": {
+        "use_fingerprint": false,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 3,
+      "val_select_auprc": 0.7525,
+      "val_select_auroc": 0.7623,
+      "optimiser_steps_per_epoch": 29,
+      "stopped_by_budget": true,
+      "train_minutes": 15.03,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_no_fingerprint_seed42.pth"
+    },
+    {
+      "variant": "no_fingerprint",
+      "seed": 123,
+      "config": {
+        "use_fingerprint": false,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 3,
+      "val_select_auprc": 0.7468,
+      "val_select_auroc": 0.7562,
+      "optimiser_steps_per_epoch": 59,
+      "stopped_by_budget": true,
+      "train_minutes": 15.06,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_no_fingerprint_seed123.pth"
+    },
+    {
+      "variant": "no_fingerprint",
+      "seed": 456,
+      "config": {
+        "use_fingerprint": false,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 2,
+      "val_select_auprc": 0.7294,
+      "val_select_auroc": 0.7275,
+      "optimiser_steps_per_epoch": 53,
+      "stopped_by_budget": true,
+      "train_minutes": 23.02,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_no_fingerprint_seed456.pth"
+    }
+  ]
+}

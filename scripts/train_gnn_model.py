@@ -1,19 +1,25 @@
 # scripts/train_gnn_model.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Scientifically Honest DDI Training Engine:
-# 1. Dataset: TDC DrugBank DDI (~1,706 approved drugs).
-# 2. Dynamic negative sampling: 1:1 negatives resampled fresh each epoch from
-#    unlabeled pairs (never assuming non-listed pairs are confirmed safe).
-# 3. Objective: BCEWithLogitsLoss with hard 0/1 binary labels (no soft targets).
-# 4. Optimization: AdamW (lr 1e-3, weight decay 1e-5), CosineAnnealingLR.
-# 5. Checkpointing: Best model selected by S1 validation AUPRC.
-# 6. Checkpoint name: drugbank_gine_model.pth (twosides separation maintained).
-# 7. Supports running 5 random seeds reporting mean +/- std.
+# DDI model training (TDC DrugBank DDI, drug-level inductive splits).
+#
+# * Mini-batch training: each optimiser step uses a batch of drug pairs; only the drugs in the
+#   batch are encoded. (Earlier versions made one step per epoch, which under-trained the model.)
+# * Negatives: 1:1, resampled every epoch from train x train pairs that are not known to
+#   interact. Every known positive is excluded, including the S0 positives held out for testing,
+#   so no held-out positive is ever shown to the model as a negative.
+# * Model selection uses the "selection" half of the validation pairs (S1-style: one train drug,
+#   one validation drug). The other half is reserved for calibration and never seen here.
+# * Variants are separately trained models, not switches applied to a trained one:
+#     full | no_fingerprint | no_edge_features | concat_head
+# * A wall-clock budget bounds each run; a run that hits it is marked as such.
+#
+#   python scripts/train_gnn_model.py --variant full --seeds 42 123 456 789 1011
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
 import sys
 import json
+import time
 import random
 import argparse
 import numpy as np
@@ -36,9 +42,16 @@ from ml.ddi.data import precompute_drug_structures  # noqa: E402
 
 CHECKPOINTS_DIR = os.path.join(MODEL_DIR, 'checkpoints')
 
+VARIANTS = {
+    'full':             dict(use_fingerprint=True,  use_edge_features=True,  head_type='symmetric'),
+    'no_fingerprint':   dict(use_fingerprint=False, use_edge_features=True,  head_type='symmetric'),
+    'no_edge_features': dict(use_fingerprint=True,  use_edge_features=False, head_type='symmetric'),
+    'concat_head':      dict(use_fingerprint=True,  use_edge_features=True,  head_type='concat'),
+}
 
-def sample_train_negatives(train_drug_ids, pos_set, n_samples, rng):
-    """Samples n_samples negative pairs uniformly from unlabeled train candidates."""
+
+def sample_train_negatives(train_drug_ids, known_positive_set, n_samples, rng):
+    """Samples n_samples pairs uniformly from train x train pairs that are not known positives."""
     neg_pairs = set()
     max_attempts = n_samples * 25
     attempts = 0
@@ -52,323 +65,222 @@ def sample_train_negatives(train_drug_ids, pos_set, n_samples, rng):
             continue
         d1, d2 = train_drug_ids[i], train_drug_ids[j]
         pair = (d1, d2) if d1 < d2 else (d2, d1)
-        if pair not in pos_set and pair not in neg_pairs:
+        if pair not in known_positive_set and pair not in neg_pairs:
             neg_pairs.add(pair)
 
     return list(neg_pairs)
 
 
-def train_single_seed(
-    seed: int,
-    epochs: int,
-    batch_size: int,
-    lr: float,
-    weight_decay: float,
-    use_fingerprint: bool,
-    patience: int,
-    drug_metadata: dict,
-    graph_dict: dict,
-    fp_dict: dict,
-    train_pos_df: pd.DataFrame,
-    val_df: pd.DataFrame,
-    device: torch.device
-):
+def known_positive_pairs(*frames):
+    """Unordered (a, b) pairs labelled 1 in any of the frames."""
+    out = set()
+    for df in frames:
+        for row in df.itertuples(index=False):
+            if float(row.label) == 1.0:
+                out.add((row.drug_a, row.drug_b) if row.drug_a < row.drug_b else (row.drug_b, row.drug_a))
+    return out
+
+
+def encode_in_chunks(model, graph_list, fps, device, chunk=512):
+    """Embeddings for many drugs, in chunks, in eval mode (no gradient)."""
+    outs = []
+    with torch.no_grad():
+        for start in range(0, len(graph_list), chunk):
+            sub = graph_list[start:start + chunk]
+            batch = Batch.from_data_list(sub).to(device)
+            fp = torch.stack(fps[start:start + chunk]).to(device) if fps is not None else None
+            outs.append(model.encoder(batch, fp))
+    return torch.cat(outs)
+
+
+def evaluate_selection(model, train_embs, val_embs, a_idx, b_idx, labels, criterion, device):
+    """Loss, AUPRC and AUROC on the selection half (train drug x validation drug pairs)."""
+    with torch.no_grad():
+        logits = model.pair_head(train_embs[a_idx], val_embs[b_idx]).squeeze(-1)
+        y = torch.tensor(labels, dtype=torch.float, device=device)
+        loss = criterion(logits, y).item()
+        probs = torch.sigmoid(logits).cpu().numpy()
+    return loss, float(average_precision_score(labels, probs)), float(roc_auc_score(labels, probs))
+
+
+def train_single_seed(seed, variant, epochs, batch_size, lr, weight_decay, patience, budget_minutes,
+                      max_batches, drug_metadata, graph_dict, fp_dict, train_df, val_select_df,
+                      known_positives, device):
+    cfg = VARIANTS[variant]
     print(f"\n=======================================================", flush=True)
-    print(f"  Training Seed {seed} (epochs={epochs}, lr={lr}, weight_decay={weight_decay})", flush=True)
+    print(f"  variant={variant} seed={seed} epochs<={epochs} batch={batch_size} "
+          f"budget={budget_minutes} min", flush=True)
     print(f"=======================================================", flush=True)
 
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
-    train_drugs = sorted(list(drug_metadata['train_drugs']))
-    val_drugs = sorted(list(drug_metadata['val_drugs']))
+    train_drugs = sorted(drug_metadata['train_drugs'])
+    val_drugs = sorted(drug_metadata['val_select_drugs'])          # selection half only
+    t_idx = {d: i for i, d in enumerate(train_drugs)}
+    v_idx = {d: i for i, d in enumerate(val_drugs)}
 
-    train_drug_to_idx = {d: i for i, d in enumerate(train_drugs)}
-    val_drug_to_idx = {d: i for i, d in enumerate(val_drugs)}
+    train_graphs = [graph_dict[d] for d in train_drugs]
+    val_graphs = [graph_dict[d] for d in val_drugs]
+    train_fps = [fp_dict[d] for d in train_drugs] if cfg['use_fingerprint'] else None
+    val_fps = [fp_dict[d] for d in val_drugs] if cfg['use_fingerprint'] else None
 
-    # Pre-build unified PyG Batches for train and val drugs
-    print("[SETUP] Assembling PyG Batches for train and val drug sets...", flush=True)
-    train_graphs_batch = Batch.from_data_list([graph_dict[d] for d in train_drugs]).to(device)
-    val_graphs_batch = Batch.from_data_list([graph_dict[d] for d in val_drugs]).to(device)
+    pos_train = [(t_idx[r.drug_a], t_idx[r.drug_b], 1.0) for r in train_df.itertuples(index=False)]
 
-    train_fps_batch = torch.stack([fp_dict[d] for d in train_drugs]).to(device) if use_fingerprint else None
-    val_fps_batch = torch.stack([fp_dict[d] for d in val_drugs]).to(device) if use_fingerprint else None
+    va, vb, labels = [], [], []
+    for r in val_select_df.itertuples(index=False):
+        if r.drug_a in t_idx and r.drug_b in v_idx:
+            va.append(t_idx[r.drug_a]); vb.append(v_idx[r.drug_b])
+        elif r.drug_b in t_idx and r.drug_a in v_idx:
+            va.append(t_idx[r.drug_b]); vb.append(v_idx[r.drug_a])
+        else:
+            continue                                                  # not a selection-half pair
+        labels.append(float(r.label))
+    va_t = torch.tensor(va, dtype=torch.long, device=device)
+    vb_t = torch.tensor(vb, dtype=torch.long, device=device)
 
-    # Positive train pairs as index tuples
-    pos_train_tuples = [
-        (train_drug_to_idx[row.drug_a], train_drug_to_idx[row.drug_b], 1.0)
-        for row in train_pos_df.itertuples(index=False)
-    ]
-    pos_set = set(
-        (row.drug_a, row.drug_b) if row.drug_a < row.drug_b else (row.drug_b, row.drug_a)
-        for row in train_pos_df.itertuples(index=False)
-    )
-
-    # Validation pairs as index tensors
-    val_indices_a = []
-    val_indices_b = []
-    val_is_train_first = []
-    val_labels = []
-
-    for row in val_df.itertuples(index=False):
-        d1, d2, lbl = row.drug_a, row.drug_b, float(row.label)
-        if d1 in train_drug_to_idx and d2 in val_drug_to_idx:
-            val_indices_a.append(train_drug_to_idx[d1])
-            val_indices_b.append(val_drug_to_idx[d2])
-            val_is_train_first.append(True)
-        elif d2 in train_drug_to_idx and d1 in val_drug_to_idx:
-            val_indices_a.append(train_drug_to_idx[d2])
-            val_indices_b.append(val_drug_to_idx[d1])
-            val_is_train_first.append(True)
-        val_labels.append(lbl)
-
-    val_t_idx_a = torch.tensor(val_indices_a, dtype=torch.long, device=device)
-    val_v_idx_b = torch.tensor(val_indices_b, dtype=torch.long, device=device)
-    val_labels_np = np.array(val_labels, dtype=float)
-
-    # Initialize model
-    model = GINEDDIPredictor(
-        node_in_dim=22,
-        edge_in_dim=10,
-        hidden_dim=128,
-        num_layers=4,
-        dropout=0.1,
-        use_fingerprint=use_fingerprint
-    ).to(device)
-
+    model = GINEDDIPredictor(node_in_dim=22, edge_in_dim=10, hidden_dim=128, num_layers=4,
+                             dropout=0.1, **cfg).to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 
-    best_val_auprc = 0.0
-    best_val_auroc = 0.0
-    best_epoch = 0
-    best_state_dict = None
-    epochs_no_improve = 0
-
+    best = dict(auprc=0.0, auroc=0.0, epoch=0, state=None)
+    stale = 0
+    started = time.time()
+    stopped_by_budget = False
     rng = random.Random(seed)
+    steps_per_epoch = 0
 
     for epoch in range(1, epochs + 1):
-        # 1. Dynamic Negative Resampling: 1:1 negatives fresh each epoch
-        neg_pairs = sample_train_negatives(train_drugs, pos_set, len(pos_train_tuples), rng)
-        neg_tuples = [
-            (train_drug_to_idx[d1], train_drug_to_idx[d2], 0.0)
-            for d1, d2 in neg_pairs
-        ]
-        epoch_pairs = pos_train_tuples + neg_tuples
-        rng.shuffle(epoch_pairs)
+        neg_pairs = sample_train_negatives(train_drugs, known_positives, len(pos_train), rng)
+        pairs = pos_train + [(t_idx[a], t_idx[b], 0.0) for a, b in neg_pairs]
+        rng.shuffle(pairs)
 
-        idx_a_all = torch.tensor([p[0] for p in epoch_pairs], dtype=torch.long, device=device)
-        idx_b_all = torch.tensor([p[1] for p in epoch_pairs], dtype=torch.long, device=device)
-        labels_all = torch.tensor([p[2] for p in epoch_pairs], dtype=torch.float, device=device)
-
-        # 2. Train loop with exact leaf gradient accumulation
         model.train()
-        optimizer.zero_grad()
+        steps, total_loss, seen = 0, 0.0, 0
+        for start in range(0, len(pairs), batch_size):
+            chunk = pairs[start:start + batch_size]
+            a = torch.tensor([p[0] for p in chunk], dtype=torch.long)
+            b = torch.tensor([p[1] for p in chunk], dtype=torch.long)
+            y = torch.tensor([p[2] for p in chunk], dtype=torch.float, device=device)
 
-        # Single encoder forward pass for all train molecules
-        train_embs = model.encoder(train_graphs_batch, train_fps_batch)
-        embs_leaf = train_embs.detach().clone().requires_grad_(True)
+            unique, inverse = torch.unique(torch.cat([a, b]), return_inverse=True)
+            graphs = Batch.from_data_list([train_graphs[i] for i in unique.tolist()]).to(device)
+            fps = (torch.stack([train_fps[i] for i in unique.tolist()]).to(device)
+                   if train_fps is not None else None)
+            embs = model.encoder(graphs, fps)
+            ea, eb = embs[inverse[:len(a)]], embs[inverse[len(a):]]
+            loss = criterion(model.pair_head(ea, eb).squeeze(-1), y)
 
-        total_train_loss = 0.0
-        n_pairs = len(epoch_pairs)
-        pair_chunk_size = 16384
-        n_chunks = (n_pairs + pair_chunk_size - 1) // pair_chunk_size
-
-        for chunk_idx in range(n_chunks):
-            start = chunk_idx * pair_chunk_size
-            end = min(n_pairs, start + pair_chunk_size)
-
-            a = embs_leaf[idx_a_all[start:end]]
-            b = embs_leaf[idx_b_all[start:end]]
-            logits = model.pair_head(a, b).squeeze(-1)
-
-            loss = criterion(logits, labels_all[start:end])
-            scaled_loss = loss * ((end - start) / n_pairs)
-            scaled_loss.backward()
-
-            total_train_loss += loss.item() * (end - start)
-
-        # Single backward pass through the encoder using the accumulated gradients
-        train_embs.backward(embs_leaf.grad)
-
-        optimizer.step()
-        scheduler.step()
-        avg_train_loss = total_train_loss / n_pairs
-
-        # 3. Validation evaluation
-        model.eval()
-        with torch.no_grad():
-            train_embs_val = model.encoder(train_graphs_batch, train_fps_batch)
-            val_embs = model.encoder(val_graphs_batch, val_fps_batch)
-
-            val_probs_list = []
-            val_loss = 0.0
-            n_val = len(val_labels)
-            val_chunks = (n_val + pair_chunk_size - 1) // pair_chunk_size
-
-            for c_idx in range(val_chunks):
-                st = c_idx * pair_chunk_size
-                en = min(n_val, st + pair_chunk_size)
-                va = train_embs_val[val_t_idx_a[st:en]]
-                vb = val_embs[val_v_idx_b[st:en]]
-                v_logits = model.pair_head(va, vb).squeeze(-1)
-                chunk_loss = criterion(v_logits, torch.tensor(val_labels[st:en], dtype=torch.float, device=device))
-                val_loss += chunk_loss.item() * (en - st)
-                val_probs_list.append(torch.sigmoid(v_logits).cpu())
-
-            val_loss = val_loss / n_val
-            val_probs = torch.cat(val_probs_list).numpy()
-
-        val_auprc = float(average_precision_score(val_labels_np, val_probs))
-        val_auroc = float(roc_auc_score(val_labels_np, val_probs))
-
-        print(
-            f"Seed {seed} | Epoch {epoch:02d}/{epochs:02d} | "
-            f"Train Loss: {avg_train_loss:.4f} | "
-            f"Val Loss: {val_loss:.4f} | "
-            f"Val AUPRC: {val_auprc:.4f} | "
-            f"Val AUROC: {val_auroc:.4f} | "
-            f"LR: {scheduler.get_last_lr()[0]:.6f}",
-            flush=True
-        )
-
-        if val_auprc > best_val_auprc:
-            best_val_auprc = val_auprc
-            best_val_auroc = val_auroc
-            best_epoch = epoch
-            best_state_dict = {k: v.cpu().clone() for k, v in model.state_dict().items()}
-            epochs_no_improve = 0
-            print(f"  --> [NEW BEST] Seed {seed} Val AUPRC: {val_auprc:.4f} at epoch {epoch}", flush=True)
-        else:
-            epochs_no_improve += 1
-            if epochs_no_improve >= patience:
-                print(f"  [EARLY STOP] No validation AUPRC improvement for {patience} epochs.", flush=True)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            steps += 1
+            total_loss += loss.item() * len(chunk)
+            seen += len(chunk)
+            if max_batches and steps >= max_batches:
                 break
+            if (time.time() - started) / 60 > budget_minutes:
+                stopped_by_budget = True
+                break
+        scheduler.step()
+        steps_per_epoch = steps
 
-    # Save seed checkpoint
+        model.eval()
+        train_embs = encode_in_chunks(model, train_graphs, train_fps, device)
+        val_embs = encode_in_chunks(model, val_graphs, val_fps, device)
+        val_loss, auprc, auroc = evaluate_selection(model, train_embs, val_embs, va_t, vb_t, labels,
+                                                    criterion, device)
+        print(f"{variant} seed {seed} | epoch {epoch:02d}/{epochs:02d} | optimiser steps {steps} | "
+              f"train loss {total_loss / max(seen, 1):.4f} | val loss {val_loss:.4f} | "
+              f"val AUPRC {auprc:.4f} | val AUROC {auroc:.4f} | "
+              f"{(time.time() - started) / 60:.1f} min", flush=True)
+
+        if auprc > best['auprc']:
+            best.update(auprc=auprc, auroc=auroc, epoch=epoch,
+                        state={k: v.cpu().clone() for k, v in model.state_dict().items()})
+            stale = 0
+        else:
+            stale += 1
+            if stale >= patience:
+                print(f"  [EARLY STOP] no selection-AUPRC improvement for {patience} epochs", flush=True)
+                break
+        if stopped_by_budget:
+            print(f"  [BUDGET] stopped after {budget_minutes} minutes", flush=True)
+            break
+        if max_batches:
+            break
+
     os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
-    seed_ckpt_path = os.path.join(CHECKPOINTS_DIR, f"drugbank_gine_seed{seed}.pth")
-    ckpt_payload = {
-        'seed': seed,
-        'model_state_dict': best_state_dict,
-        'best_epoch': best_epoch,
-        'best_val_auprc': round(best_val_auprc, 4),
-        'best_val_auroc': round(best_val_auroc, 4),
-        'use_fingerprint': use_fingerprint,
-        'architecture': 'GINE_4layer_symmetric'
+    path = os.path.join(CHECKPOINTS_DIR, f"ddi_{variant}_seed{seed}.pth")
+    payload = {
+        'variant': variant, 'seed': seed, 'config': cfg,
+        'model_state_dict': best['state'], 'best_epoch': best['epoch'],
+        'val_select_auprc': round(best['auprc'], 4), 'val_select_auroc': round(best['auroc'], 4),
+        'optimiser_steps_per_epoch': steps_per_epoch, 'stopped_by_budget': stopped_by_budget,
+        'train_minutes': round((time.time() - started) / 60, 2),
     }
-    torch.save(ckpt_payload, seed_ckpt_path)
-    print(f"Saved Seed {seed} checkpoint to: {seed_ckpt_path}", flush=True)
-
-    return {
-        'seed': seed,
-        'best_epoch': best_epoch,
-        'val_auprc': round(best_val_auprc, 4),
-        'val_auroc': round(best_val_auroc, 4),
-        'checkpoint_path': seed_ckpt_path,
-        'best_state_dict': best_state_dict
-    }
+    torch.save(payload, path)
+    print(f"saved {path}", flush=True)
+    return {k: v for k, v in payload.items() if k != 'model_state_dict'} | {'checkpoint_path': path}
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train GINE DDI model on DrugBank with cold-start validation.")
-    parser.add_argument("--epochs", type=int, default=15, help="Number of training epochs per seed.")
-    parser.add_argument("--batch_size", type=int, default=4096, help="Batch size of pairs.")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
-    parser.add_argument("--weight_decay", type=float, default=1e-5, help="Weight decay.")
-    parser.add_argument("--seeds", type=int, nargs="+", default=[42], help="List of random seeds to train.")
-    parser.add_argument("--run_all_seeds", action="store_true", help="Run full 5-seed benchmark.")
-    parser.add_argument("--no_fingerprint", action="store_true", help="Ablation: disable Morgan fingerprint branch.")
-    parser.add_argument("--patience", type=int, default=5, help="Early stopping patience epochs.")
+    parser = argparse.ArgumentParser(description="Train the GINE DDI model (or an ablation variant).")
+    parser.add_argument("--variant", choices=sorted(VARIANTS), default="full")
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--batch_size", type=int, default=2048, help="Drug pairs per optimiser step.")
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight_decay", type=float, default=1e-5)
+    parser.add_argument("--seeds", type=int, nargs="+", default=[42])
+    parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument("--budget_minutes", type=float, default=30.0, help="Wall-clock limit per seed.")
+    parser.add_argument("--max_batches", type=int, default=0, help="Smoke test: stop each epoch after N steps, one epoch.")
+    parser.add_argument("--threads", type=int, default=0, help="torch CPU threads (0 = default).")
     args = parser.parse_args()
 
-    metadata_path = os.path.join(SPLITS_DIR, 'drug_metadata.json')
-    if not os.path.exists(metadata_path):
-        print("[ERROR] Split metadata not found. Run scripts/curate_ddi_dataset.py --generate-splits first.")
+    if args.threads:
+        torch.set_num_threads(args.threads)
+    with open(os.path.join(SPLITS_DIR, 'drug_metadata.json')) as f:
+        drug_metadata = json.load(f)
+    if 'val_select_drugs' not in drug_metadata:
+        print("[ERROR] Validation halves missing. Run scripts/curate_ddi_dataset.py --migrate-splits first.")
         sys.exit(1)
 
-    with open(metadata_path, 'r') as f:
-        drug_metadata = json.load(f)
-
-    train_pos_df = pd.read_csv(os.path.join(SPLITS_DIR, 'train_pairs.csv'))
-    val_df = pd.read_csv(os.path.join(SPLITS_DIR, 'val_pairs.csv'))
+    train_df = pd.read_csv(os.path.join(SPLITS_DIR, 'train_pairs.csv'))
+    val_select_df = pd.read_csv(os.path.join(SPLITS_DIR, 'val_select_pairs.csv'))
+    s0_df = pd.read_csv(os.path.join(SPLITS_DIR, 'test_s0_pairs.csv'))
+    known = known_positive_pairs(train_df, s0_df)
+    print(f"[DATA] known positives excluded from negatives: {len(known)} "
+          f"(train {len(train_df)} + held-out S0 {int((s0_df.label == 1).sum())})", flush=True)
 
     graph_dict, fp_dict = precompute_drug_structures(drug_metadata)
+    device = torch.device('cpu')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"[DEVICE] Training on: {device}", flush=True)
+    results = [train_single_seed(
+        seed, args.variant, args.epochs, args.batch_size, args.lr, args.weight_decay, args.patience,
+        args.budget_minutes, args.max_batches, drug_metadata, graph_dict, fp_dict, train_df,
+        val_select_df, known, device) for seed in args.seeds]
 
-    seeds = [42, 123, 456, 789, 1011] if args.run_all_seeds else args.seeds
-    use_fp = not args.no_fingerprint
-
-    results = []
-    best_overall_seed = None
-    best_overall_auprc = -1.0
-
-    for s in seeds:
-        res = train_single_seed(
-            seed=s,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            weight_decay=args.weight_decay,
-            use_fingerprint=use_fp,
-            patience=args.patience,
-            drug_metadata=drug_metadata,
-            graph_dict=graph_dict,
-            fp_dict=fp_dict,
-            train_pos_df=train_pos_df,
-            val_df=val_df,
-            device=device
-        )
-        results.append(res)
-        if res['val_auprc'] > best_overall_auprc:
-            best_overall_auprc = res['val_auprc']
-            best_overall_seed = res
-
-    # Summary statistics
-    auprcs = [r['val_auprc'] for r in results]
-    aurocs = [r['val_auroc'] for r in results]
-    mean_auprc, std_auprc = float(np.mean(auprcs)), float(np.std(auprcs))
-    mean_auroc, std_auroc = float(np.mean(aurocs)), float(np.std(aurocs))
-
-    print("\n=======================================================", flush=True)
-    print("                MULTI-SEED TRAINING RESULTS            ", flush=True)
-    print("=======================================================", flush=True)
-    print(f"Seeds evaluated: {len(results)} ({[r['seed'] for r in results]})", flush=True)
-    print(f"Validation AUPRC: {mean_auprc:.4f} +/- {std_auprc:.4f}", flush=True)
-    print(f"Validation AUROC: {mean_auroc:.4f} +/- {std_auroc:.4f}", flush=True)
-    print(f"Best seed: {best_overall_seed['seed']} (AUPRC: {best_overall_seed['val_auprc']:.4f})", flush=True)
-
-    # Save primary production model checkpoint
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    primary_ckpt_path = os.path.join(MODEL_DIR, 'drugbank_gine_model.pth')
-    torch.save(best_overall_seed['best_state_dict'], primary_ckpt_path)
-    print(f"[OK] Saved primary production model to: {primary_ckpt_path}", flush=True)
-
-    # Export report summary
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    summary_data = {
-        'model_name': 'drugbank_gine_model',
-        'seeds': seeds,
-        'mean_val_auprc': round(mean_auprc, 4),
-        'std_val_auprc': round(std_auprc, 4),
-        'mean_val_auroc': round(mean_auroc, 4),
-        'std_val_auroc': round(std_auroc, 4),
-        'best_seed': best_overall_seed['seed'],
-        'best_seed_val_auprc': round(best_overall_seed['val_auprc'], 4),
-        'seed_details': [
-            {'seed': r['seed'], 'best_epoch': r['best_epoch'], 'val_auprc': r['val_auprc'], 'val_auroc': r['val_auroc']}
-            for r in results
-        ]
+    auprcs = [r['val_select_auprc'] for r in results]
+    summary = {
+        'variant': args.variant, 'seeds': args.seeds,
+        'mean_val_select_auprc': round(float(np.mean(auprcs)), 4),
+        'std_val_select_auprc': round(float(np.std(auprcs)), 4),
+        'mean_val_select_auroc': round(float(np.mean([r['val_select_auroc'] for r in results])), 4),
+        'best_seed': max(results, key=lambda r: r['val_select_auprc'])['seed'],
+        'seed_details': results,
     }
-    with open(os.path.join(REPORTS_DIR, 'training_seeds_summary.json'), 'w') as f:
-        json.dump(summary_data, f, indent=2)
-    print(f"[OK] Exported seed summary to: {os.path.join(REPORTS_DIR, 'training_seeds_summary.json')}", flush=True)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    out = os.path.join(REPORTS_DIR, f'training_{args.variant}_summary.json')
+    if not args.max_batches:
+        with open(out, 'w') as f:
+            json.dump(summary, f, indent=2)
+        print(f"[OK] wrote {out}", flush=True)
+    print(f"{args.variant}: selection AUPRC {summary['mean_val_select_auprc']} +/- "
+          f"{summary['std_val_select_auprc']} over {len(results)} seed(s)", flush=True)
 
 
 if __name__ == '__main__':

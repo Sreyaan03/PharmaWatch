@@ -139,12 +139,15 @@ class GINE_DrugEncoder(nn.Module):
         num_layers: int = 4,
         dropout: float = 0.1,
         use_fingerprint: bool = True,
-        fp_dim: int = 2048
+        fp_dim: int = 2048,
+        use_edge_features: bool = True
     ):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.use_fingerprint = use_fingerprint
+        # False makes this a plain GIN: bond features are not used, in training or at inference
+        self.use_edge_features = use_edge_features
 
         # Initial node projection
         self.node_init = nn.Sequential(
@@ -210,8 +213,10 @@ class GINE_DrugEncoder(nn.Module):
         h = self.node_init(x)
 
         for i in range(self.num_layers):
-            if edge_attr.size(0) > 0:
+            if edge_attr.size(0) > 0 and self.use_edge_features:
                 edge_emb = self.edge_projs[i](edge_attr)
+            elif edge_attr.size(0) > 0:
+                edge_emb = torch.zeros((edge_attr.size(0), self.hidden_dim), device=x.device)
             else:
                 edge_emb = torch.empty((0, self.hidden_dim), device=x.device)
             h_conv = self.convs[i](h, edge_index, edge_emb)
@@ -266,6 +271,25 @@ class SymmetricPairHead(nn.Module):
         return self.mlp(h)
 
 
+class ConcatPairHead(nn.Module):
+    """Directional head: MLP on [a, b]. Unlike SymmetricPairHead, f(A, B) != f(B, A) in general.
+
+    Present only so the value of the symmetric head can be measured by training this variant.
+    """
+    def __init__(self, drug_dim: int = 384, hidden_dim: int = 256, dropout: float = 0.2):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(drug_dim * 2, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, a, b):
+        return self.mlp(torch.cat([a, b], dim=-1))
+
+
 # ── 4. Complete GINE DDI Predictor with Deduplication ────────────────────────
 
 class GINEDDIPredictor(nn.Module):
@@ -279,7 +303,9 @@ class GINEDDIPredictor(nn.Module):
         hidden_dim: int = 128,
         num_layers: int = 4,
         dropout: float = 0.1,
-        use_fingerprint: bool = True
+        use_fingerprint: bool = True,
+        use_edge_features: bool = True,
+        head_type: str = "symmetric"
     ):
         super().__init__()
         self.encoder = GINE_DrugEncoder(
@@ -288,14 +314,20 @@ class GINEDDIPredictor(nn.Module):
             hidden_dim=hidden_dim,
             num_layers=num_layers,
             dropout=dropout,
-            use_fingerprint=use_fingerprint
+            use_fingerprint=use_fingerprint,
+            use_edge_features=use_edge_features
         )
-        self.pair_head = SymmetricPairHead(
+        if head_type not in ("symmetric", "concat"):
+            raise ValueError(f"unknown head_type {head_type!r}")
+        head_cls = SymmetricPairHead if head_type == "symmetric" else ConcatPairHead
+        self.pair_head = head_cls(
             drug_dim=self.encoder.drug_dim,
             hidden_dim=256,
             dropout=0.2
         )
         self.use_fingerprint = use_fingerprint
+        self.use_edge_features = use_edge_features
+        self.head_type = head_type
 
     def forward_pairs(self, unique_graphs, unique_fps, pair_indices):
         """

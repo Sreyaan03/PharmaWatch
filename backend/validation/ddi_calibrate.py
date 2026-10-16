@@ -1,12 +1,17 @@
 # backend/validation/ddi_calibrate.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Post-Hoc Temperature Scaling Calibration & Reliability Diagrams:
-# 1. Fits a learned temperature parameter T > 0 on held-out validation data
-#    using NLL optimization with frozen model representations.
-# 2. Computes Expected Calibration Error (ECE) before and after scaling.
-# 3. Saves visual reliability diagram to reports/ddi_calibration_reliability_diagram.png.
-# 4. Exports calibration parameters to backend/trained_models/model_calibration.json.
-# 5. Output designation: "interaction likelihood score" (never "probability of harm").
+# Calibration of the selected DDI model, and the deployment manifest.
+#
+# * The calibrator is fitted on the validation CALIBRATION half only (split by drug from the
+#   half used to choose the model), so it never sees the data that selected the model.
+# * Temperature scaling and isotonic regression are compared by cross-fitting inside the
+#   calibration half (fit on one group of drugs, score the other). If neither lowers ECE the
+#   model is shipped uncalibrated.
+# * ECE is reported on the S0/S1/S2 test sets, which were used for neither fitting nor selection.
+#   `calibrated` is true only when ECE on the S1 test set actually improved.
+# * The score is called an "interaction likelihood score", not a probability of harm.
+#
+#   python -m validation.ddi_calibrate        # after python -m validation.ddi_eval
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
@@ -148,134 +153,243 @@ def plot_reliability_diagram(uncal_stats, cal_stats, uncal_ece, cal_ece, save_pa
     print(f"[PLOT] Saved reliability diagram to: {save_path}", flush=True)
 
 
+# ── calibrators ──────────────────────────────────────────────────────────────
+def _logit(p, eps=1e-6):
+    p = np.clip(np.asarray(p, dtype=float), eps, 1 - eps)
+    return np.log(p / (1 - p))
+
+
+def _sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-np.asarray(x, dtype=float)))
+
+
+def fit_temperature(probs, labels):
+    """Fit T on the calibration data. Returns a function probs -> calibrated probs, and params."""
+    scaler = TemperatureScaler()
+    t, _ = scaler.fit(_logit(probs), labels)
+    return (lambda p: _sigmoid(_logit(p) / t)), {"method": "temperature_scaling", "temperature": round(float(t), 6)}
+
+
+def fit_isotonic(probs, labels):
+    """Isotonic regression, stored as its piecewise-linear knots so it needs no pickle."""
+    from sklearn.isotonic import IsotonicRegression
+    iso = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip").fit(probs, labels)
+    xs, ys = [float(v) for v in iso.X_thresholds_], [float(v) for v in iso.y_thresholds_]
+    return (lambda p: np.interp(np.asarray(p, dtype=float), xs, ys)), \
+        {"method": "isotonic", "x": [round(v, 9) for v in xs], "y": [round(v, 9) for v in ys]}
+
+
+CALIBRATORS = {"temperature_scaling": fit_temperature, "isotonic": fit_isotonic}
+
+
+def apply_calibration(params, probs):
+    """Apply a stored calibrator (the dict written to the manifest) to raw scores."""
+    method = params.get("method") if params else None
+    if method == "temperature_scaling":
+        return _sigmoid(_logit(probs) / params["temperature"])
+    if method == "isotonic":
+        return np.interp(np.asarray(probs, dtype=float), params["x"], params["y"])
+    return np.asarray(probs, dtype=float)
+
+
+def cross_fit_ece(fit, probs, labels, groups, n_bins=10):
+    """ECE of a calibrator fitted on one group of drugs and scored on the other (both ways, pooled)."""
+    groups = np.asarray(groups)
+    unique = sorted(set(groups.tolist()))
+    half = set(unique[::2])
+    in_a = np.array([g in half for g in groups])
+    out_p, out_y = [], []
+    for train_mask in (in_a, ~in_a):
+        if train_mask.sum() == 0 or (~train_mask).sum() == 0:
+            continue
+        f, _ = fit(probs[train_mask], labels[train_mask])
+        out_p.append(f(probs[~train_mask]))
+        out_y.append(labels[~train_mask])
+    return compute_ece(np.concatenate(out_p), np.concatenate(out_y), n_bins)[0]
+
+
+def choose_calibrator(probs, labels, groups, n_bins=10):
+    """Pick by cross-fitted ECE on the calibration half. Returns (name or None, scores per option)."""
+    scores = {"uncalibrated": compute_ece(probs, labels, n_bins)[0]}
+    for name, fit in CALIBRATORS.items():
+        scores[name] = cross_fit_ece(fit, probs, labels, groups, n_bins)
+    best = min(scores, key=scores.get)
+    return (None if best == "uncalibrated" else best), scores
+
+
+def precision_threshold(probs, labels, target):
+    """Smallest score whose top-set precision is at least `target`, on the data given. None if none."""
+    order = np.argsort(-probs, kind="stable")
+    y = labels[order]
+    p = probs[order]
+    cum_precision = np.cumsum(y) / (np.arange(len(y)) + 1)
+    ok = np.where(cum_precision >= target)[0]
+    if len(ok) == 0:
+        return None
+    return float(p[ok.max()])
+
+
+# ── scoring any selected candidate on dataset drug ids ───────────────────────
+def candidate_scores(candidate, pairs, ctx):
+    """Raw interaction scores in [0, 1] for (drug_a, drug_b) pairs, for a selected candidate."""
+    from validation import ddi_eval as E
+    kind = candidate["kind"]
+    if kind == "gine":
+        model, _ = E.load_checkpoint_model(os.path.join(MODEL_DIR, candidate["checkpoint"]))
+        index, emb = E.embed_all(model, ctx["all_drugs"], ctx["graphs"], ctx["fps"])
+        return _sigmoid(E.gnn_logits(model, emb, index, pairs))
+    if kind == "logreg":
+        import pickle
+        from ml.ddi.baselines import build_pair_feature_matrix
+        with open(os.path.join(MODEL_DIR, "baseline_logreg.pkl"), "rb") as f:
+            return pickle.load(f).predict_proba(build_pair_feature_matrix(pairs, ctx["drug_fps"]))[:, 1]
+    if kind == "xgboost":
+        import xgboost as xgb
+        from ml.ddi.baselines import build_pair_feature_matrix
+        m = xgb.XGBClassifier()
+        m.load_model(os.path.join(MODEL_DIR, "baseline_xgb.json"))
+        return m.predict_proba(build_pair_feature_matrix(pairs, ctx["drug_fps"]))[:, 1]
+    raise ValueError(f"candidate kind {kind!r} cannot be deployed")
+
+
+def scope_note(ece):
+    """Where the calibrator helps and where it does not, from test ECE per regime."""
+    worse = [r for r, v in ece.items() if v["after"] > v["before"]]
+    better = [r for r, v in ece.items() if v["after"] < v["before"]]
+    if not worse:
+        return "ECE improved in every test regime."
+    return (f"The calibrator is fitted on validation pairs with one unseen drug, and lowered ECE for "
+            f"{', '.join(better) or 'no regime'}; it raised ECE for {', '.join(worse)}. Treat the score as "
+            f"calibrated only for pairs involving a drug the model was not trained on.")
+
+
+def decide_calibrated(chosen, ece_before, ece_after):
+    """`calibrated` is true only when a calibrator was chosen and it lowered ECE on held-out data."""
+    return bool(chosen) and ece_after < ece_before
+
+
+def val_drug_of(pair, val_drugs):
+    """The validation drug in a validation pair (the other drug is a training drug)."""
+    return pair[0] if pair[0] in val_drugs else pair[1]
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Calibrate GINE DDI model via Temperature Scaling.")
-    parser.add_argument("--model_path", type=str, default=os.path.join(MODEL_DIR, "drugbank_gine_model.pth"))
-    parser.add_argument("--val_path", type=str, default=os.path.join(SPLITS_DIR, "val_pairs.csv"))
-    parser.add_argument("--n_bins", type=int, default=10, help="Number of probability bins for ECE.")
+    parser = argparse.ArgumentParser(description="Calibrate the selected DDI model and write the deployment manifest.")
+    parser.add_argument("--n_bins", type=int, default=10)
+    parser.add_argument("--target_precision", type=float, default=0.80,
+                        help="Precision the predicted-interaction threshold is chosen for, on the calibration half.")
     args = parser.parse_args()
 
-    # Load splits metadata
-    metadata_path = os.path.join(SPLITS_DIR, 'drug_metadata.json')
-    if not os.path.exists(metadata_path):
-        print("[ERROR] Missing drug metadata. Run scripts/curate_ddi_dataset.py --generate-splits first.")
+    from ml.ddi.baselines import build_drug_fingerprints
+    from ml.ddi.data import precompute_drug_structures
+    from validation import ddi_eval as E
+
+    results_path = os.path.join(REPORTS_DIR, "ddi_benchmark_results.json")
+    if not os.path.exists(results_path):
+        print("[ERROR] Run python -m validation.ddi_eval first.")
         sys.exit(1)
+    with open(results_path) as f:
+        bench = json.load(f)
+    deployable = [c for c in bench["selection"] if c["kind"] in ("gine", "logreg", "xgboost")]
+    candidate = max(deployable, key=lambda c: c["select_auprc"])
+    overall_best = max(bench["selection"], key=lambda c: c["select_auprc"])
+    print(f"[CALIB] Selected for deployment: {candidate['name']} "
+          f"(selection AUPRC {candidate['select_auprc']:.4f})", flush=True)
 
-    with open(metadata_path, 'r') as f:
-        drug_metadata = json.load(f)
+    with open(os.path.join(SPLITS_DIR, "drug_metadata.json")) as f:
+        meta = json.load(f)
+    graphs, fps = precompute_drug_structures(meta)
+    ctx = {"all_drugs": sorted(meta["drug_smiles"]), "graphs": graphs, "fps": fps,
+           "drug_fps": build_drug_fingerprints(meta)}
 
-    # Pre-compute graphs & fps
-    graph_dict, fp_dict = precompute_drug_structures(drug_metadata)
+    def load(name):
+        df = pd.read_csv(os.path.join(SPLITS_DIR, name))
+        pairs = [(r.drug_a, r.drug_b) for r in df.itertuples(index=False)]
+        return pairs, df["label"].values.astype(float)
 
-    # Load model
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = GINEDDIPredictor(
-        node_in_dim=22,
-        edge_in_dim=10,
-        hidden_dim=128,
-        num_layers=4,
-        dropout=0.1,
-        use_fingerprint=True
-    ).to(device)
+    calib_pairs, y_cal = load("val_calib_pairs.csv")
+    p_cal = np.asarray(candidate_scores(candidate, calib_pairs, ctx), dtype=float)
+    calib_val_drugs = set(meta["val_calib_drugs"])
+    groups = [val_drug_of(p, calib_val_drugs) for p in calib_pairs]
 
-    if os.path.exists(args.model_path):
-        state = torch.load(args.model_path, map_location=device)
-        model.load_state_dict(state)
-        print(f"[MODEL] Loaded trained model weights from: {args.model_path}", flush=True)
+    choice, cv_ece = choose_calibrator(p_cal, y_cal, groups, args.n_bins)
+    print(f"[CALIB] Cross-fitted ECE on the calibration half: "
+          f"{ {k: round(v, 4) for k, v in cv_ece.items()} } -> {choice or 'ship uncalibrated'}", flush=True)
+
+    if choice:
+        calibrate_fn, params = CALIBRATORS[choice](p_cal, y_cal)
     else:
-        print(f"[WARN] Checkpoint {args.model_path} not found. Using untrained weights for validation flow test.", flush=True)
+        calibrate_fn, params = (lambda p: np.asarray(p, dtype=float)), {"method": None}
 
-    model.eval()
+    # ECE on the test sets: used for neither fitting nor selection
+    ece = {}
+    test_scores = {}
+    for regime, fn in E.REGIMES.items():
+        pairs, y = load(fn)
+        raw = np.asarray(candidate_scores(candidate, pairs, ctx), dtype=float)
+        cal = calibrate_fn(raw)
+        before, stats_b = compute_ece(raw, y, args.n_bins)
+        after, stats_a = compute_ece(cal, y, args.n_bins)
+        ece[regime] = {"before": round(before, 4), "after": round(after, 4)}
+        test_scores[regime] = (raw, cal, y, stats_b, stats_a, before, after)
+        print(f"[CALIB] {regime}: ECE {before:.4f} -> {after:.4f}", flush=True)
 
-    # Build drug batches
-    train_drugs = sorted(list(drug_metadata['train_drugs']))
-    val_drugs = sorted(list(drug_metadata['val_drugs']))
+    primary = "S1 (One Unseen)"
+    raw, cal, y, stats_b, stats_a, before, after = test_scores[primary]
+    calibrated = decide_calibrated(choice, before, after)
+    if choice and not calibrated:
+        print("[CALIB] The calibrator did not lower ECE on the S1 test set: shipping uncalibrated.", flush=True)
+        calibrate_fn, params, choice = (lambda p: np.asarray(p, dtype=float)), {"method": None}, None
+        cal, after, stats_a = raw, before, stats_b
 
-    train_drug_to_idx = {d: i for i, d in enumerate(train_drugs)}
-    val_drug_to_idx = {d: i for i, d in enumerate(val_drugs)}
+    plot_reliability_diagram(stats_b, stats_a, before, after,
+                             os.path.join(REPORTS_DIR, "ddi_calibration_reliability_diagram.png"))
 
-    train_graphs_batch = Batch.from_data_list([graph_dict[d] for d in train_drugs]).to(device)
-    val_graphs_batch = Batch.from_data_list([graph_dict[d] for d in val_drugs]).to(device)
+    # Threshold for "predicted interaction", chosen on the calibration half
+    served_cal = calibrate_fn(p_cal)
+    threshold = precision_threshold(served_cal, y_cal, args.target_precision)
+    s1_precision = None
+    if threshold is not None:
+        flagged = cal >= threshold
+        s1_precision = round(float(y[flagged].mean()), 4) if flagged.any() else None
 
-    train_fps_batch = torch.stack([fp_dict[d] for d in train_drugs]).to(device)
-    val_fps_batch = torch.stack([fp_dict[d] for d in val_drugs]).to(device)
-
-    # Load validation pairs
-    val_df = pd.read_csv(args.val_path)
-    val_indices_a = []
-    val_indices_b = []
-    val_labels = []
-
-    for row in val_df.itertuples(index=False):
-        d1, d2, lbl = row.drug_a, row.drug_b, float(row.label)
-        if d1 in train_drug_to_idx and d2 in val_drug_to_idx:
-            val_indices_a.append(train_drug_to_idx[d1])
-            val_indices_b.append(val_drug_to_idx[d2])
-        elif d2 in train_drug_to_idx and d1 in val_drug_to_idx:
-            val_indices_a.append(train_drug_to_idx[d2])
-            val_indices_b.append(val_drug_to_idx[d1])
-        val_labels.append(lbl)
-
-    val_t_idx_a = torch.tensor(val_indices_a, dtype=torch.long, device=device)
-    val_v_idx_b = torch.tensor(val_indices_b, dtype=torch.long, device=device)
-    labels = np.array(val_labels, dtype=float)
-
-    print(f"[CALIB] Collecting validation logits across {len(val_df)} pairs...", flush=True)
-    all_logits = []
-    with torch.no_grad():
-        train_embs = model.encoder(train_graphs_batch, train_fps_batch)
-        val_embs = model.encoder(val_graphs_batch, val_fps_batch)
-
-        n_val = len(val_labels)
-        pair_chunk_size = 16384
-        n_chunks = (n_val + pair_chunk_size - 1) // pair_chunk_size
-
-        for c_idx in range(n_chunks):
-            st = c_idx * pair_chunk_size
-            en = min(n_val, st + pair_chunk_size)
-            va = train_embs[val_t_idx_a[st:en]]
-            vb = val_embs[val_v_idx_b[st:en]]
-            v_logits = model.pair_head(va, vb).squeeze(-1)
-            all_logits.append(v_logits.cpu())
-
-    logits = torch.cat(all_logits).numpy()
-    uncal_probs = 1.0 / (1.0 + np.exp(-logits))
-
-    # Compute uncalibrated ECE
-    uncal_ece, uncal_stats = compute_ece(uncal_probs, labels, n_bins=args.n_bins)
-    print(f"[CALIB] Uncalibrated ECE: {uncal_ece:.4f}", flush=True)
-
-    # Optimize Temperature
-    scaler = TemperatureScaler()
-    optimal_t, val_nll = scaler.fit(logits, labels)
-    print(f"[CALIB] Optimal Temperature T: {optimal_t:.4f} (Validation NLL: {val_nll:.4f})", flush=True)
-
-    # Compute calibrated ECE
-    cal_logits = logits / optimal_t
-    cal_probs = 1.0 / (1.0 + np.exp(-cal_logits))
-    cal_ece, cal_stats = compute_ece(cal_probs, labels, n_bins=args.n_bins)
-    reduction = ((uncal_ece - cal_ece) / uncal_ece) * 100 if uncal_ece > 0 else 0.0
-    print(f"[CALIB] Calibrated ECE: {cal_ece:.4f} (Reduction: {reduction:.1f}%)", flush=True)
-
-    # Save reliability diagram
-    plot_path = os.path.join(REPORTS_DIR, "ddi_calibration_reliability_diagram.png")
-    plot_reliability_diagram(uncal_stats, cal_stats, uncal_ece, cal_ece, plot_path)
-
-    # Save calibration JSON config
-    calib_json_path = os.path.join(MODEL_DIR, "model_calibration.json")
-    calib_payload = {
-        'optimal_temperature': round(float(optimal_t), 4),
-        'uncalibrated_ece': round(float(uncal_ece), 4),
-        'calibrated_ece': round(float(cal_ece), 4),
-        'ece_reduction_percent': round(float(reduction), 2),
-        'val_nll': round(float(val_nll), 4),
-        'score_terminology': 'interaction likelihood score',
-        'calibration_method': 'temperature_scaling'
+    from faers.registry import data_version
+    served_file = candidate.get("checkpoint") or {"logreg": "baseline_logreg.pkl", "xgboost": "baseline_xgb.json"}[candidate["kind"]]
+    if candidate["kind"] == "gine":
+        # per-seed checkpoints are git-ignored; the deployed one is copied to a tracked file
+        import shutil
+        shutil.copyfile(os.path.join(MODEL_DIR, served_file), os.path.join(MODEL_DIR, "ddi_deployed.pth"))
+        served_file = "ddi_deployed.pth"
+    manifest = {
+        "model": {"name": candidate["name"], "kind": candidate["kind"], "file": served_file,
+                  "source_checkpoint": candidate.get("checkpoint"), "seed": candidate.get("seed")},
+        "selected_by": "highest AUPRC on the validation selection half (S1-style)",
+        "selection_auprc": round(candidate["select_auprc"], 4),
+        "best_overall_candidate": {"name": overall_best["name"], "select_auprc": round(overall_best["select_auprc"], 4),
+                                   "deployable": overall_best["kind"] in ("gine", "logreg", "xgboost")},
+        "model_version": f"ddi-{candidate['kind']}-" + (str(candidate.get("seed")) if candidate.get("seed") is not None else "baseline"),
+        "training_data": "TDC DrugBank DDI, drug-level inductive split (data/splits)",
+        "metrics": {"S1_test": next((r for r in bench["rows"]
+                                     if r["Model"] == candidate["name"].split(",")[0] and r["Regime"] == primary), None)},
+        "calibration": {**params, "fitted_on": "validation calibration half",
+                        "candidates_cross_fitted_ece": {k: round(v, 4) for k, v in cv_ece.items()},
+                        "test_ece": ece, "primary_regime": primary},
+        "calibrated": calibrated,
+        "calibration_scope": scope_note(ece),
+        "score_terminology": "interaction likelihood score",
+        "predicted_interaction_threshold": None if threshold is None else round(threshold, 4),
+        "threshold_target_precision": args.target_precision,
+        "threshold_chosen_on": "validation calibration half",
+        "threshold_precision_on_S1_test": s1_precision,
+        "faers_data_version_when_built": data_version(),
     }
-    with open(calib_json_path, 'w') as f:
-        json.dump(calib_payload, f, indent=2)
-    print(f"[OK] Calibration parameters saved to: {calib_json_path}", flush=True)
+    out = os.path.join(MODEL_DIR, "ddi_manifest.json")
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(manifest, f, indent=2)
+    with open(os.path.join(MODEL_DIR, "model_calibration.json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump({"calibrated": calibrated, **params, "test_ece": ece, "score_terminology": "interaction likelihood score"}, f, indent=2)
+    print(f"[OK] Wrote {out}  (calibrated={calibrated})", flush=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

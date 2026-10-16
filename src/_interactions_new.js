@@ -213,7 +213,7 @@ function showExplorerEmpty(title, desc) {
 }
 
 function renderExplorerPairResult(data, container) {
-  const harmful = data.is_harmful === true;
+  const harmful = (data.predicted_interaction ?? data.is_harmful) === true;
   const severity = getInteractionSeverity(data);
   const confidence = Number.isFinite(Number(data.confidence)) ? `${(Number(data.confidence) * 100).toFixed(0)}%` : 'N/A';
   const drugA = data.drug_a || 'Drug A';
@@ -255,7 +255,7 @@ function normalizeDrugName(name) {
 }
 
 function getInteractionSeverity(item) {
-  const harmful = item?.is_harmful === true;
+  const harmful = (item?.predicted_interaction ?? item?.is_harmful) === true;
   const confidence = Number(item?.confidence || 0);
   if (!harmful) return { key: 'safe', label: 'No known harmful interaction', color: '#69db7c', width: 1.5 };
   if (confidence >= 0.85) return { key: 'critical', label: 'High risk', color: '#c0392b', width: 4 };
@@ -499,7 +499,7 @@ function normalizePolyGraph(graph, pairs) {
       ...link,
       source,
       target,
-      is_harmful:   pair.is_harmful ?? link.is_harmful,
+      is_harmful:   pair.predicted_interaction ?? pair.is_harmful ?? link.predicted_interaction ?? link.is_harmful,
       confidence:   Number(pair.confidence ?? link.confidence ?? 0),
       side_effects: pair.side_effects ?? link.side_effects ?? [],
       pair_key:     makePairKey(source, target)

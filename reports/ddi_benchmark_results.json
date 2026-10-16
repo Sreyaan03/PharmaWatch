@@ -1,0 +1,474 @@
+{
+  "rows": [
+    {
+      "Model": "GINE (full)",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 5,
+      "AUROC": [
+        0.9789,
+        0.0032
+      ],
+      "AUPRC": [
+        0.9786,
+        0.0033
+      ],
+      "P@100": [
+        1.0,
+        0.0
+      ],
+      "P@1000": [
+        0.9998,
+        0.0004
+      ]
+    },
+    {
+      "Model": "GINE (full)",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 5,
+      "AUROC": [
+        0.8491,
+        0.0058
+      ],
+      "AUPRC": [
+        0.8505,
+        0.0055
+      ],
+      "P@100": [
+        0.974,
+        0.0258
+      ],
+      "P@1000": [
+        0.9696,
+        0.0145
+      ]
+    },
+    {
+      "Model": "GINE (full)",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 5,
+      "AUROC": [
+        0.7122,
+        0.0104
+      ],
+      "AUPRC": [
+        0.725,
+        0.0095
+      ],
+      "P@100": [
+        0.918,
+        0.0232
+      ],
+      "P@1000": [
+        0.8756,
+        0.0043
+      ]
+    },
+    {
+      "Model": "Ablation: no fingerprint branch",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.8628,
+        0.0211
+      ],
+      "AUPRC": [
+        0.8534,
+        0.0236
+      ],
+      "P@100": [
+        0.9967,
+        0.0047
+      ],
+      "P@1000": [
+        0.9627,
+        0.0189
+      ]
+    },
+    {
+      "Model": "Ablation: no fingerprint branch",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.7718,
+        0.0085
+      ],
+      "AUPRC": [
+        0.7697,
+        0.0128
+      ],
+      "P@100": [
+        0.9733,
+        0.0047
+      ],
+      "P@1000": [
+        0.961,
+        0.011
+      ]
+    },
+    {
+      "Model": "Ablation: no fingerprint branch",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.6808,
+        0.003
+      ],
+      "AUPRC": [
+        0.6873,
+        0.0075
+      ],
+      "P@100": [
+        0.9167,
+        0.0205
+      ],
+      "P@1000": [
+        0.806,
+        0.0222
+      ]
+    },
+    {
+      "Model": "Ablation: no edge features (GIN)",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.9756,
+        0.0177
+      ],
+      "AUPRC": [
+        0.9756,
+        0.0172
+      ],
+      "P@100": [
+        1.0,
+        0.0
+      ],
+      "P@1000": [
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "Model": "Ablation: no edge features (GIN)",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.8441,
+        0.0082
+      ],
+      "AUPRC": [
+        0.8431,
+        0.0111
+      ],
+      "P@100": [
+        0.9467,
+        0.0499
+      ],
+      "P@1000": [
+        0.944,
+        0.0226
+      ]
+    },
+    {
+      "Model": "Ablation: no edge features (GIN)",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.7024,
+        0.0111
+      ],
+      "AUPRC": [
+        0.7127,
+        0.0095
+      ],
+      "P@100": [
+        0.9033,
+        0.0189
+      ],
+      "P@1000": [
+        0.8557,
+        0.0047
+      ]
+    },
+    {
+      "Model": "Ablation: concatenation head",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.9854,
+        0.0005
+      ],
+      "AUPRC": [
+        0.9852,
+        0.0005
+      ],
+      "P@100": [
+        1.0,
+        0.0
+      ],
+      "P@1000": [
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "Model": "Ablation: concatenation head",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.8467,
+        0.0033
+      ],
+      "AUPRC": [
+        0.847,
+        0.0026
+      ],
+      "P@100": [
+        0.97,
+        0.0141
+      ],
+      "P@1000": [
+        0.9757,
+        0.0012
+      ]
+    },
+    {
+      "Model": "Ablation: concatenation head",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 3,
+      "AUROC": [
+        0.7071,
+        0.0087
+      ],
+      "AUPRC": [
+        0.7147,
+        0.0058
+      ],
+      "P@100": [
+        0.8967,
+        0.0125
+      ],
+      "P@1000": [
+        0.8517,
+        0.0037
+      ]
+    },
+    {
+      "Model": "Logistic regression",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.8901,
+        0.0
+      ],
+      "AUPRC": [
+        0.873,
+        0.0
+      ],
+      "P@100": [
+        0.98,
+        0.0
+      ],
+      "P@1000": [
+        0.965,
+        0.0
+      ]
+    },
+    {
+      "Model": "Logistic regression",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.6788,
+        0.0
+      ],
+      "AUPRC": [
+        0.6409,
+        0.0
+      ],
+      "P@100": [
+        0.85,
+        0.0
+      ],
+      "P@1000": [
+        0.788,
+        0.0
+      ]
+    },
+    {
+      "Model": "Logistic regression",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.5742,
+        0.0
+      ],
+      "AUPRC": [
+        0.5539,
+        0.0
+      ],
+      "P@100": [
+        0.62,
+        0.0
+      ],
+      "P@1000": [
+        0.578,
+        0.0
+      ]
+    },
+    {
+      "Model": "XGBoost",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.8444,
+        0.0
+      ],
+      "AUPRC": [
+        0.8313,
+        0.0
+      ],
+      "P@100": [
+        0.98,
+        0.0
+      ],
+      "P@1000": [
+        0.951,
+        0.0
+      ]
+    },
+    {
+      "Model": "XGBoost",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.7701,
+        0.0
+      ],
+      "AUPRC": [
+        0.7535,
+        0.0
+      ],
+      "P@100": [
+        0.97,
+        0.0
+      ],
+      "P@1000": [
+        0.932,
+        0.0
+      ]
+    },
+    {
+      "Model": "XGBoost",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.6716,
+        0.0
+      ],
+      "AUPRC": [
+        0.66,
+        0.0
+      ],
+      "P@100": [
+        0.9,
+        0.0
+      ],
+      "P@1000": [
+        0.751,
+        0.0
+      ]
+    },
+    {
+      "Model": "NN-Tanimoto",
+      "Regime": "S0 (Warm)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.7928,
+        0.0
+      ],
+      "AUPRC": [
+        0.7867,
+        0.0
+      ],
+      "P@100": [
+        0.97,
+        0.0
+      ],
+      "P@1000": [
+        0.94,
+        0.0
+      ]
+    },
+    {
+      "Model": "NN-Tanimoto",
+      "Regime": "S1 (One Unseen)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.7511,
+        0.0
+      ],
+      "AUPRC": [
+        0.7311,
+        0.0
+      ],
+      "P@100": [
+        0.98,
+        0.0
+      ],
+      "P@1000": [
+        0.927,
+        0.0
+      ]
+    },
+    {
+      "Model": "NN-Tanimoto",
+      "Regime": "S2 (Both Unseen)",
+      "n_seeds": 1,
+      "AUROC": [
+        0.5765,
+        0.0
+      ],
+      "AUPRC": [
+        0.5835,
+        0.0
+      ],
+      "P@100": [
+        0.86,
+        0.0
+      ],
+      "P@1000": [
+        0.658,
+        0.0
+      ]
+    }
+  ],
+  "selection": [
+    {
+      "name": "GINE (full), best of 5 seeds",
+      "kind": "gine",
+      "select_auprc": 0.8299,
+      "checkpoint": "checkpoints/ddi_full_seed42.pth",
+      "seed": 42
+    },
+    {
+      "name": "Logistic regression",
+      "kind": "logreg",
+      "select_auprc": 0.6882
+    },
+    {
+      "name": "XGBoost",
+      "kind": "xgboost",
+      "select_auprc": 0.7387
+    },
+    {
+      "name": "NN-Tanimoto",
+      "kind": "nn_tanimoto",
+      "select_auprc": 0.7197
+    }
+  ],
+  "findings": [
+    "Ablation: no fingerprint branch: S1 AUPRC 0.7697 vs 0.8505 (difference -0.0808; 3 vs 5 seeds): lower than the full model.",
+    "Ablation: no edge features (GIN): S1 AUPRC 0.8431 vs 0.8505 (difference -0.0074; 3 vs 5 seeds): within the seed-to-seed spread, so no difference is shown.",
+    "Ablation: concatenation head: S1 AUPRC 0.8470 vs 0.8505 (difference -0.0035; 3 vs 5 seeds): within the seed-to-seed spread, so no difference is shown."
+  ]
+}

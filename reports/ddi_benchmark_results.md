@@ -1,29 +1,48 @@
-# Drug-Drug Interaction Model Benchmark & Ablation Results
+# Drug-drug interaction model: benchmark and ablations
 
-Evaluated on TDC DrugBank (~1,705 approved drugs) across disjoint inductive cold-start splits.
+TDC DrugBank DDI, disjoint inductive splits. Every row is a trained model. GINE rows are mean ± standard deviation over the trained seeds.
 
-| Model | Regime | AUROC | AUPRC | Recall@100 | Recall@1000 |
-| --- | --- | --- | --- | --- | --- |
-| GINE (Ours) | S0 (Warm) | 0.6887 | 0.6731 | 0.0085 | 0.0803 |
-| Logistic Regression | S0 (Warm) | 0.8683 | 0.8455 | 0.0098 | 0.0932 |
-| XGBoost | S0 (Warm) | 0.8249 | 0.8064 | 0.0096 | 0.0923 |
-| NN-Tanimoto | S0 (Warm) | 0.7928 | 0.7867 | 0.0097 | 0.094 |
-| GINE (Ours) | S1 (One Unseen) | 0.6617 | 0.641 | 0.0018 | 0.0161 |
-| Logistic Regression | S1 (One Unseen) | 0.6939 | 0.6582 | 0.0018 | 0.0164 |
-| XGBoost | S1 (One Unseen) | 0.7569 | 0.7379 | 0.002 | 0.019 |
-| NN-Tanimoto | S1 (One Unseen) | 0.7511 | 0.7311 | 0.0021 | 0.0196 |
-| GINE (Ours) | S2 (Both Unseen) | 0.6374 | 0.6133 | 0.0154 | 0.1252 |
-| Logistic Regression | S2 (Both Unseen) | 0.5853 | 0.5653 | 0.011 | 0.1144 |
-| XGBoost | S2 (Both Unseen) | 0.6713 | 0.6571 | 0.0169 | 0.142 |
-| NN-Tanimoto | S2 (Both Unseen) | 0.5765 | 0.5835 | 0.0163 | 0.125 |
-| Ablation: GIN (No Edge Features) | S1 (One Unseen) | 0.6722 | 0.6536 | 0.0017 | 0.0163 |
-| Ablation: GINE without Fingerprint | S1 (One Unseen) | 0.526 | 0.4984 | 0.0005 | 0.0079 |
-| Ablation: Concatenation Head (Directional) | S1 (One Unseen) | 0.5151 | 0.4907 | 0.0002 | 0.0065 |
+| Model | Regime | Seeds | AUROC | AUPRC | P@100 | P@1000 |
+| --- | --- | --- | --- | --- | --- | --- |
+| GINE (full) | S0 (Warm) | 5 | 0.9789 ± 0.0032 | 0.9786 ± 0.0033 | 1.0000 | 0.9998 ± 0.0004 |
+| GINE (full) | S1 (One Unseen) | 5 | 0.8491 ± 0.0058 | 0.8505 ± 0.0055 | 0.9740 ± 0.0258 | 0.9696 ± 0.0145 |
+| GINE (full) | S2 (Both Unseen) | 5 | 0.7122 ± 0.0104 | 0.7250 ± 0.0095 | 0.9180 ± 0.0232 | 0.8756 ± 0.0043 |
+| Ablation: no fingerprint branch | S0 (Warm) | 3 | 0.8628 ± 0.0211 | 0.8534 ± 0.0236 | 0.9967 ± 0.0047 | 0.9627 ± 0.0189 |
+| Ablation: no fingerprint branch | S1 (One Unseen) | 3 | 0.7718 ± 0.0085 | 0.7697 ± 0.0128 | 0.9733 ± 0.0047 | 0.9610 ± 0.0110 |
+| Ablation: no fingerprint branch | S2 (Both Unseen) | 3 | 0.6808 ± 0.0030 | 0.6873 ± 0.0075 | 0.9167 ± 0.0205 | 0.8060 ± 0.0222 |
+| Ablation: no edge features (GIN) | S0 (Warm) | 3 | 0.9756 ± 0.0177 | 0.9756 ± 0.0172 | 1.0000 | 1.0000 |
+| Ablation: no edge features (GIN) | S1 (One Unseen) | 3 | 0.8441 ± 0.0082 | 0.8431 ± 0.0111 | 0.9467 ± 0.0499 | 0.9440 ± 0.0226 |
+| Ablation: no edge features (GIN) | S2 (Both Unseen) | 3 | 0.7024 ± 0.0111 | 0.7127 ± 0.0095 | 0.9033 ± 0.0189 | 0.8557 ± 0.0047 |
+| Ablation: concatenation head | S0 (Warm) | 3 | 0.9854 ± 0.0005 | 0.9852 ± 0.0005 | 1.0000 | 1.0000 |
+| Ablation: concatenation head | S1 (One Unseen) | 3 | 0.8467 ± 0.0033 | 0.8470 ± 0.0026 | 0.9700 ± 0.0141 | 0.9757 ± 0.0012 |
+| Ablation: concatenation head | S2 (Both Unseen) | 3 | 0.7071 ± 0.0087 | 0.7147 ± 0.0058 | 0.8967 ± 0.0125 | 0.8517 ± 0.0037 |
+| Logistic regression | S0 (Warm) | 1 | 0.8901 | 0.8730 | 0.9800 | 0.9650 |
+| Logistic regression | S1 (One Unseen) | 1 | 0.6788 | 0.6409 | 0.8500 | 0.7880 |
+| Logistic regression | S2 (Both Unseen) | 1 | 0.5742 | 0.5539 | 0.6200 | 0.5780 |
+| XGBoost | S0 (Warm) | 1 | 0.8444 | 0.8313 | 0.9800 | 0.9510 |
+| XGBoost | S1 (One Unseen) | 1 | 0.7701 | 0.7535 | 0.9700 | 0.9320 |
+| XGBoost | S2 (Both Unseen) | 1 | 0.6716 | 0.6600 | 0.9000 | 0.7510 |
+| NN-Tanimoto | S0 (Warm) | 1 | 0.7928 | 0.7867 | 0.9700 | 0.9400 |
+| NN-Tanimoto | S1 (One Unseen) | 1 | 0.7511 | 0.7311 | 0.9800 | 0.9270 |
+| NN-Tanimoto | S2 (Both Unseen) | 1 | 0.5765 | 0.5835 | 0.8600 | 0.6580 |
 
-### Metric Definitions
-- **AUROC**: Area Under the Receiver Operating Characteristic curve.
-- **AUPRC**: Area Under the Precision-Recall curve (primary metric for ranking under negative sampling).
-- **Recall@100 / Recall@1000**: Fraction of true interactions captured in top 100 / 1000 ranked pairs.
-- **S0 (Warm)**: Both drugs seen in training graph.
-- **S1 (One Unseen)**: Exactly one drug withheld during training (primary inductive setting).
-- **S2 (Both Unseen)**: Both drugs unseen during training (fully inductive cold-start).
+## Model selection (validation selection half, S1-style)
+
+| Candidate | Selection AUPRC |
+| --- | --- |
+| GINE (full), best of 5 seeds | 0.8299 |
+| XGBoost | 0.7387 |
+| NN-Tanimoto | 0.7197 |
+| Logistic regression | 0.6882 |
+
+## What the trained ablations support
+
+- Ablation: no fingerprint branch: S1 AUPRC 0.7697 vs 0.8505 (difference -0.0808; 3 vs 5 seeds): lower than the full model.
+- Ablation: no edge features (GIN): S1 AUPRC 0.8431 vs 0.8505 (difference -0.0074; 3 vs 5 seeds): within the seed-to-seed spread, so no difference is shown.
+- Ablation: concatenation head: S1 AUPRC 0.8470 vs 0.8505 (difference -0.0035; 3 vs 5 seeds): within the seed-to-seed spread, so no difference is shown.
+
+## Notes
+
+- Test sets have 1:1 sampled negatives, so the base rate is 0.5; precision@k is read against that. Negatives are unlabelled pairs, not confirmed non-interactions.
+- Deployed by validation selection: GINE (full), best of 5 seeds (selection AUPRC 0.8299).
+- Selection and calibration use different halves of the validation pairs (split by drug).

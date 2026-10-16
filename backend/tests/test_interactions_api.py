@@ -18,6 +18,7 @@ if BASE_DIR not in sys.path:
 
 from app import app
 from database import get_prediction
+from ml.ddi.inference import load_manifest
 
 
 @pytest.fixture
@@ -51,7 +52,10 @@ def test_3_tier_api_response(client):
     assert "interaction_likelihood_score" in data
     score = data["interaction_likelihood_score"]
     assert 0.0 <= score <= 1.0, f"Expected probability score in [0, 1], got {score}"
-    assert data.get("calibrated") is True
+    manifest = load_manifest()
+    assert data.get("calibrated") is manifest["calibrated"]          # the manifest decides, not a constant
+    assert data.get("model_version") == manifest["model_version"]
+    assert data["predicted_interaction"] == data["is_harmful"]       # deprecated alias, same value
 
     # Critical Safety Terminology Check: Never return "safe" or "safe to combine"
     response_text = res.data.decode("utf-8").lower()
@@ -115,7 +119,8 @@ def test_polypharmacy_endpoint_tiers_and_disclaimer(client):
         assert pair["tier"] in {"documented", "model_predicted", "no_evidence_found"}
         assert "interaction_likelihood_score" in pair
         assert 0.0 <= pair["interaction_likelihood_score"] <= 1.0
-        assert pair.get("calibrated") is True
+        assert pair.get("calibrated") is load_manifest()["calibrated"]
+        assert pair["predicted_interaction"] == pair["is_harmful"]
 
     # Critical Safety Terminology Check
     response_text = res.data.decode("utf-8").lower()

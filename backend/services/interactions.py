@@ -8,7 +8,7 @@ from clients.hbase import _hbase_connect, find_pair_row
 from clients.http import http_requests
 from clients.openfda import _query_faers_coprescription, _query_openfda_label_interaction
 from clients.pubchem import _resolve_drug
-from ml.ddi.inference import _run_gnn_pair
+from ml.ddi.inference import score_pair
 
 FDA_EVENT_URL = "https://api.fda.gov/drug/event.json"
 
@@ -216,7 +216,9 @@ def predict_interaction(body):
     cid_b  = str((resolved_b or {}).get("cid", ""))
 
     try:
-        is_harmful, confidence = _run_gnn_pair(smiles_a, smiles_b)
+        scored = score_pair(smiles_a, smiles_b)
+        predicted, confidence = scored["predicted_interaction"], scored["score"]
+        is_harmful = predicted        # deprecated alias of predicted_interaction
 
         # Check documented sources (FDA label or adverse event database)
         label_check = _query_openfda_label_interaction(name_a, name_b)
@@ -232,9 +234,9 @@ def predict_interaction(body):
         if label_check.get("documented") or in_hbase:
             tier = "documented"
             tier_desc = "Documented clinical interaction found in regulatory labels or databases"
-        elif confidence >= 0.50:
+        elif predicted:
             tier = "model_predicted"
-            tier_desc = "Hypothesis-generating prediction based on molecular graph similarity"
+            tier_desc = "Hypothesis-generating prediction from molecular structure; not clinical evidence"
         else:
             tier = "no_evidence_found"
             tier_desc = "No documented interaction or elevated structural similarity found in current evidence"
@@ -253,12 +255,14 @@ def predict_interaction(body):
             "tier":                        tier,
             "tier_description":            tier_desc,
             "interaction_likelihood_score": confidence,
-            "calibrated":                  True,
-            "is_harmful":                  is_harmful,
+            "calibrated":                  scored["calibrated"],
+            "model_version":               scored["model_version"],
+            "predicted_interaction":       predicted,
+            "is_harmful":                  is_harmful,        # deprecated: use predicted_interaction
             "confidence":                  confidence,
-            "prediction":                  "Potential Interaction Detected" if is_harmful else "No Evidence Found",
-            "predicted_interactions":      ["Elevated interaction likelihood predicted — investigate further"] if is_harmful else ["No interaction evidence identified"],
-            "source":                      "gnn",
+            "prediction":                  "Potential Interaction Detected" if predicted else "No Evidence Found",
+            "predicted_interactions":      ["Elevated interaction likelihood predicted — investigate further"] if predicted else ["No interaction evidence identified"],
+            "source":                      "ddi_model",
             "disclaimer":                  "Research use only, not clinical advice"
         }, 200
     except Exception as e:
@@ -314,7 +318,8 @@ def polypharmacy_analysis(body):
             errors.append(f"No SMILES for {ra['name']} or {rb['name']}")
             continue
         try:
-            is_harmful, confidence = _run_gnn_pair(ra["smiles"], rb["smiles"])
+            scored = score_pair(ra["smiles"], rb["smiles"])
+            is_harmful, confidence = scored["predicted_interaction"], scored["score"]
 
             upsert_prediction(
                 drug_a=ra["name"], drug_b=rb["name"],
@@ -362,8 +367,10 @@ def polypharmacy_analysis(body):
                 "drug_b":                      rb["name"],
                 "tier":                        tier,
                 "interaction_likelihood_score": confidence,
-                "calibrated":                  True,
-                "is_harmful":                  is_harmful,
+                "calibrated":                  scored["calibrated"],
+                "model_version":               scored["model_version"],
+                "predicted_interaction":       is_harmful,
+                "is_harmful":                  is_harmful,        # deprecated: use predicted_interaction
                 "confidence":                  confidence,
                 "side_effects":                side_effects,
                 "faers_reports":               faers_reports,
@@ -397,6 +404,7 @@ def polypharmacy_analysis(body):
             "target":                       p["drug_b"],
             "tier":                         p.get("tier", "no_evidence_found"),
             "interaction_likelihood_score": p.get("interaction_likelihood_score", p["confidence"]),
+            "predicted_interaction":        p["is_harmful"],
             "is_harmful":                   p["is_harmful"],
             "confidence":                   p["confidence"],
             "side_effects":                 p.get("side_effects", []),

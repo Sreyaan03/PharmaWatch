@@ -1,0 +1,96 @@
+{
+  "variant": "full",
+  "seeds": [
+    42,
+    123,
+    456,
+    789,
+    1011
+  ],
+  "mean_val_select_auprc": 0.8215,
+  "std_val_select_auprc": 0.0077,
+  "mean_val_select_auroc": 0.8151,
+  "best_seed": 42,
+  "seed_details": [
+    {
+      "variant": "full",
+      "seed": 42,
+      "config": {
+        "use_fingerprint": true,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 2,
+      "val_select_auprc": 0.8299,
+      "val_select_auroc": 0.8234,
+      "optimiser_steps_per_epoch": 20,
+      "stopped_by_budget": true,
+      "train_minutes": 15.03,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_full_seed42.pth"
+    },
+    {
+      "variant": "full",
+      "seed": 123,
+      "config": {
+        "use_fingerprint": true,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 2,
+      "val_select_auprc": 0.8268,
+      "val_select_auroc": 0.825,
+      "optimiser_steps_per_epoch": 49,
+      "stopped_by_budget": true,
+      "train_minutes": 15.1,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_full_seed123.pth"
+    },
+    {
+      "variant": "full",
+      "seed": 456,
+      "config": {
+        "use_fingerprint": true,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 2,
+      "val_select_auprc": 0.8249,
+      "val_select_auroc": 0.8207,
+      "optimiser_steps_per_epoch": 48,
+      "stopped_by_budget": true,
+      "train_minutes": 22.99,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_full_seed456.pth"
+    },
+    {
+      "variant": "full",
+      "seed": 789,
+      "config": {
+        "use_fingerprint": true,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 3,
+      "val_select_auprc": 0.8088,
+      "val_select_auroc": 0.7996,
+      "optimiser_steps_per_epoch": 12,
+      "stopped_by_budget": true,
+      "train_minutes": 20.56,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_full_seed789.pth"
+    },
+    {
+      "variant": "full",
+      "seed": 1011,
+      "config": {
+        "use_fingerprint": true,
+        "use_edge_features": true,
+        "head_type": "symmetric"
+      },
+      "best_epoch": 2,
+      "val_select_auprc": 0.8169,
+      "val_select_auroc": 0.8066,
+      "optimiser_steps_per_epoch": 43,
+      "stopped_by_budget": true,
+      "train_minutes": 46.37,
+      "checkpoint_path": "C:\\Users\\Sreyaan\\OneDrive - Manipal Academy of Higher Education\\Desktop\\PharmaWatch\\backend\\trained_models\\checkpoints\\ddi_full_seed1011.pth"
+    }
+  ]
+}

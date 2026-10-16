@@ -178,20 +178,30 @@ class NearestNeighborTanimoto:
         return np.concatenate(all_scores).astype(np.float32)
 
 
-def train_baselines(max_train_samples=30000):
-    """Trains Logistic Regression and XGBoost on train split pairs."""
+def train_baselines(max_train_samples=None, n_jobs=-1):
+    """Trains Logistic Regression and XGBoost on the full training split.
+
+    Negatives follow the same policy as the GNN: 1:1 from train x train, excluding every known
+    positive, including the S0 positives held out for testing.
+    """
     print("[BASELINES] Loading drug metadata and splits...", flush=True)
     with open(os.path.join(SPLITS_DIR, 'drug_metadata.json'), 'r') as f:
         drug_metadata = json.load(f)
 
     drug_fps = build_drug_fingerprints(drug_metadata)
     train_pos_df = pd.read_csv(os.path.join(SPLITS_DIR, 'train_pairs.csv'))
+    s0_df = pd.read_csv(os.path.join(SPLITS_DIR, 'test_s0_pairs.csv'))
 
     train_drugs = sorted(list(drug_metadata['train_drugs']))
     pos_set = set(
         (r.drug_a, r.drug_b) if r.drug_a < r.drug_b else (r.drug_b, r.drug_a)
         for r in train_pos_df.itertuples()
     )
+    held_out_positives = set(
+        (r.drug_a, r.drug_b) if r.drug_a < r.drug_b else (r.drug_b, r.drug_a)
+        for r in s0_df.itertuples() if float(r.label) == 1.0
+    )
+    never_negative = pos_set | held_out_positives
 
     # Subsample training positives if requested for fast convergence
     pos_pairs = list(pos_set)
@@ -211,7 +221,7 @@ def train_baselines(max_train_samples=30000):
         if d1 == d2:
             continue
         pair = (d1, d2) if d1 < d2 else (d2, d1)
-        if pair not in pos_set and pair not in neg_pairs:
+        if pair not in never_negative and pair not in neg_pairs:
             neg_pairs.add(pair)
     neg_pairs = list(neg_pairs)
 
@@ -242,7 +252,7 @@ def train_baselines(max_train_samples=30000):
         n_estimators=100,
         max_depth=5,
         learning_rate=0.1,
-        n_jobs=-1,
+        n_jobs=n_jobs,
         eval_metric='logloss',
         random_state=42
     )
@@ -259,11 +269,12 @@ def train_baselines(max_train_samples=30000):
 def main():
     parser = argparse.ArgumentParser(description="Train Classical DDI Baselines (LogReg, XGBoost, NN).")
     parser.add_argument("--train", action="store_true", help="Train LogReg and XGBoost on train split.")
-    parser.add_argument("--max_train_samples", type=int, default=30000, help="Max train samples for fast training.")
+    parser.add_argument("--max_train_samples", type=int, default=0, help="Subsample for a quick run (0 = all).")
+    parser.add_argument("--n_jobs", type=int, default=-1, help="XGBoost threads.")
     args = parser.parse_args()
 
     if args.train:
-        train_baselines(max_train_samples=args.max_train_samples)
+        train_baselines(max_train_samples=args.max_train_samples or None, n_jobs=args.n_jobs)
     else:
         print("Use --train to train baseline models.")
 
