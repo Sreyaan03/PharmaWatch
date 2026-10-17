@@ -2,14 +2,12 @@
 # Business logic for backend/routes/signals.py (no Flask imports).
 
 import json
-import traceback
-import uuid
 
 from database import (get_cached_signals, upsert_signal, insert_drug_event)
 from services.identity import IdentityService
 from reddit_scraper import scrape_all, process_posts_with_ner
 from ml.ocr import get_easyocr_reader
-from services.text_mining import MINING_TASKS
+from core import jobs
 from clients.http import http_requests
 from core.config import WATCHLIST
 from ml.ner import run_ner
@@ -375,123 +373,108 @@ def get_prr(drug, event, source):
     return body, 200
 
 
+ALLOWED_UPLOAD_EXTENSIONS = {"pdf", "txt", "png", "jpg", "jpeg"}
+
+
 def register_ner_task(text, uploaded_file):
-    """Accepts text or files (PDF/TXT), registers a task, and returns task_id."""
-    task_id = str(uuid.uuid4())
-    
-    file_bytes = None
-    filename = None
+    """Accepts text or files (PDF/TXT/image), stores a durable job, and returns its id as task_id."""
+    data, filename = None, None
     if uploaded_file:
         filename = uploaded_file.filename or ""
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        allowed_extensions = {"pdf", "txt", "png", "jpg", "jpeg"}
-        if ext and ext not in allowed_extensions:
-            return {"error": f"Unsupported file format '.{ext}'. Allowed formats: {', '.join(sorted(allowed_extensions))}"}, 400
-            
-        file_bytes = uploaded_file.read()
-        if len(file_bytes) > 10 * 1024 * 1024:
+        if ext and ext not in ALLOWED_UPLOAD_EXTENSIONS:
+            return {"error": f"Unsupported file format '.{ext}'. Allowed formats: "
+                             f"{', '.join(sorted(ALLOWED_UPLOAD_EXTENSIONS))}"}, 400
+        data = uploaded_file.read()
+        if len(data) > jobs.MAX_UPLOAD_BYTES:
             return {"error": "File exceeds maximum upload size (10 MB)"}, 413
-        
-    MINING_TASKS[task_id] = {
-        "text": text,
-        "file_bytes": file_bytes,
-        "filename": filename,
-        "status": "queued"
-    }
+    try:
+        task_id = jobs.submit("ner_mining", data=data, filename=filename, meta={"text": text or ""})
+    except jobs.UploadTooLarge:
+        return {"error": "File exceeds maximum upload size (10 MB)"}, 413
     return {"task_id": task_id}, 200
 
 
+def _mine_text(job, report):
+    """Job handler: OCR (if a file), NER, then FAERS scoring of the top drug-event pairs."""
+    text = (job["meta"].get("text") or "")
+    data = jobs.read_input(job)
+    filename = (job.get("input_ref") or "").lower()
+
+    if data and filename.endswith(".pdf"):
+        report("OCR: Rasterizing PDF pages...")
+        import fitz
+        doc = fitz.open(stream=data, filetype="pdf")
+        total_pages = len(doc)
+        extracted_text = ""
+        reader = get_easyocr_reader()
+        for idx, page in enumerate(doc):
+            report(f"OCR: Transcribing page {idx + 1}/{total_pages}...")
+            ocr_results = reader.readtext(page.get_pixmap(dpi=150).tobytes("png"))
+            extracted_text += " ".join(res[1] for res in ocr_results) + "\n"
+        text = extracted_text
+    elif data:
+        text = data.decode("utf-8", errors="ignore")
+
+    text = text.strip()
+    if not text:
+        raise ValueError("No readable text found in upload.")
+
+    report("NER: Mining text with the biomedical NER model...")
+    entities = run_ner(text)
+    drugs = {e["token"].lower(): e for e in entities if e["label"] in ("Medication", "Drug")}
+    events = {e["token"].lower(): e for e in entities if e["label"] in ("Disease_disorder", "Sign_symptom")}
+    pairs = sorted(
+        ({"drug": d["token"], "event": ev["token"], "confidence": round(d["score"] * ev["score"], 4)}
+         for d in drugs.values() for ev in events.values()),
+        key=lambda x: x["confidence"], reverse=True)[:5]
+
+    if not pairs:
+        report("No drug-event associations found in text.")
+        return {"signals": [], "entities": entities}
+
+    computed_signals = []
+    for idx, p in enumerate(pairs):
+        report(f"FAERS: Scoring pair {idx + 1}/{len(pairs)} ({p['drug']} + {p['event']})...")
+        metrics = compute_disproportionality_helper(p["drug"], p["event"])
+        if metrics:
+            upsert_signal(p["drug"], p["event"], metrics, source="ner_clinical")
+            insert_drug_event(p["drug"], p["event"], source="biobert", confidence=p["confidence"], raw_text=text[:500])
+            signal_data = metrics.copy()
+            signal_data.update({"drug": p["drug"], "event": p["event"], "source": "ner_clinical"})
+            computed_signals.append(signal_data)
+    return {"signals": computed_signals, "entities": entities}
+
+
+jobs.register("ner_mining", _mine_text)
+
+
 def stream_ner_task(task_id):
-    """Streams OCR, BioBERT NER, and FAERS disproportionality progress via SSE."""
-    if task_id not in MINING_TASKS:
+    """Streams job progress as server-sent events: status..., then done or error."""
+    import time
+    if jobs.get(task_id) is None:
         return None, ({"error": "Task not found"}, 404)
-        
-    task = MINING_TASKS[task_id]
-    
+
     def generator():
-        try:
-            text = task["text"]
-            file_bytes = task["file_bytes"]
-            filename = task["filename"]
-            
-            if file_bytes and filename and filename.lower().endswith(".pdf"):
-                yield "event: status\ndata: OCR: Rasterizing PDF pages...\n\n"
-                import fitz
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
-                total_pages = len(doc)
-                extracted_text = ""
-                
-                reader = get_easyocr_reader()
-                for idx, page in enumerate(doc):
-                    page_num = idx + 1
-                    yield f"event: status\ndata: OCR: Transcribing page {page_num}/{total_pages}...\n\n"
-                    pix = page.get_pixmap(dpi=150)
-                    img_bytes = pix.tobytes("png")
-                    ocr_results = reader.readtext(img_bytes)
-                    page_text = " ".join([res[1] for res in ocr_results])
-                    extracted_text += page_text + "\n"
-                text = extracted_text
-            elif file_bytes:
-                text = file_bytes.decode("utf-8", errors="ignore")
-                
-            text = text.strip()
-            if not text:
-                yield "event: error\ndata: No readable text found in upload.\n\n"
+        last = None
+        deadline = time.time() + 15 * 60
+        while time.time() < deadline:
+            job = jobs.get(task_id)
+            if job is None:
+                yield "event: error\ndata: Task expired\n\n"
                 return
-                
-            yield "event: status\ndata: NER: Mining text with BioBERT model...\n\n"
-            entities = run_ner(text)
-            
-            drugs_found = [e for e in entities if e["label"] in ("Medication", "Drug")]
-            events_found = [e for e in entities if e["label"] in ("Disease_disorder", "Sign_symptom")]
-            
-            drugs = {}
-            for d in drugs_found:
-                drugs[d["token"].lower()] = d
-            events = {}
-            for ev in events_found:
-                events[ev["token"].lower()] = ev
-                
-            pairs = []
-            for d_name, d_ent in drugs.items():
-                for ev_name, ev_ent in events.items():
-                    pairs.append({
-                        "drug": d_ent["token"],
-                        "event": ev_ent["token"],
-                        "confidence": round(d_ent["score"] * ev_ent["score"], 4)
-                    })
-                    
-            pairs.sort(key=lambda x: x["confidence"], reverse=True)
-            pairs = pairs[:5]
-            
-            if not pairs:
-                yield "event: status\ndata: No drug-event associations found in text.\n\n"
-                yield f"event: done\ndata: {json.dumps({'signals': [], 'entities': entities})}\n\n"
+            if job["progress"] and job["progress"] != last:
+                last = job["progress"]
+                yield f"event: status\ndata: {last}\n\n"
+            if job["status"] == "done":
+                yield f"event: done\ndata: {json.dumps(job['result'])}\n\n"
                 return
-                
-            computed_signals = []
-            for idx, p in enumerate(pairs):
-                pair_num = idx + 1
-                drug = p["drug"]
-                event = p["event"]
-                yield f"event: status\ndata: FAERS: Scoring pair {pair_num}/{len(pairs)} ({drug} + {event})...\n\n"
-                
-                metrics = compute_disproportionality_helper(drug, event)
-                if metrics:
-                    upsert_signal(drug, event, metrics, source="ner_clinical")
-                    insert_drug_event(drug, event, source="biobert", confidence=p["confidence"], raw_text=text[:500])
-                    signal_data = metrics.copy()
-                    signal_data.update({"drug": drug, "event": event, "source": "ner_clinical"})
-                    computed_signals.append(signal_data)
-                    
-            yield f"event: done\ndata: {json.dumps({'signals': computed_signals, 'entities': entities})}\n\n"
-            
-        except Exception as e:
-            traceback.print_exc()
-            yield f"event: error\ndata: {str(e)}\n\n"
-        finally:
-            MINING_TASKS.pop(task_id, None)
-            
+            if job["status"] == "failed":
+                yield f"event: error\ndata: {job['error']}\n\n"
+                return
+            time.sleep(0.4)
+        yield "event: error\ndata: Timed out waiting for the job\n\n"
+
     return generator(), None
 
 

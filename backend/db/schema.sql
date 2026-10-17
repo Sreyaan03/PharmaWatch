@@ -199,3 +199,22 @@ CREATE TABLE IF NOT EXISTS faers_background_events (
     global_count BIGINT NOT NULL DEFAULT 0,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Durable background jobs (uploads on disk until the job ends; see core/jobs.py)
+CREATE TABLE IF NOT EXISTS jobs (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    kind VARCHAR(48) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'queued',
+    input_ref VARCHAR(255) DEFAULT NULL,
+    meta_json TEXT DEFAULT NULL,
+    progress VARCHAR(255) DEFAULT NULL,
+    result_json LONGTEXT DEFAULT NULL,
+    error TEXT DEFAULT NULL,
+    created_by VARCHAR(64) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    INDEX idx_jobs_status (status),
+    INDEX idx_jobs_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
