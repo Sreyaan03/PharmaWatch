@@ -3,6 +3,19 @@
 
 from db.mysql import query, query_one
 
+
+def broker_reachable(timeout=1.0):
+    """True when the first configured Kafka bootstrap server accepts a TCP connection."""
+    import os
+    import socket
+    server = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").split(",")[0].strip()
+    host, _, port = server.partition(":")
+    try:
+        socket.create_connection((host or "localhost", int(port or 9092)), timeout=timeout).close()
+        return True
+    except (OSError, ValueError):
+        return False
+
 def pipeline_stats():
     """
     Returns real Kafka consumer message counts per topic.
@@ -49,7 +62,9 @@ def pipeline_stats():
         trials_count = int(row_tr["cnt"]) if row_tr and row_tr.get("cnt") else 0
         alerts_count = int(row_al["cnt"]) if row_al and row_al.get("cnt") else 0
 
-        kafka_running = len(topics) > 0
+        # Rows from past runs stay in MySQL after the broker stops, so their presence says nothing
+        # about whether Kafka is running now. Ask the broker.
+        kafka_running = broker_reachable()
 
         return {
             "kafka_running": kafka_running,

@@ -129,3 +129,13 @@ def test_biobert_js_url_relative():
         content = f.read()
     # It must not have the hardcoded line: API_URL: 'http://localhost:5000',
     assert "API_URL: 'http://localhost:5000'," not in content
+
+
+def test_kafka_status_reflects_the_broker_not_old_rows(client, monkeypatch):
+    """Past topic rows stay in MySQL after Kafka stops; the status must come from the broker."""
+    from services import pipeline
+    monkeypatch.setattr(pipeline, "broker_reachable", lambda timeout=1.0: False)
+    down = client.get("/api/pipeline/stats").get_json()
+    assert down["kafka_running"] is False
+    monkeypatch.setattr(pipeline, "broker_reachable", lambda timeout=1.0: True)
+    assert client.get("/api/pipeline/stats").get_json()["kafka_running"] is True
