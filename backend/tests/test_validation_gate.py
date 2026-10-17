@@ -113,6 +113,32 @@ def test_signal_benchmark_reproduces_its_known_answers(tmp_path, monkeypatch):
     assert m["toy.coverage"] == 0.5
 
 
+# ── signal accuracy on the real data (only where it is loaded) ───────────────
+def _real_data_present():
+    try:
+        from faers.analytics import DB_PATH
+        from faers.registry import list_quarters
+        qs = list_quarters(DB_PATH) if os.path.exists(DB_PATH) else []
+        if not qs or all(q["is_fixture"] for q in qs):
+            return False
+        con = duckdb.connect(DB_PATH, read_only=True)
+        try:
+            return {"drug_identity", "case_drug"} <= {t[0] for t in con.execute("SHOW TABLES").fetchall()}
+        finally:
+            con.close()
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _real_data_present(), reason="needs real FAERS data with identity (set DATA_DIR)")
+def test_signal_accuracy_meets_its_baseline_on_real_data(tmp_path):
+    from faers.analytics import DB_PATH
+    from validation import signals_benchmark
+    report, _ = signals_benchmark.run(DB_PATH, out_path=str(tmp_path / "signals.json"))
+    failures = gate.check(gate.signals_metrics(report), gate.load_baselines()["signals_full"])
+    assert not failures, failures
+
+
 # ── text mining (only where its inputs exist) ────────────────────────────────
 def _ner_inputs_present():
     from validation import ner_benchmark

@@ -10,12 +10,12 @@ See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidenc
 
 ## Current Position
 
-Phase: 7 of 11 (Statistical Correctness) — complete; Phase 6 data load still pending the FDA host
-Plan: 07-01, 07-02, 07-03 done and tested
-Status: One real quarter (2026Q2) loaded; 19 more waiting on fis.fda.gov (connection resets since 2026-10-13). The forecast needs 36+ months and reports no_data until they are loaded.
+Phase: 8 of 11 (Validation Harness) — complete; Phase 9 awaiting go-ahead
+Plan: 08-01, 08-02, 08-03 done and tested; Phase 9 (prescription review) waiting for the go-ahead
+Status: All 20 FAERS quarters (2021Q3-2026Q2, 7.2M cases) loaded with drug identity (97% of drug-report pairs resolved). Interaction model retrained and deployed by manifest. Signal-benchmark outcome definitions are a draft pending clinical review. Local MySQL (Docker) was stopped at last check.
 Last activity: 2026-10-14 — statistics, provenance, descriptive boxed-warning wording and normalised forecast built and tested.
 
-Progress: [██████░░░░░] 6 of 11 phases complete
+Progress: [███████░░░░] 8 of 11 phases complete (phase 6 data load done; 8 complete)
 
 ## Accumulated Context
 

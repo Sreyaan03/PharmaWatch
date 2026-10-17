@@ -115,6 +115,11 @@ ONSET_BUCKETS = [
 ]
 MIN_ONSET_CASES = 10
 
+# FAERS records a date known only to the year as YYYY0101: 19% of all event dates in the loaded
+# data fall on 1 January (an even spread gives 0.3%). Such a date has no usable month or day, so
+# it is treated as incomplete for onset and for seasonality. A genuine 1 January is lost with it.
+DEFAULTED_DATE_SUFFIX = "0101"
+
 
 def time_to_onset(con, ingredient_rxcuis, pt, min_cases=MIN_ONSET_CASES):
     """Days from the start of the suspect drug to the event, from the reports' own dates.
@@ -139,11 +144,11 @@ def time_to_onset(con, ingredient_rxcuis, pt, min_cases=MIN_ONSET_CASES):
             SELECT t.primaryid, min(try_strptime(t.start_dt, '%Y%m%d')) AS start_date
             FROM faers_ther t
             JOIN drug_rows r ON r.primaryid = t.primaryid AND r.drug_seq = t.dsg_drug_seq
-            WHERE length(t.start_dt) = 8
+            WHERE length(t.start_dt) = 8 AND substr(t.start_dt, 5, 4) <> '0101'
             GROUP BY t.primaryid
         )
         SELECT h.primaryid,
-               CASE WHEN length(dm.event_dt) = 8 THEN try_strptime(dm.event_dt, '%Y%m%d') END AS event_date,
+               CASE WHEN length(dm.event_dt) = 8 AND substr(dm.event_dt, 5, 4) <> '0101' THEN try_strptime(dm.event_dt, '%Y%m%d') END AS event_date,
                s.start_date
         FROM hits h
         JOIN faers_demo dm USING (primaryid)
@@ -368,7 +373,7 @@ def event_month_counts(con, ingredient_rxcuis, pt, years):
         WITH {_exposed_with_event_sql(len(rxcuis))}
         SELECT CAST(substr(d.event_dt, 5, 2) AS INTEGER) AS m, count(*)
         FROM hits h JOIN faers_demo d USING (primaryid)
-        WHERE length(d.event_dt) = 8
+        WHERE length(d.event_dt) = 8 AND substr(d.event_dt, 5, 4) <> '0101'
           AND CAST(substr(d.event_dt, 1, 4) AS INTEGER) IN ({_marks(years)})
         GROUP BY m
     """, args + list(years)).fetchall()

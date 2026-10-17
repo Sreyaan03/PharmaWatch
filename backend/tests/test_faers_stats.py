@@ -89,12 +89,12 @@ def _onset_db(tmp_path, cases):
 
 def test_onset_edge_cases_are_each_counted_in_the_right_place(tmp_path):
     db = _onset_db(tmp_path, [
-        ("p1", "20240110", ["20240101"]),             # 9 days
+        ("p1", "20240111", ["20240102"]),             # 9 days
         ("p2", "20240601", ["20231201"]),             # 183 days
-        ("p3", "20240101", ["20240301"]),             # event before therapy
-        ("p4", "20240101", ["202312"]),               # start only to the month: incomplete
+        ("p3", "20240102", ["20240301"]),             # event before therapy
+        ("p4", "20240102", ["202312"]),               # start only to the month: incomplete
         ("p5", "202401", ["20231201"]),               # event only to the month: incomplete
-        ("p6", "20240401", ["20240101", "20240301"]), # two courses: the earliest start is used (91 days)
+        ("p6", "20240402", ["20240102", "20240301"]), # two courses: the earliest start is used (91 days)
         ("p7", "20240131", ["20240131"]),             # same day: 0 days, allowed
     ])
     c = duckdb.connect(db, read_only=True)
@@ -372,3 +372,21 @@ def test_spike_in_a_long_window_is_found_on_the_receipt_month(tmp_path, api):
     assert v["source"] == "faers_local" and v["span_months"] == 36
     assert v["has_spike"] is True
     assert v["months"][v["spikes"].index(True)] == "202306"
+
+
+# ── dates recorded as 1 January because only the year was known ──────────────
+def test_a_year_only_default_date_is_incomplete_for_onset_and_seasonality(tmp_path):
+    """FAERS writes a year-only date as YYYY0101 (19% of event dates in the real data)."""
+    from faers.stats import event_month_counts
+    db = _onset_db(tmp_path, [
+        ("a", "20240120", ["20240110"]),               # 10 days, genuine
+        ("b", "20240101", ["20231201"]),               # event dated 1 Jan: year-only, excluded
+        ("c", "20240220", ["20240101"]),               # therapy start dated 1 Jan: excluded
+    ])
+    c = duckdb.connect(db, read_only=True)
+    r = time_to_onset(c, "1", "E", min_cases=1)
+    assert r["cases"] == 3 and r["usable_cases"] == 1
+    assert r["excluded"]["no_complete_event_date"] == 1 and r["excluded"]["no_complete_therapy_start"] == 1
+    counts = event_month_counts(c, ["1"], "E", [2024])
+    c.close()
+    assert counts[0] == 1 and counts[1] == 1 and sum(counts) == 2    # the 1 Jan event is not in January

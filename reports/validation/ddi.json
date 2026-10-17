@@ -32,7 +32,7 @@
       "pairs": 10524
     }
   },
-  "run_at": "2026-10-16T21:45:55Z",
+  "run_at": "2026-10-17T06:16:01Z",
   "selected_by": "highest AUPRC on the validation selection half (S1-style)",
   "smoke": false
 }

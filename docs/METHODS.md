@@ -64,6 +64,8 @@ are filed, not where risk is higher.
 
 ## Time to onset (`faers/stats.py: time_to_onset`)
 
+**Defaulted dates.** FAERS records a date known only to the year as `YYYY0101`: 19% of all event dates in the loaded data fall on 1 January (an even spread gives 0.3%). Such a date has no usable month or day, so it is treated as incomplete for onset (event and therapy start) and for seasonality. A genuine 1 January is lost with it. Month-only dates recorded on the 1st are kept; they are imprecise by up to a month.
+
 Days from the earliest therapy start of the suspect drug to the event date, from the report's own
 dates. A report is used only if both dates are complete (YYYYMMDD) and the event is not before the
 start. The rest are counted by reason (`excluded`) and never estimated. No median or peak is given

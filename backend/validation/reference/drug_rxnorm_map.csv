@@ -9,7 +9,7 @@ alatrofloxacin,141440,alatrofloxacin,rxnav
 allopurinol,519,allopurinol,loaded_data
 almotriptan,279645,almotriptan,loaded_data
 amlodipine,17767,amlodipine,loaded_data
-amoxapine,722,amoxapine,rxnav
+amoxapine,722,amoxapine,loaded_data
 amoxicillin,723,amoxicillin,loaded_data
 amylases,743,amylase,rxnav
 aspirin,1191,aspirin,loaded_data
@@ -23,10 +23,10 @@ bromfenac,19737,bromfenac,loaded_data
 bromocriptine,1760,bromocriptine,loaded_data
 busulfan,1828,busulfan,loaded_data
 candesartan,214354,candesartan,loaded_data
-capreomycin,78903,capreomycin,rxnav
+capreomycin,78903,capreomycin,loaded_data
 captopril,1998,captopril,loaded_data
 carbamazepine,2002,carbamazepine,loaded_data
-carteolol,2116,carteolol,rxnav
+carteolol,2116,carteolol,loaded_data
 caspofungin,140108,caspofungin,loaded_data
 celecoxib,140587,celecoxib,loaded_data
 chlorambucil,2346,chlorambucil,loaded_data
@@ -38,18 +38,18 @@ clindamycin,2582,clindamycin,loaded_data
 clonidine,2599,clonidine,loaded_data
 clopidogrel,32968,clopidogrel,loaded_data
 clozapine,2626,clozapine,loaded_data
-cosyntropin,2890,cosyntropin,rxnav
+cosyntropin,2890,cosyntropin,loaded_data
 cyclosporine,3008,cyclosporine,loaded_data
 dacarbazine,3098,dacarbazine,loaded_data
 darbepoetin alfa,283838,darbepoetin alfa,loaded_data
-darifenacin,136198,darifenacin,rxnav
+darifenacin,136198,darifenacin,loaded_data
 darunavir,460132,darunavir,loaded_data
 desipramine,3247,desipramine,loaded_data
 desloratadine,275635,desloratadine,loaded_data
 diclofenac,3355,diclofenac,loaded_data
 dicyclomine,3361,dicyclomine,loaded_data
 didanosine,3364,didanosine,loaded_data
-diflunisal,3393,diflunisal,rxnav
+diflunisal,3393,diflunisal,loaded_data
 diltiazem,3443,diltiazem,loaded_data
 dipyridamole,3521,dipyridamole,loaded_data
 disulfiram,3554,disulfiram,loaded_data
@@ -58,7 +58,7 @@ doxazosin,49276,doxazosin,loaded_data
 droperidol,3648,droperidol,loaded_data
 efavirenz,195085,efavirenz,loaded_data
 eletriptan,231049,eletriptan,loaded_data
-enalaprilat,3829,enalaprilat,rxnav
+enalaprilat,3829,enalaprilat,loaded_data
 endopeptidases,,,suggestion only
 entecavir,306266,entecavir,loaded_data
 epoetin alfa,105694,epoetin alfa,loaded_data
@@ -67,21 +67,21 @@ erythromycin,4053,erythromycin,loaded_data
 escitalopram,321988,escitalopram,loaded_data
 estradiol,4083,estradiol,loaded_data
 "estrogens, conjugated (usp)",4099,"estrogens, conjugated (USP)",loaded_data
-estropipate,33747,estropipate,rxnav
+estropipate,33747,estropipate,loaded_data
 eszopiclone,461016,eszopiclone,loaded_data
 etodolac,24605,etodolac,loaded_data
 factor viia,4256,factor VIIa,loaded_data
 felbamate,24812,felbamate,loaded_data
 felodipine,4316,felodipine,loaded_data
-fenoprofen,4331,fenoprofen,rxnav
+fenoprofen,4331,fenoprofen,loaded_data
 ferrous gluconate,24942,ferrous gluconate,loaded_data
 ferrous sulfate,24947,ferrous sulfate,loaded_data
 fexofenadine,87636,fexofenadine,loaded_data
-flavoxate,4440,flavoxate,rxnav
+flavoxate,4440,flavoxate,loaded_data
 fluconazole,4450,fluconazole,loaded_data
 fluoxetine,4493,fluoxetine,loaded_data
 flurbiprofen,4502,flurbiprofen,loaded_data
-flutamide,4508,flutamide,rxnav
+flutamide,4508,flutamide,loaded_data
 fluticasone,41126,fluticasone,loaded_data
 fluvastatin,41127,fluvastatin,loaded_data
 fluvoxamine,42355,fluvoxamine,loaded_data
@@ -91,10 +91,10 @@ furosemide,4603,furosemide,loaded_data
 gatifloxacin,228476,gatifloxacin,loaded_data
 gemcitabine,12574,gemcitabine,loaded_data
 gemfibrozil,4719,gemfibrozil,loaded_data
-gemifloxacin,138099,gemifloxacin,rxnav
+gemifloxacin,138099,gemifloxacin,loaded_data
 glimepiride,25789,glimepiride,loaded_data
 goserelin,50610,goserelin,loaded_data
-griseofulvin,5021,griseofulvin,rxnav
+griseofulvin,5021,griseofulvin,loaded_data
 heparin,5224,heparin,loaded_data
 hydrochlorothiazide,5487,hydrochlorothiazide,loaded_data
 hyoscyamine,153970,hyoscyamine,loaded_data
@@ -123,7 +123,7 @@ levonorgestrel,6373,levonorgestrel,loaded_data
 lipase,6406,lipase,loaded_data
 lisinopril,29046,lisinopril,loaded_data
 lithium carbonate,42351,lithium carbonate,loaded_data
-lithium citrate,52105,lithium citrate,rxnav
+lithium citrate,52105,lithium citrate,loaded_data
 loratadine,28889,loratadine,loaded_data
 mebendazole,6672,mebendazole,loaded_data
 mefenamate,257844,mefenamate,loaded_data
@@ -136,12 +136,12 @@ methotrexate,6851,methotrexate,loaded_data
 methyldopa,6876,methyldopa,loaded_data
 miconazole,6932,miconazole,loaded_data
 mirtazapine,15996,mirtazapine,loaded_data
-moexipril,30131,moexipril,rxnav
+moexipril,30131,moexipril,loaded_data
 mometasone,108118,mometasone,loaded_data
 nabumetone,31448,nabumetone,loaded_data
 naproxen,7258,naproxen,loaded_data
 naratriptan,141366,naratriptan,loaded_data
-nefazodone,31565,nefazodone,rxnav
+nefazodone,31565,nefazodone,loaded_data
 nelfinavir,134527,nelfinavir,loaded_data
 neostigmine,7315,neostigmine,loaded_data
 nevirapine,53654,nevirapine,loaded_data
@@ -154,15 +154,15 @@ nortriptyline,7531,nortriptyline,loaded_data
 ofloxacin,7623,ofloxacin,loaded_data
 olmesartan medoxomil,321064,olmesartan,loaded_data
 orlistat,37925,orlistat,loaded_data
-oxaprozin,32613,oxaprozin,rxnav
+oxaprozin,32613,oxaprozin,loaded_data
 oxazepam,7781,oxazepam,loaded_data
 oxybutynin,32675,oxybutynin,loaded_data
-paromomycin,7934,paromomycin,rxnav
-pemoline,7966,pemoline,rxnav
+paromomycin,7934,paromomycin,loaded_data
+pemoline,7966,pemoline,loaded_data
 penicillamine,7975,penicillamine,loaded_data
 penicillin v,7984,penicillin V,loaded_data
 phentermine,8152,phentermine,loaded_data
-phentolamine,8153,phentolamine,rxnav
+phentolamine,8153,phentolamine,loaded_data
 pioglitazone,33738,pioglitazone,loaded_data
 piroxicam,8356,piroxicam,loaded_data
 posaconazole,282446,posaconazole,loaded_data
@@ -173,7 +173,7 @@ prilocaine,8686,prilocaine,loaded_data
 primidone,8691,primidone,loaded_data
 prochlorperazine,8704,prochlorperazine,loaded_data
 propafenone,8754,propafenone,loaded_data
-propantheline,8761,propantheline,rxnav
+propantheline,8761,propantheline,loaded_data
 propylthiouracil,8794,propylthiouracil,loaded_data
 quinapril,35208,quinapril,loaded_data
 ramelteon,596205,ramelteon,loaded_data
@@ -182,13 +182,13 @@ ramipril,35296,ramipril,loaded_data
 rifampin,9384,rifampin,loaded_data
 rizatriptan,88014,rizatriptan,loaded_data
 rofecoxib,232158,rofecoxib,loaded_data
-rosiglitazone,84108,rosiglitazone,rxnav
+rosiglitazone,84108,rosiglitazone,loaded_data
 rosuvastatin,301542,rosuvastatin,loaded_data
 salmeterol,36117,salmeterol,loaded_data
-salsalate,36108,salsalate,rxnav
+salsalate,36108,salsalate,loaded_data
 scopolamine,9601,scopolamine,loaded_data
 sertraline,36437,sertraline,loaded_data
-simethicone,9796,simethicone,rxnav
+simethicone,9796,simethicone,loaded_data
 simvastatin,36567,simvastatin,loaded_data
 sitagliptin,593411,sitagliptin,loaded_data
 "sodium phosphate, monobasic",235496,"sodium phosphate, monobasic",loaded_data
@@ -208,26 +208,26 @@ tenofovir,117466,tenofovir,loaded_data
 terazosin,37798,terazosin,loaded_data
 terbinafine,37801,terbinafine,loaded_data
 tetrahydrocannabinol,10402,dronabinol,rxnav
-thiabendazole,10450,thiabendazole,rxnav
+thiabendazole,10450,thiabendazole,loaded_data
 thioguanine,10485,thioguanine,loaded_data
-thiothixene,10510,thiothixene,rxnav
+thiothixene,10510,thiothixene,loaded_data
 thyroxine,10582,levothyroxine,rxnav
-ticlopidine,10594,ticlopidine,rxnav
+ticlopidine,10594,ticlopidine,loaded_data
 timolol,10600,timolol,loaded_data
-tinidazole,10612,tinidazole,rxnav
+tinidazole,10612,tinidazole,loaded_data
 tiotropium,69120,tiotropium,loaded_data
 tipranavir,190548,tipranavir,loaded_data
-tolcapone,72937,tolcapone,rxnav
-tolmetin,10636,tolmetin,rxnav
+tolcapone,72937,tolcapone,loaded_data
+tolmetin,10636,tolmetin,loaded_data
 trandolapril,38454,trandolapril,loaded_data
 trovafloxacin,115552,trovafloxacin,rxnav
 urea,11002,urea,loaded_data
 valacyclovir,73645,valacyclovir,loaded_data
-valdecoxib,278567,valdecoxib,rxnav
+valdecoxib,278567,valdecoxib,loaded_data
 valproate,40254,valproate,loaded_data
 vitamin a,11246,vitamin A,loaded_data
 voriconazole,121243,voriconazole,loaded_data
 zafirlukast,114970,zafirlukast,loaded_data
-zalcitabine,3363,zalcitabine,rxnav
+zalcitabine,3363,zalcitabine,loaded_data
 zidovudine,11413,zidovudine,loaded_data
 zolmitriptan,135775,zolmitriptan,loaded_data

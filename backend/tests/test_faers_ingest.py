@@ -92,7 +92,7 @@ def test_child_rows_belong_to_the_surviving_version_only(built):
 
 def test_therapy_and_outcome_rows_are_loaded(built):
     con = built["con"]
-    assert con.execute("SELECT start_dt FROM faers_ther WHERE primaryid = '10061'").fetchone()[0] == "20231201"
+    assert con.execute("SELECT start_dt FROM faers_ther WHERE primaryid = '10061'").fetchone()[0] == "20231202"
     assert con.execute("SELECT outc_cod FROM faers_outc WHERE primaryid = '10012'").fetchone()[0] == "HO"
 
 

@@ -94,7 +94,7 @@ def two_quarter_fixture(directory):
         dict(primaryid="10052", caseid="1007", caseversion="1", i_f_code="I", fda_dt="20240416",
              age="30", age_cod="", sex="M", occr_country="DE"),
         dict(primaryid="10061", caseid="1006", caseversion="1", i_f_code="I", fda_dt="20240420",
-             age="50", age_cod="YR", sex="M", occr_country="US", event_dt="20240101"),
+             age="50", age_cod="YR", sex="M", occr_country="US", event_dt="20240102"),
     ]
     q2_drug = [
         dict(primaryid="10012", caseid="1001", drug_seq="1", role_cod="PS", drugname="COUMADIN", prod_ai="WARFARIN"),
@@ -108,7 +108,7 @@ def two_quarter_fixture(directory):
         dict(primaryid="10052", caseid="1007", pt="Nausea"),
         dict(primaryid="10061", caseid="1006", pt="Haemorrhage"),
     ]
-    q2_ther = [dict(primaryid="10061", caseid="1006", dsg_drug_seq="1", start_dt="20231201")]
+    q2_ther = [dict(primaryid="10061", caseid="1006", dsg_drug_seq="1", start_dt="20231202")]
     q2_outc = [dict(primaryid="10012", caseid="1001", outc_cod="HO")]
 
     p1 = write_quarter(os.path.join(directory, "faers_ascii_2024q1.zip"), "2024q1", q1_demo, q1_drug, q1_reac,

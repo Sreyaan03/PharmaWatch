@@ -23,13 +23,17 @@
 - Only the **2x2 count path** was moved to the ingredient join in this plan. The temporal, demographic, time-to-onset and top-reaction functions still match drug names by text; Phase 7 rewrites them (real onset, stratified PRR) on top of `contingency`.
 - The fallback keeps `source: "openfda"` and adds `fallback: true`, instead of renaming the source, so existing frontend badges keep working.
 
-## Still to do (needs the FDA host)
-`fis.fda.gov` has been resetting my connections since a burst of probes early in this session (`api.fda.gov` and RxNav are fine). Only 2026Q2 is on disk. When it answers again, from `backend/`:
+## 20-quarter load (completed 2026-10-17)
+The FDA zips were downloaded manually into `C:\PharmaWatchDataaers_raw\` and registered with `--adopt`. All 20 quarters (2021Q3-2026Q2) were parsed and loaded: 8,474,526 reports, 7,222,094 cases kept after de-duplication (914 MB). Drug identity: 6,630 of 13,487 names resolved directly, covering 97.0% of drug-report pairs; 20.6 million case-ingredient rows.
 
-    set DATA_DIR=C:\PharmaWatchData
-    python -m faers.downloader --latest 20     # skips verified files, resumes partial ones
-    python -m faers.parser --all
-    python -m faers.loader
-    python -m faers.identity_build             # about 30 minutes; cached lookups are reused
+Two defects were found and fixed while doing this (see the 08-01 and 08-03 summaries): the RxNav lookup took the first of several similarly named concepts (sulfamethoxazole mapped to sulfamethazine), and 19% of event dates are FAERS year-only defaults (YYYY0101).
 
-then add `DATA_DIR=C:\PharmaWatchData` to `backend/.env`, run `python -m pytest backend/tests/test_identity.py` (the two real-data tests then run), and record the spot checks (warfarin, clozapine, metformin) in this summary.
+Spot checks on the full data (a, b, c = reports with the drug and event, with the drug only, with the event only):
+| pair | a | b | c | PRR |
+|---|---|---|---|---|
+| warfarin + haemorrhage | 357 | 6,012 | 33,793 | 12.0 |
+| clozapine + agranulocytosis | 683 | 51,932 | 6,246 | 14.9 |
+| metformin + lactic acidosis | 8,259 | 36,296 | 3,910 | 340.3 |
+| atorvastatin + rhabdomyolysis | 1,682 | 32,344 | 9,649 | 36.8 |
+| metformin + hepatic failure | 103 | 44,452 | 7,492 | 2.2 |
+The four known associations are strong; the unrelated pair is weak. `DATA_DIR=C:\PharmaWatchData` still needs to be added to `backend/.env` so the app finds the data without it being set in the shell.

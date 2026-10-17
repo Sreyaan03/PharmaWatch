@@ -59,5 +59,48 @@
       "baseline": 0.0468,
       "tolerance": 0.03
     }
-  }
+  },
+  "signals_full": {
+    "euadr.all.auc_ic025": {
+      "baseline": 0.8828,
+      "tolerance": 0.03
+    },
+    "euadr.all.auc_prr": {
+      "baseline": 0.8381,
+      "tolerance": 0.03
+    },
+    "euadr.coverage": {
+      "baseline": 0.828,
+      "tolerance": 0.03
+    },
+    "euadr.covered.auc_ic025": {
+      "baseline": 0.9001,
+      "tolerance": 0.03
+    },
+    "euadr.covered.auc_prr": {
+      "baseline": 0.8839,
+      "tolerance": 0.03
+    },
+    "omop.all.auc_ic025": {
+      "baseline": 0.7613,
+      "tolerance": 0.03
+    },
+    "omop.all.auc_prr": {
+      "baseline": 0.7118,
+      "tolerance": 0.03
+    },
+    "omop.coverage": {
+      "baseline": 0.5664,
+      "tolerance": 0.03
+    },
+    "omop.covered.auc_ic025": {
+      "baseline": 0.822,
+      "tolerance": 0.03
+    },
+    "omop.covered.auc_prr": {
+      "baseline": 0.7958,
+      "tolerance": 0.03
+    }
+  },
+  "_signals_full_note": "Needs real FAERS data with identity (not available in CI); gated wherever that data is loaded. Moves with the data version."
 }

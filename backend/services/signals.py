@@ -365,9 +365,11 @@ def get_prr(drug, event, source):
         "a": metrics["a"], "b": metrics["b"], "c": metrics["c"], "d": metrics["d"],
         "prr": metrics["prr"],
         "is_signal": metrics.get("signal_strength", "none") != "none",
+        "signal_strength": metrics.get("signal_strength", "none"),
         "source": metrics.get("source", "openfda")
     }
-    for key in ("identity", "unresolved", "fallback", "note"):
+    for key in ("prr_ci_low", "prr_ci_high", "ror", "ror_ci_low", "ror_ci_high", "chi2", "ic025", "criteria",
+                "continuity_correction", "identity", "unresolved", "fallback", "note"):
         if key in metrics:
             body[key] = metrics[key]
     return body, 200

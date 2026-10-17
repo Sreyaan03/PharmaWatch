@@ -18,9 +18,9 @@ Milestone 2 (Phases 5–11, one phase per day) turns the project into a coherent
 ### Milestone 2 — University Pilot Release (planned)
 
 - [x] **Phase 5 (Day 1): Baseline & Clean Architecture** — Layered structure, duplicate consolidation, dead-code removal, no behaviour change
-- [ ] **Phase 6 (Day 2): Real FAERS Data Foundation** — 20 real quarters, case de-duplication, RxNorm and Preferred Term identity, single statistics path
+- [x] **Phase 6 (Day 2): Real FAERS Data Foundation** — 20 real quarters, case de-duplication, RxNorm and Preferred Term identity, single statistics path
 - [x] **Phase 7 (Day 3): Statistical Correctness** — Real time-to-onset and stratified PRR, no-signal class, no invented numbers, descriptive wording
-- [ ] **Phase 8 (Day 4): Validation Harness** — Reference-set benchmarks for signals, NER and DDI; Methods & Validation page; CI regression gate
+- [x] **Phase 8 (Day 4): Validation Harness** — Reference-set benchmarks for signals, NER and DDI; Methods & Validation page; CI regression gate
 - [ ] **Phase 9 (Day 5): Prescription Review** — Upload, cloud vision extraction, confirm step, interaction and safety report, PDF export
 - [ ] **Phase 10 (Day 6): Coherence & Kafka Integration** — Regrouped navigation, drug profile page, evidence badges, Kafka as evidence ingest
 - [ ] **Phase 11 (Day 7): Platform & Pilot Release** — Accounts and roles, audit log, feedback, security fixes, portable deployment, CI/CD, docs
@@ -96,7 +96,7 @@ Plans:
 Plans:
 - [x] 06-01: Parser and loader: keep `caseid`, `caseversion`, `age_cod`, read THER and OUTC, de-duplicate, quarter registry, sequential low-memory load; move the mock generator to test fixtures
 - [x] 06-02: Identity service: RxNav client with a local cache table, Preferred Term dictionary built from loaded data, watchlist correction
-- [~] 06-03 (code complete; 20-quarter load pending the FDA host): Single statistics path: all counts through `faers/`, openFDA as a labelled fallback restricted to suspect drugs; run the 20-quarter load
+- [x] 06-03 (20 quarters loaded 2026-10-16/17): Single statistics path: all counts through `faers/`, openFDA as a labelled fallback restricted to suspect drugs; run the 20-quarter load
 
 ### Phase 7 (Day 3): Statistical Correctness
 **Goal**: Every displayed number is computed from data or absent. No invented values, no mislabelled classes, no causal claims from report counts.
@@ -128,9 +128,9 @@ Plans:
   6. CI runs a reduced benchmark and fails when a metric drops below its recorded baseline.
 
 Plans:
-- [ ] 08-01: Reference-set loaders and mappings; signal benchmark runner
-- [ ] 08-02: DDI retrain, real ablations, held-out calibration, model selection, API field cleanup (`is_harmful` renamed)
-- [ ] 08-03: NER benchmark, report generator, Methods & Validation page, CI regression gate
+- [x] 08-01: Reference-set loaders and mappings; signal benchmark runner
+- [x] 08-02: DDI retrain, real ablations, held-out calibration, model selection, API field cleanup (`is_harmful` renamed)
+- [x] 08-03: NER benchmark, report generator, Methods & Validation page, CI regression gate
 
 ### Phase 9 (Day 5): Prescription Review
 **Goal**: A user uploads a prescription, confirms the extracted medication list, and receives a structured safety report.
@@ -195,9 +195,9 @@ Plans:
 | 3. Backend Modularization & MySQL | 2/2 | Complete | 2026-10-11 |
 | 4. DDI Prediction Model Rigor | 4/4 | Complete | 2026-10-12 |
 | 5. Baseline & Clean Architecture | 3/3 | Complete | 2026-10-13 |
-| 6. Real FAERS Data Foundation | 2/3 + 06-03 code | In progress (data load pending) | — |
+| 6. Real FAERS Data Foundation | 3/3 | Complete | 2026-10-17 |
 | 7. Statistical Correctness | 3/3 | Complete | 2026-10-14 |
-| 8. Validation Harness | 0/3 | Planned | — |
+| 8. Validation Harness | 3/3 | Complete | 2026-10-17 |
 | 9. Prescription Review | 0/3 | Planned | — |
 | 10. Coherence & Kafka Integration | 0/3 | Planned | — |
 | 11. Platform & Pilot Release | 0/3 | Planned | — |

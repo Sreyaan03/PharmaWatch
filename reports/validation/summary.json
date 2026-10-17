@@ -1,24 +1,218 @@
 {
-  "generated_at": "2026-10-16T21:49:08Z",
-  "smoke": true,
+  "generated_at": "2026-10-17T06:16:01Z",
+  "smoke": false,
   "components": {
+    "signals": {
+      "title": "Signal detection",
+      "reference": "OMOP and EU-ADR reference sets",
+      "data_version": "FAERS 2021Q3-2026Q2 (20 quarters, 7,222,094 cases, identity 37303f)",
+      "run_at": "2026-10-17T06:15:28Z",
+      "rows": [
+        {
+          "set": "EUADR - pairs with 3+ cases",
+          "pairs": 77,
+          "metrics": {
+            "AUC (PRR)": [
+              0.8839,
+              [
+                0.8013,
+                0.9549
+              ]
+            ],
+            "AUC (ROR lower bound)": [
+              0.8934,
+              [
+                0.8134,
+                0.959
+              ]
+            ],
+            "AUC (IC025)": [
+              0.9001,
+              [
+                0.8231,
+                0.9665
+              ]
+            ],
+            "Sensitivity (signal rule)": [
+              0.8462,
+              [
+                0.7143,
+                0.9512
+              ]
+            ],
+            "Specificity (signal rule)": [
+              0.7895,
+              [
+                0.6579,
+                0.907
+              ]
+            ]
+          }
+        },
+        {
+          "set": "EUADR - all pairs (uncovered = no signal)",
+          "pairs": 93,
+          "metrics": {
+            "AUC (PRR)": [
+              0.8381,
+              [
+                0.7398,
+                0.9181
+              ]
+            ],
+            "AUC (ROR lower bound)": [
+              0.8447,
+              [
+                0.7488,
+                0.9235
+              ]
+            ],
+            "AUC (IC025)": [
+              0.8828,
+              [
+                0.8066,
+                0.9436
+              ]
+            ],
+            "Sensitivity (signal rule)": [
+              0.7674,
+              [
+                0.6278,
+                0.8913
+              ]
+            ],
+            "Specificity (signal rule)": [
+              0.84,
+              [
+                0.74,
+                0.9348
+              ]
+            ]
+          }
+        },
+        {
+          "set": "EUADR - coverage",
+          "pairs": 93,
+          "metrics": {
+            "Pairs with 3+ cases": [
+              0.828,
+              null
+            ]
+          }
+        },
+        {
+          "set": "OMOP - pairs with 3+ cases",
+          "pairs": 226,
+          "metrics": {
+            "AUC (PRR)": [
+              0.7958,
+              [
+                0.7318,
+                0.8497
+              ]
+            ],
+            "AUC (ROR lower bound)": [
+              0.8158,
+              [
+                0.7559,
+                0.8684
+              ]
+            ],
+            "AUC (IC025)": [
+              0.822,
+              [
+                0.7658,
+                0.873
+              ]
+            ],
+            "Sensitivity (signal rule)": [
+              0.7759,
+              [
+                0.6953,
+                0.8508
+              ]
+            ],
+            "Specificity (signal rule)": [
+              0.7455,
+              [
+                0.6607,
+                0.8253
+              ]
+            ]
+          }
+        },
+        {
+          "set": "OMOP - all pairs (uncovered = no signal)",
+          "pairs": 395,
+          "metrics": {
+            "AUC (PRR)": [
+              0.7118,
+              [
+                0.6531,
+                0.7647
+              ]
+            ],
+            "AUC (ROR lower bound)": [
+              0.7186,
+              [
+                0.6597,
+                0.7707
+              ]
+            ],
+            "AUC (IC025)": [
+              0.7613,
+              [
+                0.7144,
+                0.8056
+              ]
+            ],
+            "Sensitivity (signal rule)": [
+              0.5455,
+              [
+                0.4615,
+                0.6182
+              ]
+            ],
+            "Specificity (signal rule)": [
+              0.8783,
+              [
+                0.8362,
+                0.9188
+              ]
+            ]
+          }
+        },
+        {
+          "set": "OMOP - coverage",
+          "pairs": 399,
+          "metrics": {
+            "Pairs with 3+ cases": [
+              0.5664,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "Outcome definitions are a draft pending clinical review.",
+      "smoke": false
+    },
     "ddi": {
       "title": "Drug interaction model",
       "reference": "TDC DrugBank DDI, drug-level inductive splits; 1:1 sampled negatives (base rate 0.5)",
       "model": "GINE (full), best of 5 seeds (ddi-gine-42)",
       "calibrated": true,
-      "run_at": "2026-10-16T21:48:58Z",
+      "run_at": "2026-10-17T06:16:01Z",
       "rows": [
         {
           "set": "S0 (Warm)",
-          "pairs": 5000,
+          "pairs": 20000,
           "metrics": {
             "AUROC": [
-              0.9817,
+              0.9798,
               null
             ],
             "AUPRC": [
-              0.9777,
+              0.9766,
               null
             ],
             "Precision@100": [
@@ -26,21 +220,21 @@
               null
             ],
             "ECE (served score)": [
-              0.1506,
+              0.1493,
               null
             ]
           }
         },
         {
           "set": "S1 (One Unseen)",
-          "pairs": 5000,
+          "pairs": 94800,
           "metrics": {
             "AUROC": [
-              0.8578,
+              0.8513,
               null
             ],
             "AUPRC": [
-              0.856,
+              0.8452,
               null
             ],
             "Precision@100": [
@@ -48,29 +242,29 @@
               null
             ],
             "ECE (served score)": [
-              0.0294,
+              0.0211,
               null
             ]
           }
         },
         {
           "set": "S2 (Both Unseen)",
-          "pairs": 5000,
+          "pairs": 10524,
           "metrics": {
             "AUROC": [
-              0.7042,
+              0.7082,
               null
             ],
             "AUPRC": [
-              0.7167,
+              0.7133,
               null
             ],
             "Precision@100": [
-              0.96,
+              0.94,
               null
             ],
             "ECE (served score)": [
-              0.0842,
+              0.0792,
               null
             ]
           }
@@ -78,151 +272,149 @@
       ],
       "data_version": null,
       "caveat": null,
-      "smoke": true
+      "smoke": false
     },
     "ner": {
       "title": "Text mining (NER)",
       "reference": "ADE Corpus V2, drug-adverse-effect relations",
       "model": "d4data/biomedical-ner-all",
       "data_version": "f7c34957a1d9",
-      "run_at": "2026-10-16T21:49:08Z",
+      "run_at": "2026-10-16T18:47:04Z",
       "rows": [
         {
           "set": "Drug mentions - exact match",
-          "pairs": 237,
+          "pairs": 5198,
           "metrics": {
             "Precision": [
-              0.1811,
+              0.1861,
               null
             ],
             "Recall": [
-              0.2025,
+              0.2072,
               null
             ],
             "F1": [
-              0.1912,
+              0.1961,
               null
             ]
           }
         },
         {
           "set": "Drug mentions - overlap match",
-          "pairs": 237,
+          "pairs": 5198,
           "metrics": {
             "Precision": [
-              0.6038,
+              0.6239,
               null
             ],
             "Recall": [
-              0.6751,
+              0.6945,
               null
             ],
             "F1": [
-              0.6375,
+              0.6573,
               null
             ]
           }
         },
         {
           "set": "Drug mentions - fragments",
-          "pairs": 174,
+          "pairs": 3660,
           "metrics": {
             "Predictions that are only part of an entity": [
-              0.6566,
+              0.6326,
               null
             ]
           }
         },
         {
           "set": "Adverse-effect mentions - exact match",
-          "pairs": 286,
+          "pairs": 5816,
           "metrics": {
             "Precision": [
-              0.1634,
+              0.1675,
               null
             ],
             "Recall": [
-              0.1748,
+              0.1931,
               null
             ],
             "F1": [
-              0.1689,
+              0.1794,
               null
             ]
           }
         },
         {
           "set": "Adverse-effect mentions - overlap match",
-          "pairs": 286,
+          "pairs": 5816,
           "metrics": {
             "Precision": [
-              0.5817,
+              0.5802,
               null
             ],
             "Recall": [
-              0.6224,
+              0.669,
               null
             ],
             "F1": [
-              0.6014,
+              0.6215,
               null
             ]
           }
         },
         {
           "set": "Adverse-effect mentions - fragments",
-          "pairs": 172,
+          "pairs": 3874,
           "metrics": {
             "Predictions that are only part of an entity": [
-              0.5621,
+              0.5777,
               null
             ]
           }
         },
         {
           "set": "Drug-effect pairing - all_pairs_rule (current)",
-          "pairs": 312,
+          "pairs": 6611,
           "metrics": {
             "Precision": [
-              0.0135,
+              0.0075,
               null
             ],
             "Recall": [
-              0.0545,
+              0.0333,
               null
             ],
             "F1": [
-              0.0217,
+              0.0122,
               null
             ]
           }
         },
         {
           "set": "Drug-effect pairing - sentence_level_rule",
-          "pairs": 312,
+          "pairs": 6611,
           "metrics": {
             "Precision": [
-              0.041,
+              0.0223,
               null
             ],
             "Recall": [
-              0.0545,
+              0.0328,
               null
             ],
             "F1": [
-              0.0468,
+              0.0266,
               null
             ]
           }
         }
       ],
       "caveat": "Precision is a lower bound (see limitations).",
-      "smoke": true
+      "smoke": false
     }
   },
-  "not_run": [
-    "signals"
-  ],
+  "not_run": [],
   "known_limitations": [
     "FAERS holds spontaneous reports. Disproportionality finds reporting patterns; it cannot show causation, incidence or relative risk in patients.",
     "The signal benchmark's outcome definitions (MedDRA Preferred Terms per outcome) are a draft that no clinical reviewer has signed off.",
