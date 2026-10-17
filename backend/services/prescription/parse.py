@@ -25,15 +25,17 @@ DURATION = re.compile(r"(?:\bx|×|\bfor|\bfor the next|\bcontinue for)\s*(\d+)\s
 DURATION_BARE = re.compile(r"\b(\d+)\s*(days|weeks|months)\b", re.I)
 SCHEDULE = re.compile(r"(?<![\d.])([0-3](?:\.5)?)\s*[-–+]\s*([0-3](?:\.5)?)\s*[-–+]\s*([0-3](?:\.5)?)(?![\d.])")
 EVERY_N_HOURS = re.compile(r"\bq\.?\s*(\d{1,2})\s*h(?:rs?|ours?)?\b|\bevery\s+(\d{1,2})\s*hours?\b", re.I)
+# Order matters: the specific phrases come first, and the bare word "daily" is the last resort,
+# otherwise "twice daily" would be read as once daily.
 FREQUENCIES = [
-    ("once daily", r"\b(?:o\.?d\.?|q\.?d\.?|once (?:a |per )?day|once daily|daily|every day|1\s*x\s*/?\s*d(?:ay)?)\b"),
     ("twice daily", r"\b(?:b\.?d\.?|b\.?i\.?d\.?|twice (?:a |per )?day|twice daily|2\s*times\s*(?:a|per)\s*day)\b"),
-    ("three times daily", r"\b(?:t\.?d\.?s\.?|t\.?i\.?d\.?|thrice|three times (?:a |per )?day|3\s*times\s*(?:a|per)\s*day)\b"),
-    ("four times daily", r"\b(?:q\.?i\.?d\.?|q\.?d\.?s\.?|four times (?:a |per )?day|4\s*times\s*(?:a|per)\s*day)\b"),
+    ("three times daily", r"\b(?:t\.?d\.?s\.?|t\.?i\.?d\.?|thrice|three times (?:a |per )?day|three times daily|3\s*times\s*(?:a|per)\s*day)\b"),
+    ("four times daily", r"\b(?:q\.?i\.?d\.?|q\.?d\.?s\.?|four times (?:a |per )?day|four times daily|4\s*times\s*(?:a|per)\s*day)\b"),
+    ("once weekly", r"\b(?:once (?:a |per )?week|once weekly|weekly|q\.?w\.?|1\s*x\s*/?\s*week)\b"),
     ("at bedtime", r"\b(?:h\.?s\.?|q\.?h\.?s\.?|at bed ?time|at night|nocte|night)\b"),
     ("in the morning", r"\b(?:q\.?a\.?m\.?|mane|in the morning|morning)\b"),
-    ("once weekly", r"\b(?:once (?:a |per )?week|weekly|q\.?w\.?|1\s*x\s*/?\s*week)\b"),
     ("once (stat)", r"\bstat\b"),
+    ("once daily", r"\b(?:o\.?d\.?|q\.?d\.?|once (?:a |per )?day|once daily|daily|every day|1\s*x\s*/?\s*d(?:ay)?)\b"),
 ]
 STOPPED = re.compile(r"\b(stop(?:ped)?|discontinu\w+|d/c|hold|held|withhold|avoid|do not (?:take|use)|not to (?:take|be taken))\b", re.I)
 ALLERGY = re.compile(r"\b(allerg\w*|intoleran\w*|adverse reaction to)\b", re.I)
@@ -52,8 +54,17 @@ def split_chunks(text):
     return [c for c in chunks if len(c) >= 3]
 
 
+GLUED_X = re.compile(r"\b(od|bd|bid|tds|tid|qid|hs)x(?=\s*\d)", re.I)
+
+
+def _unglue(segment):
+    """OCR often joins a frequency and the duration marker: 'ODx 3 months' -> 'OD x 3 months'."""
+    return GLUED_X.sub(r"\1 x", segment or "")
+
+
 def parse_frequency(segment):
     """(frequency or None, as_needed, note) from one medication segment."""
+    segment = _unglue(segment)
     note = ""
     as_needed = bool(AS_NEEDED.search(segment))
     m = SCHEDULE.search(segment)
@@ -87,6 +98,7 @@ def parse_form(context):
 
 
 def parse_duration(segment):
+    segment = _unglue(segment)
     m = DURATION.search(segment) or DURATION_BARE.search(segment)
     if not m:
         return None

@@ -1,0 +1,78 @@
+{
+  "id": "rx_008",
+  "file": "rx_008.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "harsh",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Glycomet",
+      "ingredient": "metformin",
+      "strength": "500 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "twice daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Rosuvastatin",
+      "ingredient": "rosuvastatin",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Amoxycillin",
+      "ingredient": "amoxicillin",
+      "strength": "250 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "three times daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Coreg",
+      "ingredient": "carvedilol",
+      "strength": "6.25 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "metformin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Glycomet"
+  ]
+}

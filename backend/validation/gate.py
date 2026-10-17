@@ -61,3 +61,9 @@ def ner_metrics(report):
             out[f"{kind}.{mode}.f1"] = report["entities"][kind][mode]["f1"]
     out["pairing.sentence_level.f1"] = report["pairing"]["sentence_level_rule"]["f1"]
     return out
+
+
+def prescription_metrics(report):
+    o = report["overall"]
+    return {k: o[k] for k in ("line_recall", "line_precision", "ingredient_accuracy", "strength_accuracy",
+                              "frequency_accuracy", "duration_accuracy") if o.get(k) is not None}

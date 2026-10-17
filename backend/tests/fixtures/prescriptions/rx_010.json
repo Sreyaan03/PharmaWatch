@@ -1,0 +1,97 @@
+{
+  "id": "rx_010",
+  "file": "rx_010.png",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "clean",
+  "scenario": "interaction_clopidogrel_omeprazole",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Omeprazole",
+      "ingredient": "omeprazole",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Coreg",
+      "ingredient": "carvedilol",
+      "strength": "6.25 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Paracetamol",
+      "ingredient": "acetaminophen",
+      "strength": "650 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "every 8 hours",
+      "duration": "7 days",
+      "as_needed": true,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Spironolactone",
+      "ingredient": "spironolactone",
+      "strength": "25 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Plavix",
+      "ingredient": "clopidogrel",
+      "strength": "75 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "documented_interaction",
+      "ingredients": [
+        "clopidogrel",
+        "omeprazole"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "clopidogrel"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

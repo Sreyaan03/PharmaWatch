@@ -1,0 +1,96 @@
+{
+  "id": "rx_025",
+  "file": "rx_025.jpg",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "harsh",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Simvastatin",
+      "ingredient": "simvastatin",
+      "strength": "40 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Aldactone",
+      "ingredient": "spironolactone",
+      "strength": "25 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Plavix",
+      "ingredient": "clopidogrel",
+      "strength": "75 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Lipitor",
+      "ingredient": "atorvastatin",
+      "strength": "10 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "at bedtime",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Eliquis",
+      "ingredient": "apixaban",
+      "strength": "5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "twice daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "apixaban"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "clopidogrel"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

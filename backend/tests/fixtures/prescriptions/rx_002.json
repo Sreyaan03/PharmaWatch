@@ -1,0 +1,71 @@
+{
+  "id": "rx_002",
+  "file": "rx_002.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "clean",
+  "scenario": "interaction_warfarin_aspirin",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Carvedilol",
+      "ingredient": "carvedilol",
+      "strength": "12.5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Ecosprin",
+      "ingredient": "aspirin",
+      "strength": "150 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Warfarin",
+      "ingredient": "warfarin",
+      "strength": "2 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "documented_interaction",
+      "ingredients": [
+        "warfarin",
+        "aspirin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "warfarin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Ecosprin"
+  ]
+}

@@ -1,0 +1,16 @@
+name,ingredient,source
+paracetamol,acetaminophen,WHO INN paracetamol = USAN acetaminophen
+adrenaline,epinephrine,BAN/INN adrenaline = USAN epinephrine
+noradrenaline,norepinephrine,BAN/INN noradrenaline = USAN norepinephrine
+salbutamol,albuterol,INN salbutamol = USAN albuterol
+frusemide,furosemide,BAN frusemide = INN furosemide
+glibenclamide,glyburide,INN glibenclamide = USAN glyburide
+lignocaine,lidocaine,BAN lignocaine = INN lidocaine
+pethidine,meperidine,INN pethidine = USAN meperidine
+rifampicin,rifampin,INN rifampicin = USAN rifampin
+ciclosporin,cyclosporine,INN ciclosporin = USAN cyclosporine
+glyceryl trinitrate,nitroglycerin,BAN glyceryl trinitrate = USAN nitroglycerin
+amoxycillin,amoxicillin,former BAN amoxycillin = INN amoxicillin
+thyroxine,levothyroxine,thyroxine sodium = levothyroxine
+benzylpenicillin,penicillin g,INN benzylpenicillin = USAN penicillin G
+phenobarbitone,phenobarbital,BAN phenobarbitone = USAN phenobarbital

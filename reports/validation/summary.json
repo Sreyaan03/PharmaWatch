@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-17T06:16:01Z",
+  "generated_at": "2026-10-17T21:22:34Z",
   "smoke": false,
   "components": {
     "signals": {
@@ -412,6 +412,159 @@
       ],
       "caveat": "Precision is a lower bound (see limitations).",
       "smoke": false
+    },
+    "prescription": {
+      "title": "Prescription extraction",
+      "reference": "printed synthetic prescriptions; results say nothing about handwriting",
+      "model": "local (easyocr + rules)",
+      "data_version": "FAERS identity table, 9,676 names",
+      "run_at": "2026-10-17T21:22:34Z",
+      "rows": [
+        {
+          "set": "All documents",
+          "pairs": 158,
+          "metrics": {
+            "Lines found": [
+              0.9684,
+              null
+            ],
+            "Lines that are real": [
+              1.0,
+              null
+            ],
+            "Drug identified": [
+              0.9477,
+              null
+            ],
+            "Strength": [
+              0.9935,
+              null
+            ],
+            "Frequency": [
+              0.9869,
+              null
+            ],
+            "Duration": [
+              1.0,
+              null
+            ],
+            "Route": [
+              0.6857,
+              null
+            ]
+          }
+        },
+        {
+          "set": "format: png",
+          "pairs": 54,
+          "metrics": {
+            "Lines found": [
+              1.0,
+              null
+            ],
+            "Drug identified": [
+              0.963,
+              null
+            ],
+            "Frequency": [
+              0.9815,
+              null
+            ]
+          }
+        },
+        {
+          "set": "format: scanned_pdf",
+          "pairs": 56,
+          "metrics": {
+            "Lines found": [
+              0.9107,
+              null
+            ],
+            "Drug identified": [
+              0.9216,
+              null
+            ],
+            "Frequency": [
+              0.9804,
+              null
+            ]
+          }
+        },
+        {
+          "set": "format: text_pdf",
+          "pairs": 48,
+          "metrics": {
+            "Lines found": [
+              1.0,
+              null
+            ],
+            "Drug identified": [
+              0.9583,
+              null
+            ],
+            "Frequency": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "image quality: clean",
+          "pairs": 86,
+          "metrics": {
+            "Lines found": [
+              1.0,
+              null
+            ],
+            "Drug identified": [
+              0.9419,
+              null
+            ],
+            "Frequency": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "image quality: harsh",
+          "pairs": 35,
+          "metrics": {
+            "Lines found": [
+              0.9714,
+              null
+            ],
+            "Drug identified": [
+              1.0,
+              null
+            ],
+            "Frequency": [
+              0.9412,
+              null
+            ]
+          }
+        },
+        {
+          "set": "image quality: mild",
+          "pairs": 37,
+          "metrics": {
+            "Lines found": [
+              0.8919,
+              null
+            ],
+            "Drug identified": [
+              0.9091,
+              null
+            ],
+            "Frequency": [
+              1.0,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "Synthetic printed prescriptions only; no handwriting has been tested. Invented lines: 0; wrong drug identities flagged for checking: 1.0.",
+      "smoke": false
     }
   },
   "not_run": [],
@@ -422,6 +575,7 @@
     "The EU-ADR copy used has 93 pairs; the original paper reports 94.",
     "Interaction-model test sets use sampled negatives (unlabelled pairs, not confirmed non-interactions) at a 1:1 ratio, so precision at k is read against a base rate of 0.5.",
     "NER precision is a lower bound: the ADE corpus annotates only entities in annotated relations.",
-    "NER results come from published case-report text, not from prescriptions or social media."
+    "NER results come from published case-report text, not from prescriptions or social media.",
+    "Prescription extraction was measured on synthetic printed documents. Handwriting is untested, and brand names missing from FAERS (for example many Indian brands) are not recognised; they are flagged for checking."
   ]
 }

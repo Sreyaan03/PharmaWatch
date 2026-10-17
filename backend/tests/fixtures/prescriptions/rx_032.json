@@ -1,0 +1,112 @@
+{
+  "id": "rx_032",
+  "file": "rx_032.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "mild",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Cozaar",
+      "ingredient": "losartan",
+      "strength": "50 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Glycomet",
+      "ingredient": "metformin",
+      "strength": "850 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Rosuvastatin",
+      "ingredient": "rosuvastatin",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Aldactone",
+      "ingredient": "spironolactone",
+      "strength": "25 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Amlodipine",
+      "ingredient": "amlodipine",
+      "strength": "10 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Losartan",
+      "ingredient": "losartan",
+      "strength": null,
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": null,
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "allergy"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "allergy_conflict",
+      "ingredients": [
+        "losartan"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "metformin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Glycomet"
+  ]
+}

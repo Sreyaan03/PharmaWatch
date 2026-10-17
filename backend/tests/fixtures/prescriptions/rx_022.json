@@ -1,0 +1,105 @@
+{
+  "id": "rx_022",
+  "file": "rx_022.jpg",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "mild",
+  "scenario": "interaction_warfarin_aspirin",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Digoxin",
+      "ingredient": "digoxin",
+      "strength": "0.25 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Ecosprin",
+      "ingredient": "aspirin",
+      "strength": "75 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Lisinopril",
+      "ingredient": "lisinopril",
+      "strength": "5 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Coumadin",
+      "ingredient": "warfarin",
+      "strength": "2 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Clopidogrel",
+      "ingredient": "clopidogrel",
+      "strength": "75 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "documented_interaction",
+      "ingredients": [
+        "warfarin",
+        "aspirin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "clopidogrel"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "warfarin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Ecosprin"
+  ]
+}

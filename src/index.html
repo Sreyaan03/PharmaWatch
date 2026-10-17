@@ -87,6 +87,7 @@
             data-section="methodology">Methodology</a></li>
         <li class="main-nav__item"><a href="#temporal-analysis" class="main-nav__link" data-section="temporal-analysis">Temporal Analysis</a></li>
         <li class="main-nav__item"><a href="#demographics" class="main-nav__link" data-section="demographics">Demographics</a></li>
+        <li class="main-nav__item"><a href="#prescription" class="main-nav__link" data-section="prescription">Prescription Review</a></li>
         <li class="main-nav__item"><a href="#validation" class="main-nav__link" data-section="validation">Methods &amp; Validation</a></li>
         <li class="main-nav__item"><a href="#research-guide" class="main-nav__link" data-section="research-guide" style="color: #f0c040;">Research Guide</a></li>
       </ul>
@@ -628,7 +629,7 @@
             <!-- Empty state -->
             <div id="explorer-empty" class="empty-state" style="padding:var(--space-10) 0;">
               <div class="empty-state__icon">🔬</div>
-              <h3 class="empty-state__title">Select two drugs to check whether they are safe together</h3>
+              <h3 class="empty-state__title">Select two drugs to look for a documented or predicted interaction</h3>
               <p class="empty-state__desc">
                 The Explorer answers one focused question at a time: whether Drug A and Drug B have a predicted harmful interaction.
               </p>
@@ -691,7 +692,7 @@
               <button class="btn btn--primary" id="poly-analyze-btn" disabled>Analyze Interactions</button>
               <label class="poly-safe-toggle">
                 <input type="checkbox" id="poly-show-safe-toggle" />
-                <span>Show safe pairs</span>
+                <span>Show pairs with no evidence found</span>
               </label>
               <span id="poly-slot-count" style="font-size:var(--font-size-xs); color:var(--gray-500);">2 / 5 drugs</span>
             </div>
@@ -1671,6 +1672,96 @@
     <!-- ============================
          SECTION: RESEARCH GUIDE (PHASE 0)
     ============================= -->
+    <section id="prescription" class="page-section" style="display:none;">
+      <style>
+        .rx-banner { background:#fff8e1; border-left:4px solid #f9a825; padding:8px 12px; font-size:0.82rem; margin:0 0 1rem; }
+        .rx-notice { border-left:4px solid #2e7d32; background:#f4f8f4; padding:8px 12px; font-size:0.85rem; margin:0.5rem 0; }
+        .rx-error { display:none; background:#fdecea; border-left:4px solid #c0392b; padding:8px 12px; margin:0.75rem 0; font-size:0.85rem; }
+        .rx-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+        .rx-table th, .rx-table td { padding:4px 6px; border-bottom:1px solid #eee; text-align:left; vertical-align:top; }
+        .rx-in { width:100%; min-width:90px; padding:4px 6px; font-size:0.8rem; border:1px solid #ccd; border-radius:4px; box-sizing:border-box; }
+        .rx-in--s { min-width:62px; } .rx-in--warn { border-color:#c0392b; background:#fdf2f2; }
+        .rx-conf { display:inline-block; padding:1px 7px; border-radius:10px; font-weight:700; font-size:0.75rem; }
+        .rx-conf--ok { background:#e8f5e9; color:#2e7d32; } .rx-conf--mid { background:#fff3cd; color:#8a6d00; } .rx-conf--low { background:#fdecea; color:#c0392b; }
+        .rx-note { font-size:0.7rem; color:#777; max-width:220px; }
+        .rx-finding { border-left:4px solid #90a4ae; background:#f8f9fa; padding:8px 12px; margin:6px 0; border-radius:4px; }
+        .rx-finding--allergy_conflict, .rx-finding--documented_interaction { border-left-color:#c0392b; }
+        .rx-finding--boxed_warning { border-left-color:#e65100; } .rx-finding--duplicate_therapy { border-left-color:#f9a825; }
+        .rx-finding--model_predicted_interaction { border-left-color:#7e57c2; }
+        .rx-finding__title { font-weight:700; } .rx-finding__detail { font-size:0.82rem; color:#444; margin:2px 0 4px; }
+        .rx-badge { display:inline-block; font-size:0.68rem; padding:1px 8px; border-radius:10px; background:#e3f2fd; color:#1565c0; margin-right:4px; }
+        .rx-badge--src { background:#eee; color:#555; } .rx-badge--warn { background:#fff3e0; color:#e65100; margin-left:6px; }
+        .rx-h3 { font-size:0.9rem; margin:1rem 0 0.25rem; } .rx-detail { margin:6px 0; font-size:0.84rem; }
+        .rx-bw { background:#fff3e0; padding:6px 10px; border-radius:4px; font-size:0.8rem; }
+        #rx-graph { margin-top:0.75rem; }
+      </style>
+      <div class="page-header">
+        <h1>Prescription Review</h1>
+        <p>Upload a prescription or discharge summary, check the medication list the tool read from it, and get a
+          structured review of interactions, boxed warnings, duplicate therapy and reporting signals.</p>
+      </div>
+      <div class="rx-banner"><strong>Research and education use only.</strong> This is not clinical advice and does not replace
+        review by a pharmacist or physician. Doses are not checked, and "no evidence found" is not a statement that a
+        combination is acceptable.</div>
+      <div id="rx-error" class="rx-error" role="alert"></div>
+
+      <div id="rx-step-upload" class="dashboard-card">
+        <div class="card-header"><h2 class="card-title">1. Upload</h2></div>
+        <div id="rx-extractor-notice" class="rx-notice">Checking how the document will be read…</div>
+        <p id="rx-limits" style="font-size:0.78rem; color:#666;"></p>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; margin-top:0.5rem;">
+          <input type="file" id="rx-file" accept=".pdf,.png,.jpg,.jpeg,.txt">
+          <input type="text" id="rx-reference" maxlength="80" class="rx-in" style="max-width:260px;"
+                 placeholder="Optional reference label (not a patient name)" aria-label="Optional reference label">
+          <button id="rx-upload-btn" class="btn btn--primary">Read the document</button>
+        </div>
+        <p style="font-size:0.75rem; color:#888; margin-top:0.5rem;">Do not enter patient names or identifiers. The reference label is the only text kept with the report.</p>
+      </div>
+
+      <div id="rx-step-progress" class="dashboard-card" style="display:none;">
+        <div class="card-header"><h2 class="card-title">Working…</h2></div>
+        <p id="rx-progress-text">Working…</p>
+      </div>
+
+      <div id="rx-step-confirm" class="dashboard-card" style="display:none;">
+        <div class="card-header"><h2 class="card-title">2. Check the medication list</h2></div>
+        <p id="rx-extractor-used" style="font-size:0.82rem;"></p>
+        <p id="rx-unreadable" class="rx-banner" style="display:none;"></p>
+        <p style="font-size:0.82rem;">Nothing is analysed until you confirm. Correct names, doses and frequencies, remove rows that are not medications,
+          and set a row to <em>stopped</em> or <em>allergy</em> where the document says so. Low-confidence rows are highlighted.</p>
+        <div style="overflow-x:auto;"><table class="rx-table">
+          <thead><tr><th>As written</th><th>Ingredient</th><th>Strength</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>PRN</th><th>Status</th><th>Confidence</th><th></th></tr></thead>
+          <tbody id="rx-rows"></tbody></table></div>
+        <p id="rx-empty" style="display:none; color:#888;">No medication lines were found. Add them below, or upload a clearer copy.</p>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button id="rx-add-row" class="btn btn--outline">+ Add medication</button>
+          <button id="rx-confirm-btn" class="btn btn--primary">Confirm list and analyse</button>
+          <button id="rx-restart-1" class="btn btn--outline">Start over</button>
+        </div>
+      </div>
+
+      <div id="rx-step-report" style="display:none;">
+        <div class="dashboard-card">
+          <div class="card-header"><h2 class="card-title">3. Review report</h2></div>
+          <p id="rx-summary" style="font-weight:600;"></p>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin:0.5rem 0;">
+            <a id="rx-pdf" class="btn btn--primary" href="#" download>Download PDF</a>
+            <button id="rx-delete-btn" class="btn btn--outline">Delete my data now</button>
+            <button id="rx-restart-2" class="btn btn--outline">Review another</button>
+          </div>
+          <h3 class="rx-h3">Confirmed medication list</h3><ul id="rx-meds"></ul>
+          <div id="rx-findings"></div>
+        </div>
+        <div class="dashboard-card" style="margin-top:1rem;"><div class="card-header"><h2 class="card-title">Pairs checked</h2></div>
+          <div id="rx-pairs"></div><div id="rx-graph"></div></div>
+        <div class="dashboard-card" style="margin-top:1rem;"><div class="card-header"><h2 class="card-title">Per medication</h2></div><div id="rx-sections"></div></div>
+        <div class="dashboard-card" style="margin-top:1rem;"><div class="card-header"><h2 class="card-title">Not analysed</h2></div><ul id="rx-notanalysed"></ul></div>
+        <div class="dashboard-card" style="margin-top:1rem;"><div class="card-header"><h2 class="card-title">Methods and limitations</h2></div>
+          <p id="rx-methods" style="font-size:0.82rem;"></p><ul id="rx-limitations" style="font-size:0.82rem;"></ul>
+          <p id="rx-sources" style="font-size:0.75rem; color:#777;"></p></div>
+      </div>
+    </section>
+
     <section id="validation" class="page-section" style="display:none;">
       <div class="page-header">
         <h1>Methods &amp; Validation</h1>
@@ -1747,6 +1838,7 @@
   <script src="/static/temporal.js"></script>
   <script src="/static/demographics.js"></script>
   <script src="/static/validation.js"></script>
+  <script src="/static/prescription.js"></script>
 
 </body>
 

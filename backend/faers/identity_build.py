@@ -190,6 +190,8 @@ def main(argv=None):
         print(f"[+] pt_dictionary: {build_pt_dictionary(con):,} Preferred Terms")
         store_drug_identity(con, names, resolved, args.min_reports)
         print(f"[+] case_drug: {build_case_drug(con):,} case-ingredient rows")
+        from faers.brand_map import build_brand_map
+        build_brand_map(con)
         con.execute("CHECKPOINT")
     finally:
         con.close()

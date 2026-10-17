@@ -1,0 +1,92 @@
+{
+  "id": "rx_011",
+  "file": "rx_011.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Prilosec",
+      "ingredient": "omeprazole",
+      "strength": "40 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "twice daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Acetaminophen",
+      "ingredient": "acetaminophen",
+      "strength": "500 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "3 months",
+      "as_needed": true,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Glycomet",
+      "ingredient": "metformin",
+      "strength": "1000 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Aldactone",
+      "ingredient": "spironolactone",
+      "strength": "25 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Atorvastatin",
+      "ingredient": "atorvastatin",
+      "strength": "10 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "at bedtime",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "metformin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Glycomet"
+  ]
+}

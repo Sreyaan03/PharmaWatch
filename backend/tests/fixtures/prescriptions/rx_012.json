@@ -1,0 +1,55 @@
+{
+  "id": "rx_012",
+  "file": "rx_012.pdf",
+  "format": "text_pdf",
+  "style": "discharge",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Azithromycin",
+      "ingredient": "azithromycin",
+      "strength": "500 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Lanoxin",
+      "ingredient": "digoxin",
+      "strength": "0.125 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Prilosec",
+      "ingredient": "omeprazole",
+      "strength": "40 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [],
+  "unknown_to_dictionary": []
+}

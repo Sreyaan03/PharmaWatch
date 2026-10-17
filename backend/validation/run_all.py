@@ -9,6 +9,7 @@ with the reason printed and recorded under `not_run`; it is never filled in.
 """
 
 import argparse
+import os
 import sys
 import time
 import traceback
@@ -40,7 +41,14 @@ def _ner(smoke):
     return ner_benchmark.run(ner_benchmark.DEFAULT_DATA, smoke=smoke)[1]
 
 
-STEPS = [("signals", _signals), ("ddi", _ddi), ("ner", _ner)]
+def _prescription(smoke):
+    from validation import prescription_benchmark
+    if not os.path.exists(os.path.join(prescription_benchmark.FIXTURES, "manifest.json")):
+        raise FileNotFoundError("prescription test set not found")
+    return prescription_benchmark.run("local", smoke=smoke)[1]
+
+
+STEPS = [("signals", _signals), ("ddi", _ddi), ("ner", _ner), ("prescription", _prescription)]
 
 
 def main(argv=None):

@@ -1,0 +1,93 @@
+{
+  "id": "rx_024",
+  "file": "rx_024.pdf",
+  "format": "text_pdf",
+  "style": "discharge",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Crestor",
+      "ingredient": "rosuvastatin",
+      "strength": "10 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Ecosprin",
+      "ingredient": "aspirin",
+      "strength": "150 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Gabapentin",
+      "ingredient": "gabapentin",
+      "strength": "100 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Losartan",
+      "ingredient": "losartan",
+      "strength": "50 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Glycomet",
+      "ingredient": "metformin",
+      "strength": "850 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "metformin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Ecosprin",
+    "Glycomet"
+  ]
+}

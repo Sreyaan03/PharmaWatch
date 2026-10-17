@@ -1,0 +1,69 @@
+{
+  "id": "rx_017",
+  "file": "rx_017.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "harsh",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Simvastatin",
+      "ingredient": "simvastatin",
+      "strength": "40 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Tylenol",
+      "ingredient": "acetaminophen",
+      "strength": "650 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "four times daily",
+      "duration": null,
+      "as_needed": true,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Atorvastatin",
+      "ingredient": "atorvastatin",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Amoxicillin",
+      "ingredient": "amoxicillin",
+      "strength": "250 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": "oral",
+      "frequency": "three times daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [],
+  "unknown_to_dictionary": []
+}

@@ -151,3 +151,12 @@ def test_ner_meets_its_baseline(tmp_path):
     report, _ = ner_benchmark.run(ner_benchmark.DEFAULT_DATA, smoke=True, out_path=str(tmp_path / "ner.json"))
     failures = gate.check(gate.ner_metrics(report), gate.load_baselines()["ner_smoke"])
     assert not failures, failures
+
+
+# ── prescription extraction (text-layer documents, fixture dictionary: runs anywhere) ──
+def test_prescription_extraction_meets_its_baseline(tmp_path):
+    from validation import prescription_benchmark
+    report, _ = prescription_benchmark.run("local", smoke=True, out_path=str(tmp_path / "rx.json"))
+    failures = gate.check(gate.prescription_metrics(report), gate.load_baselines()["prescription_smoke"])
+    assert not failures, failures
+    assert report["overall"]["lines_invented"] == 0

@@ -102,5 +102,31 @@
       "tolerance": 0.03
     }
   },
-  "_signals_full_note": "Needs real FAERS data with identity (not available in CI); gated wherever that data is loaded. Moves with the data version."
+  "_signals_full_note": "Needs real FAERS data with identity (not available in CI); gated wherever that data is loaded. Moves with the data version.",
+  "prescription_smoke": {
+    "duration_accuracy": {
+      "baseline": 1.0,
+      "tolerance": 0.03
+    },
+    "frequency_accuracy": {
+      "baseline": 1.0,
+      "tolerance": 0.03
+    },
+    "ingredient_accuracy": {
+      "baseline": 0.9583,
+      "tolerance": 0.03
+    },
+    "line_precision": {
+      "baseline": 1.0,
+      "tolerance": 0.03
+    },
+    "line_recall": {
+      "baseline": 1.0,
+      "tolerance": 0.03
+    },
+    "strength_accuracy": {
+      "baseline": 1.0,
+      "tolerance": 0.03
+    }
+  }
 }

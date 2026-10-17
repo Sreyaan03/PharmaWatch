@@ -1,0 +1,122 @@
+{
+  "id": "rx_005",
+  "file": "rx_005.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "mild",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Zocor",
+      "ingredient": "simvastatin",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Zoloft",
+      "ingredient": "sertraline",
+      "strength": "50 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Zithromax",
+      "ingredient": "azithromycin",
+      "strength": "500 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Ultram",
+      "ingredient": "tramadol",
+      "strength": "50 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Ciprofloxacin",
+      "ingredient": "ciprofloxacin",
+      "strength": "500 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Simvastatin",
+      "ingredient": "simvastatin",
+      "strength": null,
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": null,
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "allergy"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "allergy_conflict",
+      "ingredients": [
+        "simvastatin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "ciprofloxacin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "sertraline"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "tramadol"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

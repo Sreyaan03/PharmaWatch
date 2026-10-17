@@ -1,0 +1,89 @@
+{
+  "id": "rx_006",
+  "file": "rx_006.pdf",
+  "format": "text_pdf",
+  "style": "discharge",
+  "degradation": "clean",
+  "scenario": "interaction_simvastatin_amiodarone",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Zocor",
+      "ingredient": "simvastatin",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Advil",
+      "ingredient": "ibuprofen",
+      "strength": "400 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Amiodarone",
+      "ingredient": "amiodarone",
+      "strength": "200 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Aspirin",
+      "ingredient": "aspirin",
+      "strength": "150 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "documented_interaction",
+      "ingredients": [
+        "simvastatin",
+        "amiodarone"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "amiodarone"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "ibuprofen"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

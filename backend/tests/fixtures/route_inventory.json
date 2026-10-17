@@ -383,6 +383,20 @@
       ],
       "status": 503
     },
+    "GET /api/prescription/config": {
+      "keys": [
+        "allowed_types",
+        "cloud",
+        "extractor",
+        "max_medications_analysed",
+        "max_upload_mb",
+        "meta",
+        "notice",
+        "retention_minutes",
+        "upload_kept"
+      ],
+      "status": 200
+    },
     "GET /api/prr": {
       "keys": [
         "a",
@@ -853,6 +867,12 @@
         "GET"
       ],
       "rule": "/api/prescription/<job_id>/report.pdf"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/prescription/config"
     },
     {
       "methods": [

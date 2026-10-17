@@ -1,0 +1,62 @@
+{
+  "id": "rx_013",
+  "file": "rx_013.jpg",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "mild",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Losartan",
+      "ingredient": "losartan",
+      "strength": "50 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Tramadol",
+      "ingredient": "tramadol",
+      "strength": "50 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "30 days",
+      "as_needed": true,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Carvedilol",
+      "ingredient": "carvedilol",
+      "strength": "12.5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "tramadol"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

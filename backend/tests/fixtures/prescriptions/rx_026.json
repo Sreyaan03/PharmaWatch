@@ -1,0 +1,89 @@
+{
+  "id": "rx_026",
+  "file": "rx_026.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "harsh",
+  "scenario": "interaction_simvastatin_amiodarone",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Prednisolone",
+      "ingredient": "prednisolone",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "twice daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Zocor",
+      "ingredient": "simvastatin",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Synthroid",
+      "ingredient": "levothyroxine",
+      "strength": "100 mcg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Cordarone",
+      "ingredient": "amiodarone",
+      "strength": "200 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "documented_interaction",
+      "ingredients": [
+        "simvastatin",
+        "amiodarone"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "amiodarone"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "levothyroxine"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

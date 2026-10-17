@@ -1,0 +1,102 @@
+{
+  "id": "rx_028",
+  "file": "rx_028.png",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Ciprofloxacin",
+      "ingredient": "ciprofloxacin",
+      "strength": "500 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Metformin",
+      "ingredient": "metformin",
+      "strength": "850 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Crestor",
+      "ingredient": "rosuvastatin",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Warfarin",
+      "ingredient": "warfarin",
+      "strength": "1 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Pantoprazole",
+      "ingredient": "pantoprazole",
+      "strength": "40 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "ciprofloxacin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "metformin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "warfarin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

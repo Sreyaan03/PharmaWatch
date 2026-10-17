@@ -7,6 +7,13 @@ from services.prescription import service as svc
 prescription_bp = Blueprint("prescription", __name__)
 
 
+@prescription_bp.route("/api/prescription/config", methods=["GET"])
+def config():
+    """Which extractor will run, whether the document leaves this machine, and the limits."""
+    payload, code = svc.config()
+    return jsonify(payload), code
+
+
 @prescription_bp.route("/api/prescription", methods=["POST"])
 def upload():
     """Upload a prescription or discharge summary (PDF/PNG/JPG/TXT); returns a job id."""

@@ -1,0 +1,96 @@
+{
+  "id": "rx_015",
+  "file": "rx_015.pdf",
+  "format": "text_pdf",
+  "style": "discharge",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Tramadol",
+      "ingredient": "tramadol",
+      "strength": "50 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Coreg",
+      "ingredient": "carvedilol",
+      "strength": "12.5 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Apixaban",
+      "ingredient": "apixaban",
+      "strength": "5 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Aspirin",
+      "ingredient": "aspirin",
+      "strength": "150 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Prilosec",
+      "ingredient": "omeprazole",
+      "strength": "20 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "apixaban"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "tramadol"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

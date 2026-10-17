@@ -47,7 +47,7 @@ def test_split_sql_statements():
         content = f.read()
     
     statements = split_sql_statements(content)
-    assert len(statements) == 14, f"Expected 14 CREATE TABLE statements, got {len(statements)}"
+    assert len(statements) == 15, f"Expected 15 CREATE TABLE statements, got {len(statements)}"
     for stmt in statements:
         assert stmt.strip().upper().startswith("CREATE TABLE"), f"Statement does not start with CREATE TABLE: {stmt[:40]}"
 

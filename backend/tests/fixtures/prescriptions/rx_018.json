@@ -1,0 +1,96 @@
+{
+  "id": "rx_018",
+  "file": "rx_018.pdf",
+  "format": "text_pdf",
+  "style": "discharge",
+  "degradation": "clean",
+  "scenario": "duplicate_same_ingredient",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Lisinopril",
+      "ingredient": "lisinopril",
+      "strength": "5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Simvastatin",
+      "ingredient": "simvastatin",
+      "strength": "20 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Warfarin",
+      "ingredient": "warfarin",
+      "strength": "1 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Neurontin",
+      "ingredient": "gabapentin",
+      "strength": "100 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Coumadin",
+      "ingredient": "warfarin",
+      "strength": "5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "duplicate_therapy",
+      "ingredients": [
+        "warfarin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "warfarin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

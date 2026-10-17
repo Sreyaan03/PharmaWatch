@@ -1,0 +1,69 @@
+{
+  "id": "rx_016",
+  "file": "rx_016.jpg",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "harsh",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Amoxicillin",
+      "ingredient": "amoxicillin",
+      "strength": "250 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Neurontin",
+      "ingredient": "gabapentin",
+      "strength": "300 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "three times daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Simvastatin",
+      "ingredient": "simvastatin",
+      "strength": "40 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Tylenol",
+      "ingredient": "acetaminophen",
+      "strength": "500 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "four times daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [],
+  "unknown_to_dictionary": []
+}

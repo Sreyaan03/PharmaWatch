@@ -161,7 +161,7 @@ async function runExplorerPairCheck() {
 
   if (cards) cards.style.display = 'none';
   if (!drugA && !drugB) {
-    showExplorerEmpty('Select two drugs to check whether they are safe together',
+    showExplorerEmpty('Select two drugs to look for a documented or predicted interaction',
       'The Explorer answers one focused question at a time: whether Drug A and Drug B have a predicted harmful interaction.');
     return;
   }
@@ -228,7 +228,7 @@ function renderExplorerPairResult(data, container) {
 
   container.innerHTML = `
     <div class="interaction-card interaction-card--${harmful ? 'harmful' : 'safe'} interaction-card--detail">
-      <div class="interaction-card__icon">${harmful ? '!' : 'OK'}</div>
+      <div class="interaction-card__icon">${harmful ? '!' : '-'}</div>
       <div class="interaction-card__body">
         <div class="interaction-card__drugs">${escHtml(drugA)} + ${escHtml(drugB)}</div>
         <div class="interaction-card__effect">${escHtml(summary)}</div>
@@ -257,7 +257,7 @@ function normalizeDrugName(name) {
 function getInteractionSeverity(item) {
   const harmful = (item?.predicted_interaction ?? item?.is_harmful) === true;
   const confidence = Number(item?.confidence || 0);
-  if (!harmful) return { key: 'safe', label: 'No known harmful interaction', color: '#69db7c', width: 1.5 };
+  if (!harmful) return { key: 'safe', label: 'No evidence found', color: '#69db7c', width: 1.5 };
   if (confidence >= 0.85) return { key: 'critical', label: 'High risk', color: '#c0392b', width: 4 };
   if (confidence >= 0.65) return { key: 'high', label: 'Moderate risk', color: '#ff6b6b', width: 3 };
   return { key: 'moderate', label: 'Possible risk', color: '#f08c00', width: 2.25 };
@@ -532,11 +532,11 @@ function renderPolyEmpty(message) {
   }
 }
 
-function drawPolypharmacyGraph(graph, container) {
+function drawPolypharmacyGraph(graph, container, options = {}) {
   const W = container.clientWidth || 700;
   const H = 380;
   container.innerHTML = '';
-  const showSafePairs = document.getElementById('poly-show-safe-toggle')?.checked === true;
+  const showSafePairs = options.showAll ?? (document.getElementById('poly-show-safe-toggle')?.checked === true);
   const visibleLinks = (graph.links || []).filter(link => showSafePairs || link.is_harmful === true);
   const hasHarmfulLinks = (graph.links || []).some(link => link.is_harmful === true);
 
@@ -616,7 +616,7 @@ function drawPolypharmacyGraph(graph, container) {
     .attr('stroke', '#fff').attr('stroke-width', 2)
     .style('cursor', 'pointer')
     .on('mouseover', (event, d) => {
-      tip.innerHTML = `<strong>${escHtml(d.id)}</strong><br>${d.harmful_count} harmful pair(s)`;
+      tip.innerHTML = `<strong>${escHtml(d.id)}</strong><br>${d.harmful_count} flagged pair(s)`;
       tip.style.display = 'block';
     })
     .on('mousemove', event => {
@@ -644,7 +644,7 @@ function drawPolypharmacyGraph(graph, container) {
       .attr('fill', '#69db7c')
       .attr('font-size', '12px')
       .attr('font-weight', '500')
-      .text('\u2713 No harmful interactions in this combination \u2014 all pairs appear safe');
+      .text('\u2713 No harmful interactions in this combination \u2014 no evidence found for any pair; this is not a statement of safety');
   }
 
   sim.on('tick', () => {
@@ -670,7 +670,7 @@ function renderPolyPairs(pairs, container) {
     return;
   }
   if (!visiblePairs.length) {
-    container.innerHTML = '<p style="color:var(--cdc-green);padding:1rem;">No harmful interactions found in this medication list.</p>';
+    container.innerHTML = '<p style="color:var(--cdc-green);padding:1rem;">No documented or predicted interactions found in this medication list (not a statement of safety).</p>';
     return;
   }
   container.innerHTML = visiblePairs.map(p => {
@@ -728,7 +728,7 @@ async function loadRecentPredictions() {
             ${escHtml(p.drug_a)} + ${escHtml(p.drug_b)}
           </span>
           <span class="poly-pair-item__badge poly-pair-item__badge--${p.is_harmful ? 'harmful' : 'safe'}" style="font-size:0.7rem;">
-            ${p.is_harmful ? '&#x26a0; Harmful' : '&#x2713; Safe'}
+            ${p.is_harmful ? '&#x26a0; Interaction flagged' : 'No evidence found'}
           </span>
           <span class="recent-pred-row__time">${escHtml(when)}</span>
         </div>`;

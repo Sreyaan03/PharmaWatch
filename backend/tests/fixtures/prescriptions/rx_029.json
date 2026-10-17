@@ -1,0 +1,96 @@
+{
+  "id": "rx_029",
+  "file": "rx_029.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Amoxycillin",
+      "ingredient": "amoxicillin",
+      "strength": "500 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Omeprazole",
+      "ingredient": "omeprazole",
+      "strength": "40 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Tramadol",
+      "ingredient": "tramadol",
+      "strength": "50 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Pantoprazole",
+      "ingredient": "pantoprazole",
+      "strength": "40 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Ciprofloxacin",
+      "ingredient": "ciprofloxacin",
+      "strength": "500 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "ciprofloxacin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "tramadol"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

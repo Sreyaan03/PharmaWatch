@@ -3,6 +3,7 @@
 # (brand, generic and salt names mapped to RxNorm ingredients). Dictionary matching is far more
 # reliable for drug names than the general NER model, which splits names into fragments.
 
+import csv
 import difflib
 import os
 import re
@@ -28,6 +29,7 @@ STOPWORDS = {
 }
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z\-']*")
+SYNONYMS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "drug_name_synonyms.csv")
 
 
 def normalize(text):
@@ -63,11 +65,30 @@ class DrugLexicon:
                     names[raw] = ingredient
                 if ingredient:
                     names.setdefault(ingredient, ingredient)
-            return cls(names)
+            try:                                # brand names derived from the drug rows (faers.brand_map)
+                for brand, ingredient in con.execute("SELECT brand, ingredient_name FROM drug_brand_map").fetchall():
+                    names.setdefault(brand, ingredient)
+            except duckdb.Error:
+                pass                             # database built before the brand map existed
+            lex = cls(names)
+            lex.add_synonyms()
+            return lex
         except duckdb.Error:
             return cls({})
         finally:
             con.close()
+
+    def add_synonyms(self, path=SYNONYMS_PATH):
+        """International names (paracetamol, salbutamol...) that map to an ingredient already known."""
+        if not os.path.exists(path):
+            return
+        with open(path, encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                target = self.names.get(normalize(row["ingredient"]))
+                name = normalize(row["name"])
+                if target and len(name) >= MIN_NAME_LENGTH and name not in self.names:
+                    self.names[name] = target
+                    self._by_first.setdefault(name[0], []).append(name)
 
     def __len__(self):
         return len(self.names)

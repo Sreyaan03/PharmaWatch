@@ -1,0 +1,96 @@
+{
+  "id": "rx_035",
+  "file": "rx_035.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "harsh",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Cozaar",
+      "ingredient": "losartan",
+      "strength": "50 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Frusemide",
+      "ingredient": "furosemide",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Norvasc",
+      "ingredient": "amlodipine",
+      "strength": "5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Plavix",
+      "ingredient": "clopidogrel",
+      "strength": "75 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Thyroxine",
+      "ingredient": "levothyroxine",
+      "strength": "100 mcg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "clopidogrel"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "levothyroxine"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

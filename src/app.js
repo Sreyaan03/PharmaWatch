@@ -1230,6 +1230,9 @@ function navigateTo(sectionId) {
       MLModels.initLSTMDemoChart('Metformin');
     }
   }
+  if (sectionId === 'prescription' && typeof initPrescription === 'function') {
+    initPrescription();
+  }
   if (sectionId === 'validation' && typeof loadValidation === 'function') {
     loadValidation();
   }

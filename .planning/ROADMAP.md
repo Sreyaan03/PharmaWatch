@@ -21,7 +21,7 @@ Milestone 2 (Phases 5–11, one phase per day) turns the project into a coherent
 - [x] **Phase 6 (Day 2): Real FAERS Data Foundation** — 20 real quarters, case de-duplication, RxNorm and Preferred Term identity, single statistics path
 - [x] **Phase 7 (Day 3): Statistical Correctness** — Real time-to-onset and stratified PRR, no-signal class, no invented numbers, descriptive wording
 - [x] **Phase 8 (Day 4): Validation Harness** — Reference-set benchmarks for signals, NER and DDI; Methods & Validation page; CI regression gate
-- [ ] **Phase 9 (Day 5): Prescription Review** — Upload, cloud vision extraction, confirm step, interaction and safety report, PDF export
+- [x] **Phase 9 (Day 5): Prescription Review** — Upload, cloud vision extraction, confirm step, interaction and safety report, PDF export
 - [ ] **Phase 10 (Day 6): Coherence & Kafka Integration** — Regrouped navigation, drug profile page, evidence badges, Kafka as evidence ingest
 - [ ] **Phase 11 (Day 7): Platform & Pilot Release** — Accounts and roles, audit log, feedback, security fixes, portable deployment, CI/CD, docs
 
@@ -146,9 +146,9 @@ Plans:
   7. Field-level accuracy on the synthetic prescription set is measured and shown on the validation page.
 
 Plans:
-- [ ] 09-01: Extractor interface, cloud vision client with a fixed output schema, local OCR fallback, job table replacing the in-memory task dict
-- [ ] 09-02: Prescription service composing the identity, interaction, boxed-warning and signal services; duplicate-therapy check; report and PDF
-- [ ] 09-03: Upload, confirm and report views; synthetic prescription test set and accuracy benchmark
+- [x] 09-01: Extractor interface, cloud vision client with a fixed output schema, local OCR fallback, job table replacing the in-memory task dict
+- [x] 09-02: Prescription service composing the identity, interaction, boxed-warning and signal services; duplicate-therapy check; report and PDF
+- [x] 09-03: Upload, confirm and report views; synthetic prescription test set and accuracy benchmark
 
 ### Phase 10 (Day 6): Coherence & Kafka Integration
 **Goal**: One navigable product where each feature has a place, each number states how it was obtained, and Kafka delivers evidence to the drug it concerns.

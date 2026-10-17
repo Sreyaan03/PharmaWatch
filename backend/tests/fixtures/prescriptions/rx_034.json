@@ -1,0 +1,83 @@
+{
+  "id": "rx_034",
+  "file": "rx_034.jpg",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "harsh",
+  "scenario": "duplicate_statins",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Prednisolone",
+      "ingredient": "prednisolone",
+      "strength": "5 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Simvastatin",
+      "ingredient": "simvastatin",
+      "strength": "40 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": "oral",
+      "frequency": "at bedtime",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Atorvastatin",
+      "ingredient": "atorvastatin",
+      "strength": "40 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Cipro",
+      "ingredient": "ciprofloxacin",
+      "strength": "500 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "duplicate_therapy",
+      "ingredients": [
+        "atorvastatin",
+        "simvastatin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "ciprofloxacin"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

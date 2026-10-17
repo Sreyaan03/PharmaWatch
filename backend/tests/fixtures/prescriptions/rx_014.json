@@ -1,0 +1,103 @@
+{
+  "id": "rx_014",
+  "file": "rx_014.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "mild",
+  "scenario": "duplicate_statins",
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Amoxicillin",
+      "ingredient": "amoxicillin",
+      "strength": "250 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Atorvastatin",
+      "ingredient": "atorvastatin",
+      "strength": "40 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Zocor",
+      "ingredient": "simvastatin",
+      "strength": "20 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Eliquis",
+      "ingredient": "apixaban",
+      "strength": "2.5 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": "14 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Amoxicillin",
+      "ingredient": "amoxicillin",
+      "strength": null,
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": null,
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "allergy"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "duplicate_therapy",
+      "ingredients": [
+        "atorvastatin",
+        "simvastatin"
+      ]
+    },
+    {
+      "category": "allergy_conflict",
+      "ingredients": [
+        "amoxicillin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "apixaban"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

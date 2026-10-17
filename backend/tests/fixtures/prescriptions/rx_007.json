@@ -1,0 +1,83 @@
+{
+  "id": "rx_007",
+  "file": "rx_007.jpg",
+  "format": "png",
+  "style": "numbered",
+  "degradation": "harsh",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Prednisolone",
+      "ingredient": "prednisolone",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "7 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Rosuvastatin",
+      "ingredient": "rosuvastatin",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "at bedtime",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Lisinopril",
+      "ingredient": "lisinopril",
+      "strength": "10 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Spironolactone",
+      "ingredient": "spironolactone",
+      "strength": "25 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "30 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Omeprazole",
+      "ingredient": "omeprazole",
+      "strength": "20 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "twice daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [],
+  "unknown_to_dictionary": []
+}

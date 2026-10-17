@@ -151,7 +151,8 @@ def review(lines, deps, max_drugs=MAX_DRUGS):
         if p["tier"] == "documented":
             findings.append(_finding(
                 "documented_interaction", pair_name,
-                p.get("label_snippet") or "Documented in an FDA label or interaction database.",
+                (f"Label severity: {p['label_severity']}. " if p.get("label_severity") not in (None, "", "unknown") else "")
+                + (p.get("label_snippet") or "Documented in an FDA label or interaction database."),
                 "label" if p.get("label_documented") else "database",
                 p.get("label_found_in") or "interaction database",
                 severity=p.get("label_severity"), faers_co_reports=p.get("faers_reports")))
@@ -183,11 +184,13 @@ def summarise(n_analysed, not_analysed, truncated, counts, n_pairs):
     """Fixed-template summary built only from counts of the structured findings."""
     parts = [f"{n_analysed} medication{'s' if n_analysed != 1 else ''} analysed"
              f"{f' ({n_pairs} pairs checked)' if n_pairs else ''}."]
-    labels = [("allergy_conflict", "allergy conflict"), ("documented_interaction", "documented interaction"),
-              ("boxed_warning", "boxed warning"), ("duplicate_therapy", "possible duplicate therapy finding"),
-              ("model_predicted_interaction", "model-predicted interaction"),
-              ("signal", "drug with FAERS reporting signals")]
-    found = [f"{counts[k]} {name}{'s' if counts[k] != 1 else ''}" for k, name in labels if counts.get(k)]
+    labels = [("allergy_conflict", "allergy conflict", "allergy conflicts"),
+              ("documented_interaction", "documented interaction", "documented interactions"),
+              ("boxed_warning", "boxed warning", "boxed warnings"),
+              ("duplicate_therapy", "possible duplicate therapy finding", "possible duplicate therapy findings"),
+              ("model_predicted_interaction", "model-predicted interaction", "model-predicted interactions"),
+              ("signal", "drug with FAERS reporting signals", "drugs with FAERS reporting signals")]
+    found = [f"{counts[k]} {one if counts[k] == 1 else many}" for k, one, many in labels if counts.get(k)]
     parts.append("Findings: " + ", ".join(found) + "." if found else "No findings in the sources used.")
     if not_analysed:
         parts.append(f"{len(not_analysed)} line{'s' if len(not_analysed) != 1 else ''} could not be analysed.")

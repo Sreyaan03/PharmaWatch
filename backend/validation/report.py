@@ -24,6 +24,8 @@ KNOWN_LIMITATIONS = [
     "non-interactions) at a 1:1 ratio, so precision at k is read against a base rate of 0.5.",
     "NER precision is a lower bound: the ADE corpus annotates only entities in annotated relations.",
     "NER results come from published case-report text, not from prescriptions or social media.",
+    "Prescription extraction was measured on synthetic printed documents. Handwriting is untested, and "
+    "brand names missing from FAERS (for example many Indian brands) are not recognised; they are flagged for checking.",
 ]
 
 
@@ -88,7 +90,34 @@ def _ner_component(d):
             "caveat": "Precision is a lower bound (see limitations)."}
 
 
-BUILDERS = {"signals": _signals_component, "ddi": _ddi_component, "ner": _ner_component}
+def _prescription_component(d):
+    o = d["overall"] or {}
+    pct = lambda k: [o.get(k), None]                                                     # noqa: E731
+    rows = [{"set": "All documents", "pairs": o.get("documents_lines"),
+             "metrics": {"Lines found": pct("line_recall"), "Lines that are real": pct("line_precision"),
+                         "Drug identified": pct("ingredient_accuracy"), "Strength": pct("strength_accuracy"),
+                         "Frequency": pct("frequency_accuracy"), "Duration": pct("duration_accuracy"),
+                         "Route": pct("route_accuracy")}}]
+    for key, label in (("by_format", "format"), ("by_image_quality", "image quality")):
+        for name, v in (d.get(key) or {}).items():
+            rows.append({"set": f"{label}: {name}", "pairs": v.get("documents_lines"),
+                         "metrics": {"Lines found": [v.get("line_recall"), None],
+                                     "Drug identified": [v.get("ingredient_accuracy"), None],
+                                     "Frequency": [v.get("frequency_accuracy"), None]}})
+    rev = d.get("review") or {}
+    if rev.get("recall") is not None:
+        rows.append({"set": "Review: planted findings reported", "pairs": rev["expected"],
+                     "metrics": {"Recall": [rev["recall"], None]}})
+    return {"title": "Prescription extraction", "reference": d["test_set"]["note"],
+            "model": f"{d['extractor']} ({d['model']})", "data_version": d["dictionary"], "run_at": d.get("run_at"),
+            "rows": rows,
+            "caveat": "Synthetic printed prescriptions only; no handwriting has been tested. Invented lines: "
+                      f"{o.get('lines_invented')}; wrong drug identities flagged for checking: "
+                      f"{o.get('wrong_ingredients_flagged_for_checking')}."}
+
+
+BUILDERS = {"signals": _signals_component, "ddi": _ddi_component, "ner": _ner_component,
+            "prescription": _prescription_component}
 
 
 def build_summary(smoke=False, write=True):

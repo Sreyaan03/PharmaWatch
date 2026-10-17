@@ -187,3 +187,18 @@ def delete(job_id):
         if jid:
             jobs.delete(jid)
     return {"deleted": True}, 200
+
+
+def config():
+    """What will happen to an upload, stated before it is made."""
+    extractor = get_extractor()
+    cloud = isinstance(extractor, CloudVisionExtractor)
+    return {
+        "extractor": extractor.name, "cloud": cloud,
+        "notice": ("The page images are sent to an external service (Anthropic) to be read. "
+                   "Do not upload documents you are not allowed to share." if cloud else
+                   "The document is read on this machine (text layer or OCR). Nothing is sent to an external service."),
+        "allowed_types": sorted(ALLOWED), "max_upload_mb": jobs.MAX_UPLOAD_BYTES // (1024 * 1024),
+        "retention_minutes": RETENTION_MINUTES, "max_medications_analysed": review_mod.MAX_DRUGS,
+        "upload_kept": "only while the extraction runs",
+    }, 200

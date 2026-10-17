@@ -137,3 +137,83 @@ def test_confidence_rises_with_a_complete_line_and_a_clean_read():
     low_ocr = parse_medications("Tab. Metformin 500 mg PO BD", LEX,
                                 line_confidences={"Tab. Metformin 500 mg PO BD": 0.3})[0]
     assert low_ocr.confidence < full.confidence
+
+
+# ── brand names and international names ───────────────────────────────────────
+def _brand_db(tmp_path):
+    import duckdb
+    db = str(tmp_path / "brands.duckdb")
+    c = duckdb.connect(db)
+    c.execute("CREATE TABLE drug_identity (raw_name VARCHAR, part VARCHAR, rxcui VARCHAR, ingredient_rxcui VARCHAR, "
+              "ingredient_name VARCHAR, match_type VARCHAR, n_reports BIGINT)")
+    c.execute("CREATE TABLE faers_drug (primaryid VARCHAR, drugname VARCHAR, prod_ai VARCHAR)")
+    for raw, rx, name in (("warfarin", "11289", "warfarin"), ("acetaminophen", "161", "acetaminophen"),
+                          ("ibuprofen", "5640", "ibuprofen")):
+        c.execute("INSERT INTO drug_identity VALUES (?, ?, ?, ?, ?, 'exact', 500)", [raw, raw, rx, rx, name])
+    c.execute("INSERT INTO drug_identity VALUES ('amoxicillin\\clavulanate', 'amoxicillin', '1', '723', 'amoxicillin', 'exact', 500)")
+    c.execute("INSERT INTO drug_identity VALUES ('amoxicillin\\clavulanate', 'clavulanate', '2', '48203', 'clavulanate', 'exact', 500)")
+
+    def rows(brand, ai, n):
+        for i in range(n):
+            c.execute("INSERT INTO faers_drug VALUES (?, ?, ?)", [f"{brand}{ai}{i}", brand.upper(), ai])
+    rows("coumadin", "warfarin", 40)             # clear brand
+    rows("mixup", "warfarin", 15)                # ambiguous: half and half
+    rows("mixup", "ibuprofen", 15)
+    rows("rare", "warfarin", 5)                  # too few rows
+    rows("warfarin", "warfarin", 40)             # the ingredient itself: not a brand
+    rows("augmentin", "amoxicillin\\clavulanate", 40)   # a combination: left out
+    c.close()
+    return db
+
+
+def test_the_brand_map_keeps_only_clear_single_ingredient_brands(tmp_path):
+    import duckdb
+    from faers.brand_map import build_brand_map
+    db = _brand_db(tmp_path)
+    c = duckdb.connect(db)
+    build_brand_map(c, log=lambda *_: None)
+    got = dict(c.execute("SELECT brand, ingredient_name FROM drug_brand_map").fetchall())
+    c.close()
+    assert got == {"coumadin": "warfarin"}
+
+
+def test_the_lexicon_loads_brands_and_international_names_from_the_database(tmp_path):
+    import duckdb
+    from faers.brand_map import build_brand_map
+    db = _brand_db(tmp_path)
+    c = duckdb.connect(db)
+    build_brand_map(c, log=lambda *_: None)
+    c.close()
+    lex = DrugLexicon.from_database(db)
+    assert lex.names["coumadin"] == "warfarin"
+    assert lex.names["paracetamol"] == "acetaminophen"          # international name -> a known ingredient
+    assert "salbutamol" not in lex.names                        # its ingredient is not in this database
+    assert "mixup" not in lex.names and "augmentin" not in lex.names
+
+
+def test_a_database_without_a_brand_map_still_loads(tmp_path):
+    import duckdb
+    db = str(tmp_path / "old.duckdb")
+    c = duckdb.connect(db)
+    c.execute("CREATE TABLE drug_identity (raw_name VARCHAR, part VARCHAR, rxcui VARCHAR, ingredient_rxcui VARCHAR, "
+              "ingredient_name VARCHAR, match_type VARCHAR, n_reports BIGINT)")
+    c.execute("INSERT INTO drug_identity VALUES ('warfarin', 'warfarin', '1', '1', 'warfarin', 'exact', 100)")
+    c.close()
+    assert "warfarin" in DrugLexicon.from_database(db).names
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("twice daily", "twice daily"), ("Twice Daily", "twice daily"), ("three times daily", "three times daily"),
+    ("four times daily", "four times daily"), ("2 times a day", "twice daily"), ("once daily", "once daily"),
+    ("daily", "once daily"), ("once a week", "once weekly"), ("weekly", "once weekly"),
+])
+def test_a_phrase_containing_daily_is_not_read_as_once_daily(text, expected):
+    """Regression: the benchmark found 'twice daily' read as 'once daily'."""
+    assert parse_frequency(f"Carvedilol 6.25 mg {text}")[0] == expected
+
+
+def test_ocr_glued_frequency_and_duration():
+    # OCR often reads "BD x 3 months" as "BDx 3 months"
+    assert parse_frequency("Prednisolone 20 mg BDx 3 months")[0] == "twice daily"
+    assert parse_frequency("Synthroid 50 mcg PO ODx 3 months")[0] == "once daily"
+    assert parse_duration("Synthroid 50 mcg ODx 3 months") == "3 months"

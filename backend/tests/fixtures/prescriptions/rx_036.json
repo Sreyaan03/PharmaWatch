@@ -1,0 +1,90 @@
+{
+  "id": "rx_036",
+  "file": "rx_036.pdf",
+  "format": "text_pdf",
+  "style": "discharge",
+  "degradation": "clean",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Zocor",
+      "ingredient": "simvastatin",
+      "strength": "40 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Amiodarone",
+      "ingredient": "amiodarone",
+      "strength": "200 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Zithromax",
+      "ingredient": "azithromycin",
+      "strength": "250 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "once daily",
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Lipitor",
+      "ingredient": "atorvastatin",
+      "strength": "20 mg",
+      "dose_form": "capsule",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Acetaminophen",
+      "ingredient": "acetaminophen",
+      "strength": "500 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "three times daily",
+      "duration": "3 months",
+      "as_needed": true,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "amiodarone"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": []
+}

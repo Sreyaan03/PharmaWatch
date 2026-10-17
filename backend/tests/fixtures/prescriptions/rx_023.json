@@ -1,0 +1,84 @@
+{
+  "id": "rx_023",
+  "file": "rx_023.pdf",
+  "format": "scanned_pdf",
+  "style": "table",
+  "degradation": "mild",
+  "scenario": null,
+  "synthetic": true,
+  "lines": [
+    {
+      "drug_text": "Ecosprin",
+      "ingredient": "aspirin",
+      "strength": "150 mg",
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": "once daily",
+      "duration": "5 days",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Crestor",
+      "ingredient": "rosuvastatin",
+      "strength": "20 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": null,
+      "frequency": "at bedtime",
+      "duration": "3 months",
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Advil",
+      "ingredient": "ibuprofen",
+      "strength": "200 mg",
+      "dose_form": "tablet",
+      "dose": null,
+      "route": "oral",
+      "frequency": "three times daily",
+      "duration": "30 days",
+      "as_needed": true,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "active"
+    },
+    {
+      "drug_text": "Aspirin",
+      "ingredient": "aspirin",
+      "strength": null,
+      "dose_form": null,
+      "dose": null,
+      "route": null,
+      "frequency": null,
+      "duration": null,
+      "as_needed": false,
+      "confidence": 1.0,
+      "notes": "",
+      "status": "allergy"
+    }
+  ],
+  "expected_findings": [
+    {
+      "category": "allergy_conflict",
+      "ingredients": [
+        "aspirin"
+      ]
+    },
+    {
+      "category": "boxed_warning",
+      "ingredients": [
+        "ibuprofen"
+      ]
+    }
+  ],
+  "unknown_to_dictionary": [
+    "Ecosprin"
+  ]
+}

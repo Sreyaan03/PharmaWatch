@@ -1,0 +1,293 @@
+{
+  "seed": 2026,
+  "documents": [
+    {
+      "id": "rx_001",
+      "file": "rx_001.png",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_002",
+      "file": "rx_002.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "clean",
+      "scenario": "interaction_warfarin_aspirin"
+    },
+    {
+      "id": "rx_003",
+      "file": "rx_003.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_004",
+      "file": "rx_004.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "mild",
+      "scenario": null
+    },
+    {
+      "id": "rx_005",
+      "file": "rx_005.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "mild",
+      "scenario": null
+    },
+    {
+      "id": "rx_006",
+      "file": "rx_006.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": "interaction_simvastatin_amiodarone"
+    },
+    {
+      "id": "rx_007",
+      "file": "rx_007.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "harsh",
+      "scenario": null
+    },
+    {
+      "id": "rx_008",
+      "file": "rx_008.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "harsh",
+      "scenario": null
+    },
+    {
+      "id": "rx_009",
+      "file": "rx_009.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_010",
+      "file": "rx_010.png",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "clean",
+      "scenario": "interaction_clopidogrel_omeprazole"
+    },
+    {
+      "id": "rx_011",
+      "file": "rx_011.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_012",
+      "file": "rx_012.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_013",
+      "file": "rx_013.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "mild",
+      "scenario": null
+    },
+    {
+      "id": "rx_014",
+      "file": "rx_014.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "mild",
+      "scenario": "duplicate_statins"
+    },
+    {
+      "id": "rx_015",
+      "file": "rx_015.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_016",
+      "file": "rx_016.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "harsh",
+      "scenario": null
+    },
+    {
+      "id": "rx_017",
+      "file": "rx_017.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "harsh",
+      "scenario": null
+    },
+    {
+      "id": "rx_018",
+      "file": "rx_018.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": "duplicate_same_ingredient"
+    },
+    {
+      "id": "rx_019",
+      "file": "rx_019.png",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_020",
+      "file": "rx_020.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_021",
+      "file": "rx_021.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_022",
+      "file": "rx_022.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "mild",
+      "scenario": "interaction_warfarin_aspirin"
+    },
+    {
+      "id": "rx_023",
+      "file": "rx_023.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "mild",
+      "scenario": null
+    },
+    {
+      "id": "rx_024",
+      "file": "rx_024.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_025",
+      "file": "rx_025.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "harsh",
+      "scenario": null
+    },
+    {
+      "id": "rx_026",
+      "file": "rx_026.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "harsh",
+      "scenario": "interaction_simvastatin_amiodarone"
+    },
+    {
+      "id": "rx_027",
+      "file": "rx_027.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_028",
+      "file": "rx_028.png",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_029",
+      "file": "rx_029.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_030",
+      "file": "rx_030.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": "interaction_clopidogrel_omeprazole"
+    },
+    {
+      "id": "rx_031",
+      "file": "rx_031.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "mild",
+      "scenario": null
+    },
+    {
+      "id": "rx_032",
+      "file": "rx_032.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "mild",
+      "scenario": null
+    },
+    {
+      "id": "rx_033",
+      "file": "rx_033.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    },
+    {
+      "id": "rx_034",
+      "file": "rx_034.jpg",
+      "format": "png",
+      "style": "numbered",
+      "degradation": "harsh",
+      "scenario": "duplicate_statins"
+    },
+    {
+      "id": "rx_035",
+      "file": "rx_035.pdf",
+      "format": "scanned_pdf",
+      "style": "table",
+      "degradation": "harsh",
+      "scenario": null
+    },
+    {
+      "id": "rx_036",
+      "file": "rx_036.pdf",
+      "format": "text_pdf",
+      "style": "discharge",
+      "degradation": "clean",
+      "scenario": null
+    }
+  ]
+}
