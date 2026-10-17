@@ -165,3 +165,19 @@ def recover_interrupted():
     for r in rows:
         fail(r["id"], "interrupted by an application restart")
     return len(rows)
+
+
+def update_meta(job_id, patch):
+    """Merge keys into a job's meta (used to attach a confirmation or a follow-up job id)."""
+    job = get(job_id)
+    if job is None:
+        return None
+    meta = {**job["meta"], **patch}
+    execute("UPDATE jobs SET meta_json = %s WHERE id = %s", (json.dumps(meta), job_id))
+    return meta
+
+
+def delete(job_id):
+    """Remove a job and its upload now."""
+    _delete_upload(job_id)
+    execute("DELETE FROM jobs WHERE id = %s", (job_id,))

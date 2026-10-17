@@ -382,3 +382,46 @@ def event_month_counts(con, ingredient_rxcuis, pt, years):
         if 1 <= m <= 12:
             counts[m - 1] = int(n)
     return counts
+
+
+# ── a drug's reactions and signals, in one pass ──────────────────────────────
+def drug_profile(con, ingredient_rxcuis, scan=150, show=10, exclude=()):
+    """Most reported reactions for a drug, and which of them are signals.
+
+    The `scan` most reported terms among cases with the drug as suspect are each scored against
+    the rest of FAERS (same 2x2 definition as `contingency`). `exclude` lists lowercase terms to
+    leave out (product-use terms). Returns {'exposed_cases', 'reactions', 'signals'}; `reactions`
+    are the `show` most reported terms, `signals` those whose class is not `none`, ranked by IC025 (which, unlike PRR, discounts terms with
+    few cases) and then by case count.
+    """
+    from faers.disproportionality import SIGNAL_NONE, compute_metrics
+
+    rxcuis, _ = _cohort_args(ingredient_rxcuis, "x")
+    rows = con.execute(f"""
+        WITH exposed AS (
+            SELECT primaryid FROM case_drug
+            WHERE suspect AND ingredient_rxcui IN ({_marks(rxcuis)})
+            GROUP BY primaryid HAVING count(DISTINCT ingredient_rxcui) = ?
+        ),
+        counts AS (
+            SELECT lower(r.pt) AS pt_lower, count(DISTINCT r.primaryid) AS a
+            FROM faers_reac r JOIN exposed e USING (primaryid)
+            GROUP BY 1 ORDER BY a DESC LIMIT ?
+        )
+        SELECT d.pt, c.a, d.n_reports, (SELECT count(*) FROM exposed), (SELECT count(*) FROM faers_demo)
+        FROM counts c JOIN pt_dictionary d ON d.pt_lower = c.pt_lower
+        ORDER BY c.a DESC
+    """, rxcuis + [len(rxcuis), int(scan) + len(exclude)]).fetchall()
+    if not rows:
+        return {"exposed_cases": 0, "reactions": [], "signals": []}
+    skip = {x.lower() for x in exclude}
+    reactions = []
+    for pt, a, event_total, exposed, total in rows:
+        if pt.lower() in skip:
+            continue
+        m = compute_metrics(a, exposed - a, event_total - a, total - exposed - event_total + a)
+        reactions.append({"pt": pt, "cases": int(a), "share_of_cases": round(a / exposed, 4),
+                          "prr": m["prr"], "ror_ci_low": m["ror_ci_low"], "ic025": m["ic025"],
+                          "signal_strength": m["signal_strength"]})
+    signals = sorted((r for r in reactions if r["signal_strength"] != SIGNAL_NONE), key=lambda r: (-r["ic025"], -r["cases"]))
+    return {"exposed_cases": int(rows[0][3]), "reactions": reactions[:show], "signals": signals[:10]}

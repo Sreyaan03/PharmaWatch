@@ -4,7 +4,7 @@ import duckdb
 from core.config import data_dir
 from .stats import (complete_event_years, event_month_counts, receipt_velocity,
                     AGE_STRATA, SEX_STRATA, contingency, reports_by_country,
-                    monthly_report_share, stratified_metrics, time_to_onset, unclassified_cases)
+                    drug_profile, monthly_report_share, stratified_metrics, time_to_onset, unclassified_cases)
 import logging
 log = logging.getLogger(__name__)
 
@@ -413,3 +413,8 @@ def get_event_seasonality(ingredient_rxcuis, pt):
         years = complete_event_years(c)
         return {"years": years, "counts": event_month_counts(c, ingredient_rxcuis, pt, years)}
     return _with_identity_connection(work)
+
+
+def get_drug_profile(ingredient_rxcuis, exclude=()):
+    """Top reactions and signals for a drug (see stats.drug_profile)."""
+    return _with_identity_connection(lambda c: drug_profile(c, ingredient_rxcuis, exclude=exclude))

@@ -32,6 +32,7 @@ _EVIDENCE = [
     ("/api/dashboard", "measured", None, "faers_local"),
     ("/api/local-stats", "measured", None, "faers_local"),
     ("/api/validation", "measured", None, None),
+    ("/api/prescription", "composite", None, None),
 ]
 
 _VERSION_TTL_SECONDS = 60

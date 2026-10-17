@@ -94,3 +94,24 @@ def _query_openfda_label_interaction(name_a: str, name_b: str) -> dict:
         }
     except Exception:
         return {"documented": False, "severity": "unknown", "found_in": "", "snippet": ""}
+
+
+def fetch_label(name: str) -> dict:
+    """Pharmacological class and boxed warning from the FDA label for a generic name.
+
+    Returns {'found': bool, 'pharm_class': [...], 'boxed_warning': str | None, 'brand_names': [...]}.
+    A lookup failure is {'found': False, 'error': ...}: the caller reports the data as unavailable.
+    """
+    LABEL_BASE = "https://api.fda.gov/drug/label.json"
+    try:
+        res = http_requests.get(f'{LABEL_BASE}?search=openfda.generic_name:"{name}"&limit=1', timeout=6).json()
+        if not res.get("results"):
+            return {"found": False, "pharm_class": [], "boxed_warning": None, "brand_names": []}
+        label = res["results"][0]
+        openfda = label.get("openfda", {})
+        boxed = " ".join(label.get("boxed_warning", [])).strip() or None
+        return {"found": True, "pharm_class": openfda.get("pharm_class_epc", []),
+                "boxed_warning": boxed, "brand_names": openfda.get("brand_name", [])[:3]}
+    except Exception as exc:
+        return {"found": False, "error": type(exc).__name__, "pharm_class": [], "boxed_warning": None,
+                "brand_names": []}

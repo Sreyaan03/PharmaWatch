@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 # modelled     produced by a trained or fitted model; a prediction, not an observation
 # retrieved    passed through from an external source (literature, trial registry)
 # operational  state of this deployment (queues, health), not a pharmacovigilance result
-EVIDENCE_KINDS = ("measured", "modelled", "retrieved", "operational")
+# composite  a report that combines the kinds above; each finding in it states its own kind
+EVIDENCE_KINDS = ("measured", "modelled", "retrieved", "operational", "composite")
 
 
 def with_meta(payload, evidence, data_version=None, model_version=None):

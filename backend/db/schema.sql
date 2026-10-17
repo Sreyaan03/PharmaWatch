@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     kind VARCHAR(48) NOT NULL,
     status VARCHAR(16) NOT NULL DEFAULT 'queued',
     input_ref VARCHAR(255) DEFAULT NULL,
-    meta_json TEXT DEFAULT NULL,
+    meta_json MEDIUMTEXT DEFAULT NULL,
     progress VARCHAR(255) DEFAULT NULL,
     result_json LONGTEXT DEFAULT NULL,
     error TEXT DEFAULT NULL,

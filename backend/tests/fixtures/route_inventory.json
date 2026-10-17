@@ -365,6 +365,24 @@
       ],
       "status": 200
     },
+    "GET /api/prescription/<job_id>": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
+    "GET /api/prescription/<job_id>/report": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
+    "GET /api/prescription/<job_id>/report.pdf": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
     "GET /api/prr": {
       "keys": [
         "a",
@@ -533,6 +551,18 @@
         "error"
       ],
       "status": 400
+    },
+    "POST /api/prescription": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
+    },
+    "POST /api/prescription/<job_id>/confirm": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
     },
     "POST /api/reddit/process": {
       "keys": [
@@ -787,6 +817,42 @@
         "GET"
       ],
       "rule": "/api/pipeline/trials"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/prescription"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/prescription/<job_id>"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "rule": "/api/prescription/<job_id>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/prescription/<job_id>/confirm"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/prescription/<job_id>/report"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/prescription/<job_id>/report.pdf"
     },
     {
       "methods": [

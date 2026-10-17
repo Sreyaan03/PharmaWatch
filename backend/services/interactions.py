@@ -279,14 +279,14 @@ def resolve_drug_endpoint(raw):
     else:
         return {"found": False, "input": raw}, 200
 
-def polypharmacy_analysis(body):
-    """Accepts up to 5 drugs, runs GNN on combinations and fetches details."""
+def polypharmacy_analysis(body, max_drugs=5):
+    """Accepts up to `max_drugs` drugs (5 for the interactive tool), scores every pair and fetches details."""
     drugs = body.get("drugs", [])
 
     if not drugs or len(drugs) < 2:
         return {"error": "Provide at least 2 drugs"}, 400
-    if len(drugs) > 5:
-        return {"error": "Maximum 5 drugs allowed"}, 400
+    if len(drugs) > max_drugs:
+        return {"error": f"Maximum {max_drugs} drugs allowed"}, 400
 
     def _resolve_one(idx_drug):
         idx, d = idx_drug
@@ -296,7 +296,7 @@ def polypharmacy_analysis(body):
     resolved_drugs = [None] * len(drugs)
     errors_resolve = []
 
-    with ThreadPoolExecutor(max_workers=min(len(drugs), 5)) as ex:
+    with ThreadPoolExecutor(max_workers=min(len(drugs), 8)) as ex:
         futures = {ex.submit(_resolve_one, (i, d)): i for i, d in enumerate(drugs)}
         for fut in as_completed(futures):
             idx, raw, result = fut.result()
