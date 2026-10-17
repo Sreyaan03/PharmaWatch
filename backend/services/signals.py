@@ -392,6 +392,9 @@ def register_ner_task(text, uploaded_file):
         task_id = jobs.submit("ner_mining", data=data, filename=filename, meta={"text": text or ""})
     except jobs.UploadTooLarge:
         return {"error": "File exceeds maximum upload size (10 MB)"}, 413
+    except Exception as exc:                      # the job store (MySQL) is unavailable
+        log.error(f"[JOBS] could not create a job: {exc}")
+        return {"error": "Job storage is unavailable; try again shortly."}, 503
     return {"task_id": task_id}, 200
 
 
@@ -452,7 +455,12 @@ jobs.register("ner_mining", _mine_text)
 def stream_ner_task(task_id):
     """Streams job progress as server-sent events: status..., then done or error."""
     import time
-    if jobs.get(task_id) is None:
+    try:
+        known = jobs.get(task_id) is not None
+    except Exception as exc:                      # the job store (MySQL) is unavailable
+        log.error(f"[JOBS] could not look up job {task_id}: {exc}")
+        return None, ({"error": "Job storage is unavailable; try again shortly."}, 503)
+    if not known:
         return None, ({"error": "Task not found"}, 404)
 
     def generator():

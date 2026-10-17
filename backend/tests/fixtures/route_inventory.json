@@ -423,7 +423,7 @@
       "keys": [
         "error"
       ],
-      "status": 404
+      "status": 503
     },
     "GET /api/signals/network": {
       "keys": [
@@ -548,10 +548,9 @@
     },
     "POST /api/signals/ner-mine": {
       "keys": [
-        "meta",
-        "task_id"
+        "error"
       ],
-      "status": 200
+      "status": 503
     }
   },
   "rules": [

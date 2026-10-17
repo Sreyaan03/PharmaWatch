@@ -119,5 +119,17 @@ app.register_blueprint(demographics_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(validation_bp)
 
+def _job_housekeeping():
+    """Jobs left running by a previous process cannot finish; expired ones are removed."""
+    try:
+        from core import jobs
+        jobs.recover_interrupted()
+        jobs.purge_expired()
+    except Exception as exc:                      # the app runs without the job store
+        logging.getLogger(__name__).warning(f"[JOBS] startup housekeeping skipped: {exc}")
+
+
+_job_housekeeping()
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
