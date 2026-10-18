@@ -1,35 +1,37 @@
 #!/usr/bin/env python3
 """
-ingest/consumer.py — PharmaWatch Kafka Consumer (Production MySQL Engine)
+ingest/consumer.py — PharmaWatch Kafka consumer.
 
-Reads all 4 topics and writes processed data into MySQL:
-  faers-raw        → signals_cache (PRR computed from co-occurrence counts)
-                   → drug_events_agg & drug_events
-  pubmed-stream    → kafka_pubmed  (literature signals)
-  clinical-trials  → kafka_trials  (active trial monitoring)
-  fda-alerts       → kafka_alerts  (real FDA safety alerts)
+Delivers new evidence and announces new data. It computes no statistics: disproportionality
+comes only from the FAERS batch path (faers/), on the full database.
+
+  faers-release    → faers_releases (a newer FAERS quarter is available; the refresh runs as a job)
+  pubmed-stream    → kafka_pubmed  + evidence_links (paper → drugs and terms named in its title)
+  clinical-trials  → kafka_trials  + evidence_links (trial → the drug it studies)
+  fda-alerts       → kafka_alerts  + evidence_links (recall → drugs named in the product)
+
+Every write is an upsert on a natural key, so a message delivered twice changes nothing.
 """
 
+import json
+import logging
 import os
 import sys
-import json
 import time
-import hashlib
-import logging
-from kafka import KafkaConsumer
-from kafka.errors import KafkaError
+
 from dotenv import load_dotenv
 
 # Run from the backend directory: `python -m ingest.consumer`
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(backend_dir, ".env"))
 
-from db.mysql import query_one, execute, ping
-from faers.disproportionality import compute_metrics, get_global_event_count, TOTAL_FAERS_POPULATION
+from db.mysql import execute, ping  # noqa: E402
+from faers import pipeline as faers_pipeline  # noqa: E402
+from faers.mentions import MentionIndex  # noqa: E402
+from faers.registry import database_path  # noqa: E402
 
 KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
-# ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [CONSUMER] %(levelname)s %(message)s",
@@ -38,175 +40,132 @@ logging.basicConfig(
 log = logging.getLogger("consumer")
 
 _msg_count_since_purge = 0
+_index = None
 
 
 def init_kafka_tables():
     """Verify MySQL connectivity and database readiness."""
     try:
         status = ping()
-        log.info(f"✅ Connected to MySQL database '{status.get('database')}' ({status.get('table_count')} tables).")
+        log.info(f"Connected to MySQL database '{status.get('database')}' ({status.get('table_count')} tables).")
     except Exception as e:
-        log.warning(f"⚠️ MySQL check returned: {e}. Ensure MySQL container is running.")
+        log.warning(f"MySQL check returned: {e}. Ensure the MySQL container is running.")
 
 
-def record_pipeline_stat(topic, offset=None):
-    """
-    Track real Kafka message counts and periodically purge rows older than 7 days
-    to prevent unbounded disk growth.
-    """
+def mention_index():
+    """Drug and term names from the FAERS identity tables, loaded once (empty without a database)."""
+    global _index
+    if _index is None:
+        _index = MentionIndex.from_database(database_path())
+        log.info(f"Mention index: {len(_index.drugs):,} drug names, {len(_index.pts):,} terms")
+    return _index
+
+
+def reset_mention_index():
+    global _index
+    _index = None
+
+
+def record_pipeline_stat(topic, partition=0, offset=None):
+    """One row per delivered message; a redelivered message (same topic, partition, offset) is ignored."""
     global _msg_count_since_purge
     try:
-        sql = """
-            INSERT INTO kafka_pipeline_stats (topic, messages_in, last_offset, recorded_at)
-            VALUES (%s, 1, %s, NOW())
-        """
-        execute(sql, (topic, str(offset) if offset is not None else None))
+        execute(
+            "INSERT IGNORE INTO kafka_pipeline_stats (topic, partition_id, messages_in, last_offset, recorded_at) "
+            "VALUES (%s, %s, 1, %s, NOW())",
+            (topic, int(partition or 0), str(offset) if offset is not None else None))
         _msg_count_since_purge += 1
-
-        # Purge stats older than 7 days every 500 messages
-        if _msg_count_since_purge >= 500:
+        if _msg_count_since_purge >= 500:            # keep the table bounded
             execute("DELETE FROM kafka_pipeline_stats WHERE recorded_at < NOW() - INTERVAL 7 DAY")
             _msg_count_since_purge = 0
-            log.info("🧹 Auto-purged kafka_pipeline_stats older than 7 days.")
     except Exception as e:
         log.error(f"Failed to record pipeline stat: {e}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HANDLER 1: faers-raw
-# ══════════════════════════════════════════════════════════════════════════════
-def compute_prr(a, ab, ac, total):
+# ── evidence links ────────────────────────────────────────────────────────────
+def link_evidence(kind, ref_id, text, title=None, url=None, published=None, drug_hint=None, find_terms=False):
+    """Attach one item of external evidence to each drug it names. Returns the number of links written.
+
+    drug_hint: the drug the source was queried for (trials), matched like any other name.
+    find_terms: also attach to Preferred Terms named in the text (papers). Trial titles name the
+    condition treated, and recall texts name defects, so neither is searched for terms.
     """
-    Compute PRR, ROR, BCPNN IC with Haldane-Anscombe continuity correction.
-    """
-    b = max(int(ab) - int(a), 0)
-    c = max(int(ac) - int(a), 0)
-    d = max(int(total) - int(ab) - int(ac) + int(a), 0)
-    return compute_metrics(int(a), b, c, d)
+    index = mention_index()
+    drugs = index.drugs_in(drug_hint) if drug_hint else []
+    seen = {d["rxcui"] for d in drugs}
+    drugs += [d for d in index.drugs_in(text) if d["rxcui"] not in seen]
+    terms = index.pts_in(text) if find_terms else []
+    written = 0
+    for d in drugs:
+        for term in (terms or [{"pt": "", "matched": None}]):
+            matched = d["matched"] + (f" / {term['matched']}" if term["matched"] else "")
+            execute(
+                "INSERT INTO evidence_links (rxcui, ingredient, pt, kind, ref_id, title, url, published, matched_text) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE ingredient = VALUES(ingredient), title = VALUES(title), url = VALUES(url), "
+                "published = VALUES(published), matched_text = VALUES(matched_text)",
+                (d["rxcui"], d["ingredient"], term["pt"], kind, str(ref_id)[:191], (title or text or "")[:2000],
+                 url, (published or "")[:64], matched[:191]))
+            written += 1
+    return written
 
 
-def handle_faers(msg):
-    """Process a faers-raw message → update drug_events_agg and signals_cache."""
-    drug = msg.get("drug", "").lower().strip()
-    event = msg.get("event", "").lower().strip()
-    count = int(msg.get("count", 1))
-
-    if not drug or not event:
-        return
-
-    # 1. Upsert aggregated counts
-    sql_agg = """
-        INSERT INTO drug_events_agg (drug, event, report_count, source, updated_at)
-        VALUES (%s, %s, %s, 'kafka_faers', NOW())
-        ON DUPLICATE KEY UPDATE
-            report_count = VALUES(report_count),
-            updated_at = NOW()
-    """
-    execute(sql_agg, (drug, event, count))
-
-    # 2. Keep unique row in drug_events
-    raw_hash = hashlib.md5(f"{drug}:{event}:kafka_faers".encode("utf-8")).hexdigest()
-    sql_events = """
-        INSERT INTO drug_events (drug, event, source, confidence, raw_hash, created_at)
-        VALUES (%s, %s, 'kafka_faers', 1.0, %s, NOW())
-        ON DUPLICATE KEY UPDATE confidence = 1.0
-    """
-    execute(sql_events, (drug, event, raw_hash))
-
-    # 3. Compute disproportionality from aggregated counts with true global background reference
-    row_a = query_one("SELECT COALESCE(report_count, 0) AS cnt FROM drug_events_agg WHERE drug = %s AND event = %s", (drug, event))
-    row_ab = query_one("SELECT COALESCE(SUM(report_count), 0) AS cnt FROM drug_events_agg WHERE drug = %s", (drug,))
-
-    a = int(row_a["cnt"]) if row_a and row_a.get("cnt") else 0
-    ab = int(row_ab["cnt"]) if row_ab and row_ab.get("cnt") else 0
-
-    if a < 3 or ab < 3:
-        return
-
-    # Obtain the true global FAERS background count for this event across all drugs
-    global_ac = get_global_event_count(event)
-    ac = max(global_ac, a + 10)
-    total = TOTAL_FAERS_POPULATION
-
-    metrics = compute_prr(a, ab, ac, total)
-
-    sql_signals = """
-        INSERT INTO signals_cache (
-            drug, event, a, b, c, d, prr, prr_ci_low, prr_ci_high, ror, ror_ci_low, ror_ci_high,
-            chi2, bcpnn_ic, ic025, n_reports, signal_strength, source, computed_at
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'kafka_faers', NOW())
-        ON DUPLICATE KEY UPDATE
-            a = VALUES(a), b = VALUES(b), c = VALUES(c), d = VALUES(d),
-            prr = VALUES(prr), prr_ci_low = VALUES(prr_ci_low), prr_ci_high = VALUES(prr_ci_high),
-            ror = VALUES(ror), ror_ci_low = VALUES(ror_ci_low), ror_ci_high = VALUES(ror_ci_high),
-            chi2 = VALUES(chi2), bcpnn_ic = VALUES(bcpnn_ic), ic025 = VALUES(ic025),
-            n_reports = VALUES(n_reports), signal_strength = VALUES(signal_strength),
-            source = VALUES(source), computed_at = NOW()
-    """
-    execute(sql_signals, (
-        drug, event, metrics["a"], metrics["b"], metrics["c"], metrics["d"],
-        metrics["prr"], metrics["prr_ci_low"], metrics["prr_ci_high"],
-        metrics["ror"], metrics["ror_ci_low"], metrics["ror_ci_high"],
-        metrics["chi2"], metrics["bcpnn_ic"], metrics["ic025"],
-        metrics["n_reports"], metrics["signal_strength"]
-    ))
+# ── handlers ──────────────────────────────────────────────────────────────────
+def handle_release(msg):
+    """A newer FAERS quarter is available. Record it; refresh only if auto-refresh is on."""
+    quarter = msg.get("quarter", "")
+    if not quarter:
+        return "ignored"
+    try:
+        quarter = faers_pipeline.normalize_quarter(quarter)
+        status = faers_pipeline.record_release(quarter)
+    except ValueError:
+        log.warning(f"faers-release with an invalid quarter: {quarter!r}")
+        return "ignored"
+    if status == "recorded" and faers_pipeline.auto_refresh_enabled():
+        job_id = faers_pipeline.start_refresh(quarter, created_by="kafka-consumer")
+        log.info(f"FAERS {quarter}: refresh job {job_id} started (FAERS_AUTO_REFRESH on)")
+        return "refreshing"
+    log.info(f"FAERS {quarter}: {status}")
+    return status
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HANDLER 2: pubmed-stream
-# ══════════════════════════════════════════════════════════════════════════════
 def handle_pubmed(msg):
     pmid = msg.get("pmid", "")
     title = msg.get("title", "")
-    journal = msg.get("journal", "")
-    pubdate = msg.get("pubdate", "")
-    query_str = msg.get("query", "")
-
     if not pmid:
         return
+    execute(
+        "INSERT INTO kafka_pubmed (pmid, title, journal, pubdate, query, ingested_at) "
+        "VALUES (%s, %s, %s, %s, %s, NOW()) "
+        "ON DUPLICATE KEY UPDATE title = VALUES(title), journal = VALUES(journal)",
+        (pmid, title, msg.get("journal", ""), msg.get("pubdate", ""), msg.get("query", "")))
+    link_evidence("paper", pmid, title, url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+                  published=msg.get("pubdate", ""), find_terms=True)
 
-    sql = """
-        INSERT INTO kafka_pubmed (pmid, title, journal, pubdate, query, ingested_at)
-        VALUES (%s, %s, %s, %s, %s, NOW())
-        ON DUPLICATE KEY UPDATE title = VALUES(title), journal = VALUES(journal)
-    """
-    execute(sql, (pmid, title, journal, pubdate, query_str))
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HANDLER 3: clinical-trials
-# ══════════════════════════════════════════════════════════════════════════════
 def handle_trials(msg):
     nct_id = msg.get("nct_id", "")
-    drug = msg.get("drug", "")
     title = msg.get("title", "")
-    phase = json.dumps(msg.get("phase", []))
-    status = msg.get("status", "")
-
     if not nct_id:
         return
+    execute(
+        "INSERT INTO kafka_trials (nct_id, drug, title, phase, status, ingested_at) "
+        "VALUES (%s, %s, %s, %s, %s, NOW()) "
+        "ON DUPLICATE KEY UPDATE title = VALUES(title), status = VALUES(status)",
+        (nct_id, msg.get("drug", ""), title, json.dumps(msg.get("phase", [])), msg.get("status", "")))
+    link_evidence("trial", nct_id, title, url=f"https://clinicaltrials.gov/study/{nct_id}",
+                  drug_hint=msg.get("drug", ""))
 
-    sql = """
-        INSERT INTO kafka_trials (nct_id, drug, title, phase, status, ingested_at)
-        VALUES (%s, %s, %s, %s, %s, NOW())
-        ON DUPLICATE KEY UPDATE title = VALUES(title), status = VALUES(status)
-    """
-    execute(sql, (nct_id, drug, title, phase, status))
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HANDLER 4: fda-alerts
-# ══════════════════════════════════════════════════════════════════════════════
 def handle_alerts(msg):
-    source = msg.get("source", "")
-    if source == "fda_enforcement":
+    if msg.get("source") == "fda_enforcement":
         key = msg.get("recall_num", "")
         title = msg.get("title", "")
         link = ""
         summary = msg.get("product", "")
         pub = msg.get("report_date", "")
-        feed = f"class:{msg.get('class','')} firm:{msg.get('firm','')}"
+        feed = f"class:{msg.get('class', '')} firm:{msg.get('firm', '')}"
     else:
         key = msg.get("title", "")[:80]
         title = msg.get("title", "")
@@ -214,31 +173,38 @@ def handle_alerts(msg):
         summary = msg.get("summary", "")
         pub = msg.get("published", "")
         feed = msg.get("feed_url", "")
-
     if not title or not key:
         return
+    execute(
+        "INSERT INTO kafka_alerts (alert_key, title, link, summary, published, feed_url, ingested_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, NOW()) "
+        "ON DUPLICATE KEY UPDATE title = VALUES(title), summary = VALUES(summary)",
+        (key, title, link, summary, pub, feed))
+    link_evidence("alert", key, f"{summary} {title}", title=title, url=link or None, published=pub)
 
-    sql = """
-        INSERT INTO kafka_alerts (alert_key, title, link, summary, published, feed_url, ingested_at)
-        VALUES (%s, %s, %s, %s, %s, %s, NOW())
-        ON DUPLICATE KEY UPDATE title = VALUES(title), summary = VALUES(summary)
-    """
-    execute(sql, (key, title, link, summary, pub, feed))
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MAIN CONSUMER LOOP
-# ══════════════════════════════════════════════════════════════════════════════
 TOPIC_HANDLERS = {
-    "faers-raw": handle_faers,
+    "faers-release": handle_release,
     "pubmed-stream": handle_pubmed,
     "clinical-trials": handle_trials,
     "fda-alerts": handle_alerts,
 }
 
 
+def handle_record(topic, partition, offset, msg):
+    """Run the handler for one delivered message and record it. Returns False for an unknown topic."""
+    handler = TOPIC_HANDLERS.get(topic)
+    if handler is None:
+        return False
+    handler(msg)
+    record_pipeline_stat(topic, partition, offset)
+    return True
+
+
 def create_consumer(retries=10, delay=5):
     """Create Kafka consumer with retry logic."""
+    from kafka import KafkaConsumer
+    from kafka.errors import KafkaError
     for attempt in range(1, retries + 1):
         try:
             consumer = KafkaConsumer(
@@ -252,48 +218,35 @@ def create_consumer(retries=10, delay=5):
                 session_timeout_ms=30000,
                 max_poll_records=50,
             )
-            log.info(f"✅ Consumer connected to Kafka at {KAFKA_SERVERS}")
-            log.info(f"   Subscribed topics: {list(TOPIC_HANDLERS.keys())}")
+            log.info(f"Consumer connected to Kafka at {KAFKA_SERVERS}; topics {list(TOPIC_HANDLERS)}")
             return consumer
         except KafkaError:
             log.warning(f"Kafka not ready (attempt {attempt}/{retries}), retrying in {delay}s...")
             time.sleep(delay)
-    log.error("❌ Could not connect to Kafka. Exiting.")
+    log.error("Could not connect to Kafka. Exiting.")
     sys.exit(1)
 
 
 def main():
-    log.info("🚀 PharmaWatch Kafka Consumer starting up (MySQL backend)...")
+    log.info("PharmaWatch Kafka consumer starting...")
     init_kafka_tables()
+    faers_pipeline.register_job()
     consumer = create_consumer()
-
-    total_processed = 0
-    log.info("✅ Consumer running. Waiting for messages...")
-
+    total = 0
     try:
         for record in consumer:
-            topic = record.topic
-            offset = record.offset
-            msg = record.value
-
             try:
-                handler = TOPIC_HANDLERS.get(topic)
-                if handler:
-                    handler(msg)
-                    record_pipeline_stat(topic, offset)
-                    total_processed += 1
-
-                    if total_processed % 50 == 0:
-                        log.info(f"📊 Total processed: {total_processed} messages across all topics")
-
+                if handle_record(record.topic, record.partition, record.offset, record.value):
+                    total += 1
+                    if total % 50 == 0:
+                        log.info(f"Processed {total} messages")
             except Exception as e:
-                log.error(f"Error processing message from {topic} offset {offset}: {e}")
-
+                log.error(f"Error processing {record.topic} partition {record.partition} offset {record.offset}: {e}")
     except KeyboardInterrupt:
         log.info("Consumer stopped by user.")
     finally:
         consumer.close()
-        log.info(f"Consumer shut down. Total messages processed: {total_processed}")
+        log.info(f"Consumer shut down after {total} messages.")
 
 
 if __name__ == "__main__":

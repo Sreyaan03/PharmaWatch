@@ -20,18 +20,6 @@ CREATE TABLE IF NOT EXISTS drug_events (
     UNIQUE KEY uq_drug_event_source_hash (drug, event, source, raw_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. Aggregated Co-occurrence Matrix (High-speed disproportionality)
-CREATE TABLE IF NOT EXISTS drug_events_agg (
-    drug VARCHAR(191) NOT NULL,
-    event VARCHAR(191) NOT NULL,
-    report_count INT NOT NULL DEFAULT 0,
-    source VARCHAR(64) NOT NULL DEFAULT 'faers',
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (drug, event),
-    INDEX idx_agg_event (event),
-    INDEX idx_agg_count (report_count)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- 3. Social Media Scraped Posts (Reddit Mining)
 CREATE TABLE IF NOT EXISTS reddit_posts (
     id VARCHAR(32) PRIMARY KEY,
@@ -186,20 +174,14 @@ CREATE TABLE IF NOT EXISTS kafka_alerts (
 CREATE TABLE IF NOT EXISTS kafka_pipeline_stats (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     topic VARCHAR(64) NOT NULL,
+    partition_id INT NOT NULL DEFAULT 0,
     messages_in INT NOT NULL DEFAULT 1,
     last_offset VARCHAR(64) DEFAULT NULL,
     recorded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_pipe_topic_recorded (topic, recorded_at),
-    INDEX idx_pipe_recorded (recorded_at)
+    INDEX idx_pipe_recorded (recorded_at),
+    UNIQUE KEY uq_pipe_message (topic, partition_id, last_offset)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 14. Global FAERS Adverse Event Background Counts (Epidemiological Reference)
-CREATE TABLE IF NOT EXISTS faers_background_events (
-    event VARCHAR(191) PRIMARY KEY,
-    global_count BIGINT NOT NULL DEFAULT 0,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- Durable background jobs (uploads on disk until the job ends; see core/jobs.py)
 CREATE TABLE IF NOT EXISTS jobs (
@@ -217,4 +199,32 @@ CREATE TABLE IF NOT EXISTS jobs (
     expires_at DATETIME NOT NULL,
     INDEX idx_jobs_status (status),
     INDEX idx_jobs_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- FAERS quarters announced on the `faers-release` topic (written by the Kafka consumer)
+CREATE TABLE IF NOT EXISTS faers_releases (
+    quarter VARCHAR(8) NOT NULL PRIMARY KEY,
+    status VARCHAR(16) NOT NULL DEFAULT 'available',
+    job_id CHAR(36) DEFAULT NULL,
+    detected_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- External evidence (alerts, papers, trials) linked to a drug ingredient and, when the text names
+-- one, a MedDRA Preferred Term. pt is '' when no term was found. External evidence, not statistics.
+CREATE TABLE IF NOT EXISTS evidence_links (
+    rxcui VARCHAR(16) NOT NULL,
+    ingredient VARCHAR(191) NOT NULL,
+    pt VARCHAR(191) NOT NULL DEFAULT '',
+    kind VARCHAR(16) NOT NULL,
+    ref_id VARCHAR(191) NOT NULL,
+    title TEXT DEFAULT NULL,
+    url TEXT DEFAULT NULL,
+    published VARCHAR(64) DEFAULT NULL,
+    matched_text VARCHAR(191) DEFAULT NULL,
+    linked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_evidence (rxcui, pt, kind, ref_id),
+    INDEX idx_evidence_rxcui (rxcui),
+    INDEX idx_evidence_pt (pt)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

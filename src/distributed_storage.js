@@ -21,7 +21,7 @@ const DistributedStorage = {
   /* ── Real Kafka state (populated from /api/pipeline/stats) ── */
   kafka: {
     topics: {
-      'faers-raw':       { partitions: 4, offset: 0, lag: 0, total: 0, recent: 0 },
+      'faers-release':       { partitions: 4, offset: 0, lag: 0, total: 0, recent: 0 },
       'pubmed-stream':   { partitions: 2, offset: 0, lag: 0, total: 0, recent: 0 },
       'clinical-trials': { partitions: 2, offset: 0, lag: 0, total: 0, recent: 0 },
       'fda-alerts':      { partitions: 1, offset: 0, lag: 0, total: 0, recent: 0 },
@@ -133,7 +133,7 @@ const DistributedStorage = {
 
   _updateTopicRateNodes() {
     const nodeMap = {
-      'fda-rate':    'faers-raw',
+      'fda-rate':    'faers-release',
       'social-rate': 'fda-alerts',
       'ct-rate':     'clinical-trials',
     };
@@ -232,7 +232,7 @@ const DistributedStorage = {
     this.kafkaLagChart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: ['faers-raw', 'pubmed-stream', 'clinical-trials', 'fda-alerts'],
+        labels: ['faers-release', 'pubmed-stream', 'clinical-trials', 'fda-alerts'],
         datasets: [{
           label: 'Messages Ingested (total)',
           data: [0, 0, 0, 0],
@@ -264,7 +264,7 @@ const DistributedStorage = {
 
   _updateKafkaLagChart() {
     if (!this.kafkaLagChart) return;
-    const topics = ['faers-raw', 'pubmed-stream', 'clinical-trials', 'fda-alerts'];
+    const topics = ['faers-release', 'pubmed-stream', 'clinical-trials', 'fda-alerts'];
     const data   = topics.map(t => this.kafka.topics[t]?.total || 0);
 
     // Only update if we have real data
@@ -435,7 +435,7 @@ const DistributedStorage = {
 
   animateMeters() {
     const meters = [
-      { fill: 'fda-bar',    val: 'fda-val',    target: 72, topic: 'faers-raw' },
+      { fill: 'fda-bar',    val: 'fda-val',    target: 72, topic: 'faers-release' },
       { fill: 'social-bar', val: 'social-val', target: 22, topic: 'fda-alerts' },
       { fill: 'ct-bar',     val: 'ct-val',     target: 19, topic: 'clinical-trials' },
     ];

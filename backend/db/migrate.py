@@ -27,6 +27,21 @@ LEGACY_SQLITE_PATH = os.path.join(BASE_DIR, "pharmawatch.db")
 # (table, column, definition) for columns added to tables that may already exist. Idempotent.
 ADDITIVE_COLUMNS = [
     ("signals_cache", "data_version", "VARCHAR(160) NULL AFTER `source`"),
+    ("kafka_pipeline_stats", "partition_id", "INT NOT NULL DEFAULT 0 AFTER `topic`"),
+]
+
+# (table, index, columns) unique keys added to tables that may already exist. Duplicate rows are
+# removed first, keeping the earliest. Idempotent.
+ADDITIVE_UNIQUE_KEYS = [
+    ("kafka_pipeline_stats", "uq_pipe_message", ("topic", "partition_id", "last_offset")),
+]
+
+# Tables that held statistics computed inside the Kafka consumer from a hard-coded background
+# count. Statistics now come only from the FAERS batch path, so these go.
+RETIRED_TABLES = ["drug_events_agg", "faers_background_events"]
+RETIRED_ROWS = [
+    ("signals_cache", "source = 'kafka_faers'"),
+    ("drug_events", "source = 'kafka_faers'"),
 ]
 
 
@@ -147,6 +162,29 @@ def run_migrations(args):
                 if cur.fetchone()["n"] == 0:
                     cur.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}")
                     log.info(f"Added column {table}.{column}")
+        app_conn.commit()
+
+        with app_conn.cursor() as cur:
+            for table, index, columns in ADDITIVE_UNIQUE_KEYS:
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM information_schema.statistics "
+                    "WHERE table_schema = DATABASE() AND table_name = %s AND index_name = %s",
+                    (table, index),
+                )
+                if cur.fetchone()["n"] == 0:
+                    cols = ", ".join(f"`{c}`" for c in columns)
+                    join = " AND ".join(f"t.`{c}` <=> k.`{c}`" for c in columns)
+                    removed = cur.execute(
+                        f"DELETE t FROM `{table}` t JOIN (SELECT {cols}, MIN(id) AS keep_id FROM `{table}` "
+                        f"GROUP BY {cols} HAVING COUNT(*) > 1) k ON {join} AND t.id <> k.keep_id")
+                    cur.execute(f"ALTER TABLE `{table}` ADD UNIQUE KEY `{index}` ({cols})")
+                    log.info(f"Added unique key {table}.{index} (removed {removed} duplicate rows)")
+            for table in RETIRED_TABLES:
+                cur.execute(f"DROP TABLE IF EXISTS `{table}`")
+            for table, where in RETIRED_ROWS:
+                removed = cur.execute(f"DELETE FROM `{table}` WHERE {where}")
+                if removed:
+                    log.info(f"Removed {removed} rows from {table} ({where})")
         app_conn.commit()
 
         # Verify created tables

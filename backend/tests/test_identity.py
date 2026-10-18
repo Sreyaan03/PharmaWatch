@@ -253,6 +253,17 @@ def test_live_lookup_can_be_switched_off(service):
     assert out["resolved"] is False and service.rxnav.session.calls == []
 
 
+def test_brand_in_the_brand_map_resolves_without_network(service):
+    con = duckdb.connect(service.db_file)
+    con.execute("CREATE TABLE drug_brand_map AS SELECT 'coumadin' AS brand, '11289' AS ingredient_rxcui, "
+                "'warfarin' AS ingredient_name")
+    con.close()
+    out = service.resolve_drug("Coumadin", live=False)
+    assert out["resolved"] and out["source"] == "loaded_data" and out["match"] == "brand"
+    assert out["ingredients"] == [{"rxcui": "11289", "name": "warfarin"}]
+    assert service.rxnav.session.calls == []
+
+
 def test_unresolved_drug_carries_a_suggestion_not_a_match(service):
     out = service.resolve_drug("metfromin")
     assert out["resolved"] is False and out["ingredients"] == []

@@ -152,6 +152,10 @@ services:
       - DATA_DIR=/app/data
       - KAFKA_ROLE=producer
       - PYTHONUNBUFFERED=1
+    # Read-only FAERS database: the producer checks which quarters are loaded, the consumer links
+    # evidence to drug identities. FAERS_AUTO_REFRESH needs ../data mounted read-write instead.
+    volumes:
+      - ../data/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
     command: ["python", "-m", "ingest.producer"]
 
   # ── 6. KAFKA CONSUMER (Real-Time Pipeline Worker) ──────────────────────────
@@ -176,6 +180,11 @@ services:
       - MYSQL_PORT=3306
       - KAFKA_ROLE=consumer
       - PYTHONUNBUFFERED=1
+      - DATA_DIR=/app/data
+    # Read-only FAERS database: the producer checks which quarters are loaded, the consumer links
+    # evidence to drug identities. FAERS_AUTO_REFRESH needs ../data mounted read-write instead.
+    volumes:
+      - ../data/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
     command: ["python", "-m", "ingest.consumer"]
 
   # ── 7. PHARMAWATCH APPLICATION (Gunicorn + Flask) ──────────────────────────
@@ -187,10 +196,8 @@ services:
     restart: unless-stopped
     networks:
       - pharmawatch-net
-    depends_on:
+    depends_on:                  # not on Kafka: the core app runs with the stream stopped
       mysql:
-        condition: service_healthy
-      kafka:
         condition: service_healthy
     expose:
       - "5000"

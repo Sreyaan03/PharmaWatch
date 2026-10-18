@@ -167,7 +167,7 @@ Plans:
   10. Scaling out is configuration only: addresses, storage and job execution sit behind interfaces with single-machine defaults, and a scaled profile (2 web copies, 2 workers, Spark master with 2 workers, MinIO) passes an automated check.
 
 Plans (in execution order):
-- [ ] 10-01: Kafka cleanup: remove PRR from the consumer, `faers-release` trigger, linked evidence (alerts, papers, trials) on drug identities, idempotency; core app runs without Kafka
+- [x] 10-01: Kafka cleanup: remove PRR from the consumer, `faers-release` trigger, linked evidence (alerts, papers, trials) on drug identities, idempotency; core app runs without Kafka
 - [ ] 10-02: Scale-ready: one configuration surface, storage interface (local or S3-compatible), queue interface (inline or Kafka workers), stateless web tier and health checks, scaled Compose profile with an automated check, measured scaling, docs/SCALING.md runbook
 - [ ] 10-03: Data lake export; Spark quarterly all-pairs job matched to `compute_metrics`; HBase `signal_history` with Parquet fallback and history chart; Spark vs DuckDB timings
 - [ ] 10-04: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist

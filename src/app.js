@@ -313,6 +313,66 @@ function showSignalDetail(signal) {
 
   // Render D3 graph
   renderSignalNetworkGraph(signal.drug, signal.event);
+  loadSignalEvidence(signal.drug, signal.event);
+}
+
+/* External evidence delivered by Kafka (recalls, papers, trials) and linked to the drug by name.
+   Shown apart from the statistics: it is something to read, not a number. */
+async function loadSignalEvidence(drug, event) {
+  const body = document.getElementById('signal-detail-body');
+  if (!body) return;
+  let box = document.getElementById('signal-evidence');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'signal-evidence';
+    box.style.cssText = 'margin-top:1rem; padding:1rem; border-radius:6px; border:1px solid rgba(255,255,255,0.05); background:rgba(15,23,42,0.4);';
+    body.appendChild(box);
+  }
+  box.innerHTML = '<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">External evidence</h4><div style="color:var(--text-muted); font-size:0.85rem;">Loading…</div>';
+  try {
+    const res = await fetch(`/api/evidence?drug=${encodeURIComponent(drug)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    const items = data.items || [];
+    const ev = String(event || '').toLowerCase();
+    const forEvent = items.filter(i => (i.terms || []).some(t => t.toLowerCase() === ev));
+    const rest = items.filter(i => !forEvent.includes(i));
+    const kindLabel = { alert: 'FDA recall', paper: 'Paper', trial: 'Trial' };
+    const row = i => `<li style="margin-bottom:0.35rem;"><span class="badge" style="font-size:0.7rem; margin-right:0.4rem;">${escHtml(kindLabel[i.kind] || i.kind)}</span>` +
+      (i.url ? `<a href="${escHtml(i.url)}" target="_blank" rel="noopener">${escHtml(i.title || i.id)}</a>` : escHtml(i.title || i.id)) +
+      `<span style="color:var(--text-muted); font-size:0.75rem;"> · ${escHtml(i.published || '')}</span></li>`;
+    let html = '<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">External evidence</h4>';
+    if (!items.length) {
+      html += `<div style="color:var(--text-muted); font-size:0.85rem;">No recalls, papers or trials linked to ${escHtml(drug)} yet.</div>`;
+    } else {
+      if (forEvent.length) html += `<div style="font-size:0.8rem; margin-bottom:0.25rem;">Naming ${escHtml(event)}:</div><ul style="margin:0 0 0.75rem 1rem; padding:0; font-size:0.85rem;">${forEvent.map(row).join('')}</ul>`;
+      if (rest.length) html += `<div style="font-size:0.8rem; margin-bottom:0.25rem;">Naming ${escHtml(drug)}:</div><ul style="margin:0 0 0.5rem 1rem; padding:0; font-size:0.85rem;">${rest.slice(0, 10).map(row).join('')}</ul>`;
+    }
+    html += `<div style="color:var(--text-muted); font-size:0.75rem;">${escHtml(data.note || '')}</div>`;
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">External evidence</h4><div style="color:var(--text-muted); font-size:0.85rem;">Not available (evidence store unreachable).</div>';
+  }
+}
+
+/* A FAERS quarter newer than the loaded data has been announced on the faers-release topic. */
+async function loadFaersReleaseNotice() {
+  const el = document.getElementById('faers-release-notice');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/faers/releases');
+    const data = await res.json();
+    const pending = (data.pending || [])[0];
+    if (!res.ok || !pending) { el.style.display = 'none'; return; }
+    const status = pending.status === 'refreshing' ? 'is being loaded now'
+      : pending.status === 'failed' ? 'failed to load; an admin can retry'
+      : data.auto_refresh ? 'will be loaded automatically' : 'is available; an admin can load it';
+    el.innerHTML = `<strong>New FAERS data:</strong> quarter ${escHtml(pending.quarter.toUpperCase())} ${status}. ` +
+      `Results shown are from data up to ${escHtml((data.latest_loaded || '?').toUpperCase())}.`;
+    el.style.display = 'block';
+  } catch (e) {
+    el.style.display = 'none';
+  }
 }
 
 function filterSignals() {
@@ -2473,6 +2533,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPRRCalculator();
   initCounters();
   loadTopEvents();
+  loadFaersReleaseNotice();
 
   // Boot the dashboard section (default)
   navigateTo('dashboard');

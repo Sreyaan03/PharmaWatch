@@ -124,3 +124,35 @@ def pipeline_trials():
         return {"trials": rows, "count": len(rows)}, 200
     except Exception as e:
         return {"trials": [], "count": 0, "error": str(e)}, 200
+
+
+# ── FAERS quarterly releases (announced on the faers-release topic) ──────────
+def faers_releases():
+    """Loaded quarters and announced quarters not loaded yet, for the dashboard notice."""
+    from faers import pipeline as faers_pipeline
+    loaded = sorted(faers_pipeline.loaded_quarters())
+    try:
+        pending = faers_pipeline.pending_releases()
+    except Exception:
+        return {"loaded": loaded, "pending": [], "store": "unavailable",
+                "auto_refresh": faers_pipeline.auto_refresh_enabled()}, 200
+    return {"loaded": loaded, "latest_loaded": loaded[-1] if loaded else None, "pending": pending,
+            "auto_refresh": faers_pipeline.auto_refresh_enabled(), "store": "ok"}, 200
+
+
+def start_faers_refresh(quarter, created_by="admin"):
+    """Start the refresh job for an announced quarter (admin)."""
+    from faers import pipeline as faers_pipeline
+    try:
+        quarter = faers_pipeline.normalize_quarter(quarter or "")
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
+    if quarter in faers_pipeline.loaded_quarters():
+        return {"error": f"{quarter} is already loaded"}, 409
+    try:
+        job_id = faers_pipeline.start_refresh(quarter, created_by=created_by)
+    except Exception:
+        return {"error": "Job store unavailable (MySQL is not reachable)."}, 503
+    if job_id is None:
+        return {"error": f"a refresh of {quarter} is already running"}, 409
+    return {"quarter": quarter, "job_id": job_id, "status": "refreshing"}, 202

@@ -17,7 +17,6 @@ from db.migrate import split_sql_statements
 
 EXPECTED_TABLES = [
     "drug_events",
-    "drug_events_agg",
     "reddit_posts",
     "boxed_warning_violations",
     "signals_cache",
@@ -29,10 +28,12 @@ EXPECTED_TABLES = [
     "kafka_trials",
     "kafka_alerts",
     "kafka_pipeline_stats",
-    "faers_background_events",
+    "jobs",
+    "faers_releases",
+    "evidence_links",
 ]
 
-def test_schema_sql_contains_all_14_tables():
+def test_schema_sql_contains_all_tables():
     schema_path = os.path.join(BASE_DIR, "db", "schema.sql")
     assert os.path.exists(schema_path), f"schema.sql not found at {schema_path}"
     with open(schema_path, "r", encoding="utf-8") as f:
@@ -40,6 +41,8 @@ def test_schema_sql_contains_all_14_tables():
     
     for table in EXPECTED_TABLES:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in content, f"Table {table} missing from schema.sql"
+    for retired in ("drug_events_agg", "faers_background_events"):
+        assert retired not in content, f"{retired} should no longer be in schema.sql"
 
 def test_split_sql_statements():
     schema_path = os.path.join(BASE_DIR, "db", "schema.sql")
@@ -47,7 +50,7 @@ def test_split_sql_statements():
         content = f.read()
     
     statements = split_sql_statements(content)
-    assert len(statements) == 15, f"Expected 15 CREATE TABLE statements, got {len(statements)}"
+    assert len(statements) == len(EXPECTED_TABLES), f"Expected {len(EXPECTED_TABLES)} CREATE TABLE statements, got {len(statements)}"
     for stmt in statements:
         assert stmt.strip().upper().startswith("CREATE TABLE"), f"Statement does not start with CREATE TABLE: {stmt[:40]}"
 

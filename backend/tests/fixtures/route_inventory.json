@@ -227,6 +227,23 @@
       ],
       "status": 200
     },
+    "GET /api/evidence": {
+      "keys": [
+        "error",
+        "items"
+      ],
+      "status": 503
+    },
+    "GET /api/faers/releases": {
+      "keys": [
+        "auto_refresh",
+        "loaded",
+        "meta",
+        "pending",
+        "store"
+      ],
+      "status": 200
+    },
     "GET /api/graph": {
       "keys": [
         "links",
@@ -542,6 +559,12 @@
       ],
       "status": 200
     },
+    "POST /api/admin/faers/refresh": {
+      "keys": [
+        "error"
+      ],
+      "status": 403
+    },
     "POST /api/graph/predict": {
       "keys": [
         "error"
@@ -603,6 +626,12 @@
         "GET"
       ],
       "rule": "/"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/admin/faers/refresh"
     },
     {
       "methods": [
@@ -723,6 +752,18 @@
         "GET"
       ],
       "rule": "/api/demographics/sex"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/evidence"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/faers/releases"
     },
     {
       "methods": [

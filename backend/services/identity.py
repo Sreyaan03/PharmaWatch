@@ -84,6 +84,10 @@ class IdentityService:
             rows = self._query(
                 "SELECT DISTINCT ingredient_rxcui, ingredient_name, 'exact' FROM drug_identity "
                 "WHERE lower(ingredient_name) = ?", [name])
+        if not rows:
+            # a brand name: FAERS rows give the brand next to its active ingredient (faers.brand_map)
+            rows = self._query(
+                "SELECT ingredient_rxcui, ingredient_name, 'brand' FROM drug_brand_map WHERE brand = ?", [name])
         if rows:
             out.update(resolved=True, source="loaded_data", match=rows[0][2],
                        ingredients=[{"rxcui": r[0], "name": r[1]} for r in rows])

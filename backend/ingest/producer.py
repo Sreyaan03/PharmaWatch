@@ -4,7 +4,7 @@ ingest/producer.py — PharmaWatch Multi-Source Kafka Producer
 
 Polls 4 real data sources and publishes JSON messages to Kafka topics:
 
-  faers-raw         ← openFDA FAERS adverse event reports
+  faers-release     ← a FAERS quarter newer than the loaded database is out (checked daily)
   pubmed-stream     ← PubMed new drug-safety papers (via NCBI E-utilities)
   clinical-trials   ← ClinicalTrials.gov active study updates
   fda-alerts        ← FDA MedWatch Safety Alerts RSS feed
@@ -80,50 +80,36 @@ def publish(producer, topic, key, payload):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SOURCE 1: openFDA FAERS — adverse event reports
-# Topic: faers-raw
-# Polls every 10 minutes, fetches top 20 latest reports per watched drug
+# SOURCE 1: FAERS quarterly releases
+# Topic: faers-release
+# Once a day: is a quarter newer than the newest loaded one on the FDA site? The message only
+# announces it; the consumer records it and the refresh runs as a job. No statistics are sent.
 # ══════════════════════════════════════════════════════════════════════════════
-def poll_faers(producer):
-    log.info("=== Polling openFDA FAERS ===")
-    base = "https://api.fda.gov/drug/event.json"
-    api_suffix = f"&api_key={FDA_API_KEY}" if FDA_API_KEY else ""
-    published = 0
+def check_faers_release(latest_released=None, loaded=None):
+    """The newest released quarter label if it is not loaded yet, else None."""
+    from faers import downloader
+    from faers.pipeline import loaded_quarters
+    year, qtr = (latest_released or downloader.latest_released)(1)[-1]
+    label = downloader.quarter_label(year, qtr)
+    have = loaded if loaded is not None else loaded_quarters()
+    return None if label in have else label
 
-    for drug in WATCHLIST:
-        try:
-            url = (
-                f"{base}?search=patient.drug.medicinalproduct:\"{drug}\""
-                f"&count=patient.reaction.reactionmeddrapt.exact"
-                f"&limit=10{api_suffix}"
-            )
-            resp = requests.get(url, timeout=10)
-            if resp.status_code != 200:
-                continue
-            data = resp.json()
-            results = data.get("results", [])
 
-            for item in results:
-                event   = item.get("term", "").lower()
-                count   = item.get("count", 0)
-                if not event or count < 1:
-                    continue
-
-                message = {
-                    "source":    "faers",
-                    "drug":      drug,
-                    "event":     event,
-                    "count":     count,
-                    "timestamp": datetime.datetime.utcnow().isoformat(),
-                }
-                publish(producer, "faers-raw", drug, message)
-                published += 1
-
-            time.sleep(0.5)   # be polite to openFDA rate limits
-        except Exception as e:
-            log.error(f"FAERS error for {drug}: {e}")
-
-    log.info(f"FAERS poll done — {published} messages published")
+def poll_faers_release(producer):
+    log.info("=== Checking for a new FAERS quarter ===")
+    try:
+        label = check_faers_release()
+    except Exception as e:
+        log.error(f"FAERS release check failed: {e}")
+        return
+    if label is None:
+        log.info("FAERS: the newest released quarter is already loaded")
+        return
+    publish(producer, "faers-release", label, {
+        "source": "fda_faers",
+        "quarter": label,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    })
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -316,24 +302,24 @@ def main():
     producer = create_producer()
 
     # Track last-run timestamps for each source
-    last_faers   = 0   # every 10 minutes
+    last_release = 0   # once a day
     last_pubmed  = 0   # every 60 minutes
     last_trials  = 0   # every 60 minutes
     last_rss     = 0   # every 30 minutes
 
-    FAERS_INTERVAL   = 10 * 60
+    RELEASE_INTERVAL = 24 * 60 * 60
     PUBMED_INTERVAL  = 60 * 60
     TRIALS_INTERVAL  = 60 * 60
     RSS_INTERVAL     = 20 * 60   # every 20 minutes (was 30)
 
-    log.info("✅ Producer running. Topics: faers-raw | pubmed-stream | clinical-trials | fda-alerts")
+    log.info("✅ Producer running. Topics: faers-release | pubmed-stream | clinical-trials | fda-alerts")
 
     while True:
         now = time.time()
 
-        if now - last_faers >= FAERS_INTERVAL:
-            poll_faers(producer)
-            last_faers = time.time()
+        if now - last_release >= RELEASE_INTERVAL:
+            poll_faers_release(producer)
+            last_release = time.time()
 
         if now - last_rss >= RSS_INTERVAL:
             poll_fda_alerts(producer)
