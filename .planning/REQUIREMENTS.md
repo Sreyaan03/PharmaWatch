@@ -151,7 +151,7 @@ Context, evidence and architecture: `.planning/MILESTONE-2-CONTEXT.md`.
 - **RX-05: Privacy.** Images are not stored by default, identifiers are kept out of logs and analysis calls, cloud use is disclosed.
 - **RX-06: Measured accuracy.** Field-level accuracy on a synthetic prescription set appears on the validation page.
 
-### Coherence and Kafka (Phase 10)
+### Surveillance pipeline and coherence (Phase 10)
 
 - **COH-01: Navigation.** Seven areas; every existing feature reachable.
 - **COH-02: Drug profile.** One page per drug combining all evidence.
@@ -159,6 +159,14 @@ Context, evidence and architecture: `.planning/MILESTONE-2-CONTEXT.md`.
 - **KAF-01: Ingest only.** The consumer computes no statistics; the hard-coded background table and its helpers are removed.
 - **KAF-02: Release trigger.** A `faers-release` event starts the batch recompute.
 - **KAF-03: Linked evidence.** Alerts, papers and trials attach to drug identities; consumers are idempotent.
+- **BD-01: Spark batch.** Spark computes all drug and side-effect pairs for every quarter, and the values match the app's statistics code.
+- **BD-02: HBase serving.** HBase serves per-pair signal history, with a Parquet fallback.
+- **BD-03: Measured engines.** Spark and DuckDB timings for the same job are published.
+- **SURV-01: Label watcher.** Changes to watched drugs' FDA labels become `label-change` events.
+- **SURV-02: Label-text check.** Each signal reports whether its effect is in the label text; the check's accuracy is measured.
+- **SURV-03: Alerts.** New signals, not-in-label signals and label changes become reviewable alerts worded as possible signals.
+- **REPLAY-01: Replay.** History replays through Kafka without touching live data.
+- **REPLAY-02: Lead time.** Whether signals preceded label changes is measured, with censoring and caveats.
 
 ### Platform (Phase 11)
 

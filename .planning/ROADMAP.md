@@ -22,7 +22,7 @@ Milestone 2 (Phases 5–11, one phase per day) turns the project into a coherent
 - [x] **Phase 7 (Day 3): Statistical Correctness** — Real time-to-onset and stratified PRR, no-signal class, no invented numbers, descriptive wording
 - [x] **Phase 8 (Day 4): Validation Harness** — Reference-set benchmarks for signals, NER and DDI; Methods & Validation page; CI regression gate
 - [x] **Phase 9 (Day 5): Prescription Review** — Upload, cloud vision extraction, confirm step, interaction and safety report, PDF export
-- [ ] **Phase 10 (Day 6): Coherence & Kafka Integration** — Regrouped navigation, drug profile page, evidence badges, Kafka as evidence ingest
+- [ ] **Phase 10: Surveillance Pipeline & Coherence** — Kafka label and release events, Spark quarterly all-pairs signals, HBase signal history, surveillance alerts, replay and lead-time study, regrouped navigation and drug profile
 - [ ] **Phase 11 (Day 7): Platform & Pilot Release** — Accounts and roles, audit log, feedback, security fixes, portable deployment, CI/CD, docs
 
 ## Phase Details
@@ -150,23 +150,28 @@ Plans:
 - [x] 09-02: Prescription service composing the identity, interaction, boxed-warning and signal services; duplicate-therapy check; report and PDF
 - [x] 09-03: Upload, confirm and report views; synthetic prescription test set and accuracy benchmark
 
-### Phase 10 (Day 6): Coherence & Kafka Integration
-**Goal**: One navigable product where each feature has a place, each number states how it was obtained, and Kafka delivers evidence to the drug it concerns.
-**Depends on**: Phases 7 and 9
-**Requirements**: [COH-01, COH-02, COH-03, KAF-01, KAF-02, KAF-03]
+### Phase 10: Surveillance Pipeline & Coherence
+**Goal**: Kafka, Spark and HBase each do a job the product needs: watch for new evidence, compute every signal every quarter, and serve signal history. A reviewer sees possible new signals, especially those whose effect is not in the label, and can replay history to see whether the system would have warned early. The app reads as one product.
+**Depends on**: Phases 7, 8 and 9
+**Requirements**: [KAF-01, KAF-02, KAF-03, BD-01, BD-02, BD-03, SURV-01, SURV-02, SURV-03, REPLAY-01, REPLAY-02, COH-01, COH-02, COH-03]
 **Success Criteria** (what must be TRUE):
-  1. Navigation has seven areas: Monitor, Investigate, Interactions, Prescription Review, Text Mining, Pipeline, Methods & Validation, and every existing feature is reachable.
-  2. A drug profile page shows signals, demographics, temporal analysis, boxed warning, interactions, trials, alerts and papers for one drug.
-  3. Every result shows an evidence badge and the data version.
-  4. The Kafka consumer computes no statistics; a `faers-release` event triggers the batch recompute.
-  5. Alerts, papers and trials from Kafka appear on the matching drug profile.
-  6. Delivering the same Kafka message twice leaves the database unchanged.
-  7. Social listening is labelled exploratory and never feeds FAERS statistics.
+  1. The Kafka consumer computes no statistics. `faers-release`, `label-change` and `signals-updated` events drive the work, and replaying any message leaves the database unchanged.
+  2. A Spark batch job computes every drug and side-effect pair for every loaded quarter, and its values equal `compute_metrics` exactly on a sampled check.
+  3. HBase serves each pair's quarter-by-quarter history to a chart, and the chart still works from Parquet when HBase is stopped.
+  4. Spark and DuckDB timings for the same job are published, whichever wins.
+  5. Label changes and newly crossing signals become alerts, worded as possible signals needing review, with review states.
+  6. Each signal says whether its effect is found in the label text, and that check's precision and recall are published.
+  7. A replay of the 20 quarters runs through Kafka without touching live data. The lead-time study reports flagged before, flagged after, left-censored and never flagged separately, with CIs and caveats.
+  8. The Pipeline area shows only real state; nothing is simulated. Navigation is regrouped, and a drug profile combines all evidence including alerts and history.
+  9. Social listening is labelled exploratory and never feeds FAERS statistics.
 
-Plans:
-- [ ] 10-01: Navigation regroup, drug profile page from existing endpoints, evidence badge component
-- [ ] 10-02: Kafka: remove PRR from the consumer, add `faers-release`, link alerts, papers and trials to drug identities, idempotency test; remove the hard-coded background table
-- [ ] 10-03: Text Mining area (correct model name, negation handling, exploratory label), Pipeline area with live and simulated parts marked, browser smoke test
+Plans (in execution order):
+- [ ] 10-01: Kafka cleanup: remove PRR from the consumer, `faers-release` trigger, linked evidence (alerts, papers, trials) on drug identities, idempotency; core app runs without Kafka
+- [ ] 10-02: Data lake export; Spark quarterly all-pairs job matched to `compute_metrics`; HBase `signal_history` with Parquet fallback and history chart; Spark vs DuckDB timings
+- [ ] 10-03: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist
+- [ ] 10-04: Isolated replay through Kafka with a timeline view; lead-time study against FDA safety labelling changes (checkpoint: reference source)
+- [ ] 10-05: Navigation regroup, drug profile page (now with alerts and history), evidence badge component
+- [ ] 10-06: Text Mining area (correct model name, negation handling, exploratory label), Pipeline area with live state only, frontend contract test, browser smoke test
 
 ### Phase 11 (Day 7): Platform & Pilot Release
 **Goal**: A secured, auditable build that runs locally with one command and can move to a server by changing configuration only.
