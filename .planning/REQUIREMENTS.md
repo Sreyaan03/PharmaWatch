@@ -167,6 +167,11 @@ Context, evidence and architecture: `.planning/MILESTONE-2-CONTEXT.md`.
 - **SURV-03: Alerts.** New signals, not-in-label signals and label changes become reviewable alerts worded as possible signals.
 - **REPLAY-01: Replay.** History replays through Kafka without touching live data.
 - **REPLAY-02: Lead time.** Whether signals preceded label changes is measured, with censoring and caveats.
+- **SCALE-01: Configuration.** Every address, path and credential comes from one configuration module; a scan finds none in code.
+- **SCALE-02: Storage.** Files go through one interface with local and S3-compatible backends, both tested.
+- **SCALE-03: Queue and workers.** Background work goes through one interface: inline by default, Kafka-backed workers when configured; a crashed worker's job is finished by another.
+- **SCALE-04: Stateless web.** Web copies share no in-process state; health endpoints support load balancing.
+- **SCALE-05: Scaled profile.** A scaled Compose profile passes an automated check; scaling is measured and a runbook describes moving each component.
 
 ### Platform (Phase 11)
 

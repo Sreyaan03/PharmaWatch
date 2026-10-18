@@ -153,7 +153,7 @@ Plans:
 ### Phase 10: Surveillance Pipeline & Coherence
 **Goal**: Kafka, Spark and HBase each do a job the product needs: watch for new evidence, compute every signal every quarter, and serve signal history. A reviewer sees possible new signals, especially those whose effect is not in the label, and can replay history to see whether the system would have warned early. The app reads as one product.
 **Depends on**: Phases 7, 8 and 9
-**Requirements**: [KAF-01, KAF-02, KAF-03, BD-01, BD-02, BD-03, SURV-01, SURV-02, SURV-03, REPLAY-01, REPLAY-02, COH-01, COH-02, COH-03]
+**Requirements**: [KAF-01, KAF-02, KAF-03, BD-01, BD-02, BD-03, SURV-01, SURV-02, SURV-03, REPLAY-01, REPLAY-02, COH-01, COH-02, COH-03, SCALE-01, SCALE-02, SCALE-03, SCALE-04, SCALE-05]
 **Success Criteria** (what must be TRUE):
   1. The Kafka consumer computes no statistics. `faers-release`, `label-change` and `signals-updated` events drive the work, and replaying any message leaves the database unchanged.
   2. A Spark batch job computes every drug and side-effect pair for every loaded quarter, and its values equal `compute_metrics` exactly on a sampled check.
@@ -164,14 +164,16 @@ Plans:
   7. A replay of the 20 quarters runs through Kafka without touching live data. The lead-time study reports flagged before, flagged after, left-censored and never flagged separately, with CIs and caveats.
   8. The Pipeline area shows only real state; nothing is simulated. Navigation is regrouped, and a drug profile combines all evidence including alerts and history.
   9. Social listening is labelled exploratory and never feeds FAERS statistics.
+  10. Scaling out is configuration only: addresses, storage and job execution sit behind interfaces with single-machine defaults, and a scaled profile (2 web copies, 2 workers, Spark master with 2 workers, MinIO) passes an automated check.
 
 Plans (in execution order):
 - [ ] 10-01: Kafka cleanup: remove PRR from the consumer, `faers-release` trigger, linked evidence (alerts, papers, trials) on drug identities, idempotency; core app runs without Kafka
-- [ ] 10-02: Data lake export; Spark quarterly all-pairs job matched to `compute_metrics`; HBase `signal_history` with Parquet fallback and history chart; Spark vs DuckDB timings
-- [ ] 10-03: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist
-- [ ] 10-04: Isolated replay through Kafka with a timeline view; lead-time study against FDA safety labelling changes (checkpoint: reference source)
-- [ ] 10-05: Navigation regroup, drug profile page (now with alerts and history), evidence badge component
-- [ ] 10-06: Text Mining area (correct model name, negation handling, exploratory label), Pipeline area with live state only, frontend contract test, browser smoke test
+- [ ] 10-02: Scale-ready: one configuration surface, storage interface (local or S3-compatible), queue interface (inline or Kafka workers), stateless web tier and health checks, scaled Compose profile with an automated check, measured scaling, docs/SCALING.md runbook
+- [ ] 10-03: Data lake export; Spark quarterly all-pairs job matched to `compute_metrics`; HBase `signal_history` with Parquet fallback and history chart; Spark vs DuckDB timings
+- [ ] 10-04: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist
+- [ ] 10-05: Isolated replay through Kafka with a timeline view; lead-time study against FDA safety labelling changes (checkpoint: reference source)
+- [ ] 10-06: Navigation regroup, drug profile page (with alerts and history), evidence badge component
+- [ ] 10-07: Text Mining area (correct model name, negation handling, exploratory label), Pipeline area with live state only, frontend contract test, browser smoke test
 
 ### Phase 11 (Day 7): Platform & Pilot Release
 **Goal**: A secured, auditable build that runs locally with one command and can move to a server by changing configuration only.
