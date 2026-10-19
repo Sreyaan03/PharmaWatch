@@ -197,6 +197,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     expires_at DATETIME NOT NULL,
+    lease_owner VARCHAR(64) DEFAULT NULL,
+    lease_expires DATETIME DEFAULT NULL,
+    attempts INT NOT NULL DEFAULT 0,
     INDEX idx_jobs_status (status),
     INDEX idx_jobs_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

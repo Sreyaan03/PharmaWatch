@@ -1,10 +1,11 @@
 # backend/core/auth.py
 # Request guards shared by the route modules.
 
-import os
 from functools import wraps
 
 from flask import jsonify, request
+
+from core import config
 
 
 def require_admin(view):
@@ -14,7 +15,7 @@ def require_admin(view):
     """
     @wraps(view)
     def wrapper(*args, **kwargs):
-        admin_key = os.getenv("ADMIN_API_KEY", "").strip()
+        admin_key = config.get("ADMIN_API_KEY")
         if not admin_key:
             return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
         provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")

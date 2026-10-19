@@ -35,10 +35,11 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from ml.ner import MODEL_NAME
+from core.config import data_dir
 
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                            "reports", "validation")
-DEFAULT_DATA = os.path.join(os.environ.get("DATA_DIR", r"C:\PharmaWatchData"), "reference",
+DEFAULT_DATA = os.path.join(data_dir(), "reference",
                             "ade_drug_ade_relation.parquet")
 DRUG_LABELS = ("Medication", "Drug")
 EFFECT_LABELS = ("Disease_disorder", "Sign_symptom")

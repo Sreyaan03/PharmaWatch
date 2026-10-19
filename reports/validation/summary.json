@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-17T21:22:34Z",
+  "generated_at": "2026-10-19T09:10:57Z",
   "smoke": false,
   "components": {
     "signals": {
@@ -564,6 +564,197 @@
         }
       ],
       "caveat": "Synthetic printed prescriptions only; no handwriting has been tested. Invented lines: 0; wrong drug identities flagged for checking: 1.0.",
+      "smoke": false
+    },
+    "scaling": {
+      "title": "Architecture: scale-out",
+      "reference": "docker/docker-compose.scale.yml",
+      "model": null,
+      "data_version": "12 CPUs, 16.8 GB RAM, one machine",
+      "run_at": "2026-10-19T08:52:00Z",
+      "rows": [
+        {
+          "set": "Check: load balancing",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Check: job on a worker",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Check: worker killed",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Check: shared storage",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Check: spark cluster",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Check: readiness",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Workers: 1, default threads (24 OCR jobs)",
+          "pairs": 24,
+          "metrics": {
+            "Jobs per minute": [
+              10.06,
+              null
+            ],
+            "Seconds": [
+              143.1,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Workers: 2, default threads (24 OCR jobs)",
+          "pairs": 24,
+          "metrics": {
+            "Jobs per minute": [
+              13.59,
+              null
+            ],
+            "Seconds": [
+              106.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Workers: 4, default threads (24 OCR jobs)",
+          "pairs": 24,
+          "metrics": {
+            "Jobs per minute": [
+              11.7,
+              null
+            ],
+            "Seconds": [
+              123.1,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Workers: 1, threads = cores / workers (24 OCR jobs)",
+          "pairs": 24,
+          "metrics": {
+            "Jobs per minute": [
+              9.57,
+              null
+            ],
+            "Seconds": [
+              150.4,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Workers: 2, threads = cores / workers (24 OCR jobs)",
+          "pairs": 24,
+          "metrics": {
+            "Jobs per minute": [
+              13.04,
+              null
+            ],
+            "Seconds": [
+              110.4,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Workers: 4, threads = cores / workers (24 OCR jobs)",
+          "pairs": 24,
+          "metrics": {
+            "Jobs per minute": [
+              16.37,
+              null
+            ],
+            "Seconds": [
+              88.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Web copies: 1 (16 concurrent clients)",
+          "pairs": 18046,
+          "metrics": {
+            "Requests per second": [
+              601.5,
+              null
+            ],
+            "p95 ms": [
+              35.6,
+              null
+            ],
+            "Errors": [
+              0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Web copies: 3 (16 concurrent clients)",
+          "pairs": 27573,
+          "metrics": {
+            "Requests per second": [
+              919.1,
+              null
+            ],
+            "p95 ms": [
+              26.0,
+              null
+            ],
+            "Errors": [
+              0,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "Measured on one machine: this shows the scale-out mechanism works; cluster speedups will differ.",
       "smoke": false
     }
   },

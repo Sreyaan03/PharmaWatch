@@ -162,12 +162,8 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, help="only the N most frequent names (for a quick trial)")
     parser.add_argument("--workers", type=int, default=8, help="concurrent RxNav requests")
     args = parser.parse_args(argv)
-    try:
-        from dotenv import load_dotenv
-        from core.config import BACKEND_DIR
-        load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
-    except ImportError:
-        pass
+    from core.config import load_env
+    load_env()
 
     db_file = database_path()
     if not os.path.exists(db_file):

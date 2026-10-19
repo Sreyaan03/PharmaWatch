@@ -5,10 +5,11 @@
 
 import base64
 import logging
-import os
 import time
 
 import requests
+
+from core import config
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +37,8 @@ class VisionError(RuntimeError):
 
 class VisionClient:
     def __init__(self, api_key=None, model=None, session=None, timeout=90, retries=1, sleep=time.sleep):
-        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        self.model = model or os.getenv("RX_VISION_MODEL", DEFAULT_MODEL)
+        self.api_key = api_key or config.get("ANTHROPIC_API_KEY") or None
+        self.model = model or config.get("RX_VISION_MODEL") or DEFAULT_MODEL
         self.session = session or requests
         self.timeout = timeout
         self.retries = retries

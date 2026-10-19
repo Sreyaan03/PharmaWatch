@@ -10,11 +10,12 @@ import os
 
 import numpy as np
 
-from core.config import MODEL_DIR
+from core import storage
 import logging
 log = logging.getLogger(__name__)
 
-MANIFEST_PATH = os.path.join(MODEL_DIR, "ddi_manifest.json")
+MANIFEST_KEY = "ddi_manifest.json"     # in the storage area "models"
+MANIFEST_PATH = None                    # a file path here overrides storage (tests)
 DEFAULT_THRESHOLD = 0.5          # used only when the manifest has no precision-based threshold
 
 _manifest = None
@@ -25,8 +26,8 @@ _loaded = False
 def load_manifest(path=None):
     """The deployment manifest, or None when no model has been deployed."""
     global _manifest
-    path = path or MANIFEST_PATH
-    if _manifest is None and os.path.exists(path):
+    path = path or MANIFEST_PATH or storage.local_path("models", MANIFEST_KEY)
+    if _manifest is None and path and os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             _manifest = json.load(f)
     return _manifest
@@ -38,10 +39,18 @@ def reset():
     _manifest, _scorer, _loaded = None, None, False
 
 
+def _model_file(manifest):
+    """Local path of the manifest's model file (a cached copy when storage is remote)."""
+    path = storage.local_path("models", manifest["model"]["file"])
+    if path is None:
+        raise FileNotFoundError(f"model file {manifest['model']['file']!r} is not in storage")
+    return path
+
+
 def _gine_scorer(manifest):
     import torch
     from ml.ddi.model import GINEDDIPredictor, smiles_to_fingerprint, smiles_to_molecular_graph
-    payload = torch.load(os.path.join(MODEL_DIR, manifest["model"]["file"]), map_location="cpu",
+    payload = torch.load(_model_file(manifest), map_location="cpu",
                          weights_only=True)
     model = GINEDDIPredictor(node_in_dim=22, edge_in_dim=10, hidden_dim=128, num_layers=4,
                              dropout=0.1, **payload["config"])
@@ -61,7 +70,7 @@ def _gine_scorer(manifest):
 def _sklearn_scorer(manifest):
     from ml.ddi.baselines import build_pair_feature_matrix
     from ml.ddi.model import smiles_to_fingerprint
-    kind, path = manifest["model"]["kind"], os.path.join(MODEL_DIR, manifest["model"]["file"])
+    kind, path = manifest["model"]["kind"], _model_file(manifest)
     if kind == "xgboost":
         import xgboost as xgb
         model = xgb.XGBClassifier()

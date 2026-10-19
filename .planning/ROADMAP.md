@@ -168,7 +168,7 @@ Plans:
 
 Plans (in execution order):
 - [x] 10-01: Kafka cleanup: remove PRR from the consumer, `faers-release` trigger, linked evidence (alerts, papers, trials) on drug identities, idempotency; core app runs without Kafka
-- [ ] 10-02: Scale-ready: one configuration surface, storage interface (local or S3-compatible), queue interface (inline or Kafka workers), stateless web tier and health checks, scaled Compose profile with an automated check, measured scaling, docs/SCALING.md runbook
+- [x] 10-02: Scale-ready: one configuration surface, storage interface (local or S3-compatible), queue interface (inline or Kafka workers), stateless web tier and health checks, scaled Compose profile with an automated check, measured scaling, docs/SCALING.md runbook
 - [ ] 10-03: Data lake export; Spark quarterly all-pairs job matched to `compute_metrics`; HBase `signal_history` with Parquet fallback and history chart; Spark vs DuckDB timings
 - [ ] 10-04: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist
 - [ ] 10-05: Isolated replay through Kafka with a timeline view; lead-time study against FDA safety labelling changes (checkpoint: reference source)

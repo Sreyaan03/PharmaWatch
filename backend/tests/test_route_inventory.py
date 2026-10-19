@@ -64,9 +64,10 @@ def isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(socket.socket, "connect", _refuse)
     monkeypatch.setattr(requests.sessions.Session, "request", _fake_request)
     monkeypatch.delenv("ADMIN_API_KEY", raising=False)
-    # Creating a pool re-reads backend/.env; without this the developer's .env
+    # Settings read backend/.env on first use; without this the developer's .env
     # (and its ADMIN_API_KEY) would leak into the snapshot and CI would differ.
-    monkeypatch.setattr(mysql, "load_dotenv", lambda *a, **k: False)
+    from core import config
+    monkeypatch.setattr(config, "load_env", lambda: None)
 
     # The HBase circuit breaker is process-global; earlier tests may have tripped it.
     for module_name in ("clients.hbase",):

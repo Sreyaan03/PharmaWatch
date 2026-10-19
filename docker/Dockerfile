@@ -33,6 +33,10 @@ RUN pip install --no-cache-dir \
         "torch==2.2.0+cpu" "torchvision==0.17.0+cpu" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r /app/requirements.txt
 
+# EasyOCR downloads its detection and recognition models on first use. Fetch them at build time,
+# so a new worker does not spend a minute downloading before its first prescription.
+RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)"
+
 # ── Application Source ────────────────────────────────────────────────────────
 # Copy backend Python application
 COPY backend/ /app/backend/

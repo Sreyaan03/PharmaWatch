@@ -1,0 +1,194 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PharmaWatch — scaled profile (reference scale-out deployment, runs on one machine)
+#
+# The same images and code as the single-machine setup, with the settings switched to their
+# scale-out values. Each count is one number:
+#
+#   WEB_REPLICAS=2 WORKER_REPLICAS=2 SPARK_WORKERS=2 \
+#     docker compose -p pwscale -f docker/docker-compose.scale.yml up -d --build
+#   python scripts/scale_check.py              # automated check of the scale-out behaviour
+#   docker compose -p pwscale -f docker/docker-compose.scale.yml down -v
+#
+#   web       stateless web copies behind Caddy (round robin)        QUEUE_MODE=kafka
+#   worker    job workers, one Kafka consumer group                  python -m workers.run
+#   objectstore  S3-compatible storage (SeaweedFS) for uploads, models, lake   STORAGE_BACKEND=s3
+#   redis     shared rate-limit counters                             RATE_LIMIT_STORAGE_URI
+#   spark     master + workers                                       SPARK_MASTER=spark://...
+#
+# Everything here is separate from the production stack: own project, network and volumes,
+# no fixed container names, only Caddy (SCALE_HTTP_PORT, 8088) and the Spark UI (18080) on localhost.
+# Moving a service to its own machine or a managed service is described in docs/SCALING.md.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: pwscale
+
+x-app-env: &app-env
+  MYSQL_HOST: mysql
+  MYSQL_PORT: "3306"
+  MYSQL_USER: root
+  MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+  MYSQL_DATABASE: pharmawatch
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  QUEUE_MODE: kafka
+  JOB_THREADS: "1"
+  JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-20}
+  JOB_TOPIC_PARTITIONS: "6"
+  TORCH_THREADS: ${TORCH_THREADS:-0}           # set to cores / workers when workers share a machine
+  STORAGE_BACKEND: s3
+  S3_ENDPOINT_URL: http://objectstore:8333
+  S3_BUCKET: pharmawatch
+  S3_ACCESS_KEY_ID: pwstore                      # local-only credentials, see seaweedfs-s3.json
+  S3_SECRET_ACCESS_KEY: pwstore-local-only
+  RATE_LIMIT_STORAGE_URI: redis://redis:6379
+  SPARK_MASTER: spark://spark-master:7077
+  DATA_DIR: /app/data
+  PYTHONUNBUFFERED: "1"
+
+x-app: &app
+  image: pharmawatch-app:scale
+  networks: [scale-net]
+  environment: *app-env
+  depends_on:
+    setup:
+      condition: service_completed_successfully
+
+networks:
+  scale-net:
+    name: pwscale-net
+
+volumes:
+  mysql_data:
+    name: pwscale_mysql_data
+  objectstore_data:
+    name: pwscale_objectstore_data
+
+services:
+
+  # ── edge ──
+  caddy:
+    image: caddy:2.8-alpine
+    networks: [scale-net]
+    ports: ["127.0.0.1:${SCALE_HTTP_PORT:-8088}:80"]
+    volumes:
+      - ./Caddyfile.scale:/etc/caddy/Caddyfile:ro
+      - ../src:/app/src:ro
+    depends_on: [web]
+
+  # ── state ──
+  mysql:
+    image: mysql:8.0
+    networks: [scale-net]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: pharmawatch
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--max_connections=300"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Any S3-compatible store works (MinIO, S3, ...); SeaweedFS is used here because its image is
+  # freely pullable. The app only speaks S3.
+  objectstore:
+    image: chrislusf/seaweedfs:3.97
+    networks: [scale-net]
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    volumes:
+      - objectstore_data:/data
+      - ./seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8333"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    networks: [scale-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  # ── stream ──
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    networks: [scale-net]
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    networks: [scale-net]
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+
+  # ── batch ──
+  spark-master:
+    image: apache/spark:3.5.3
+    networks: [scale-net]
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master"]
+    ports: ["127.0.0.1:18080:8080"]
+
+  spark-worker:
+    image: apache/spark:3.5.3
+    networks: [scale-net]
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker",
+              "--cores", "2", "--memory", "1g", "spark://spark-master:7077"]
+    depends_on: [spark-master]
+    deploy:
+      replicas: ${SPARK_WORKERS:-2}
+
+  # ── one-shot setup: schema, bucket, models ──
+  setup:
+    image: pharmawatch-app:scale
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    networks: [scale-net]
+    environment: *app-env
+    working_dir: /app/backend
+    command: ["sh", "-c", "python -m db.migrate --skip-seed && python -m core.storage seed-models"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      objectstore: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # ── application ──
+  web:
+    <<: *app
+    deploy:
+      replicas: ${WEB_REPLICAS:-2}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:5000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  worker:
+    <<: *app
+    working_dir: /app/backend
+    command: ["python", "-m", "workers.run"]
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}

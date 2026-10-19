@@ -173,12 +173,8 @@ def main(argv=None):
     parser.add_argument("--force", action="store_true", help="re-parse quarters that already have a manifest")
     args = parser.parse_args(argv)
 
-    try:
-        from dotenv import load_dotenv
-        from core.config import BACKEND_DIR
-        load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
-    except ImportError:
-        pass
+    from core.config import load_env
+    load_env()
 
     from faers.downloader import raw_dir, is_verified
     raw = raw_dir()

@@ -116,7 +116,8 @@ def deployed(tmp_path, monkeypatch):
             "predicted_interaction_threshold": None, **over}
         (tmp_path / "ddi_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         inference.reset()
-    monkeypatch.setattr(inference, "MODEL_DIR", str(tmp_path))
+    from core import config
+    monkeypatch.setattr(config, "MODEL_DIR", str(tmp_path))         # the local storage area "models"
     monkeypatch.setattr(inference, "MANIFEST_PATH", str(tmp_path / "ddi_manifest.json"))
     write()
     yield write

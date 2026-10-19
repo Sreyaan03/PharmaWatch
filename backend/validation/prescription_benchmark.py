@@ -23,6 +23,7 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from core import config
 
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "fixtures", "prescriptions")
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -227,7 +228,7 @@ def run(extractor="local", smoke=False, review=False, out_path=None, directory=F
 
     report = {
         "benchmark": "prescription", "smoke": smoke, "extractor": extractor,
-        "model": os.getenv("RX_VISION_MODEL", "claude-opus-5-5") if extractor == "cloud" else "easyocr + rules",
+        "model": config.get("RX_VISION_MODEL") if extractor == "cloud" else "easyocr + rules",
         "run_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "dictionary": "test fixture (parser only)" if smoke else f"FAERS identity table, {len(lexicon):,} names",
         "test_set": {"documents": len(docs), "scored": len(scores), "synthetic": True, "handwritten": 0,
@@ -257,10 +258,10 @@ def main(argv=None):
     ap.add_argument("--extractor", choices=("local", "cloud"), default="local")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--review", action="store_true")
-    ap.add_argument("--ocr-cache", default=os.path.join(os.environ.get("DATA_DIR", ""), "ocr_cache_prescriptions.json")
-                    if os.environ.get("DATA_DIR") else None, help="remember OCR output between runs")
+    ap.add_argument("--ocr-cache", default=os.path.join(config.data_dir(), "ocr_cache_prescriptions.json")
+                    if config.raw("DATA_DIR") else None, help="remember OCR output between runs")
     args = ap.parse_args(argv)
-    if args.extractor == "cloud" and not os.getenv("ANTHROPIC_API_KEY"):
+    if args.extractor == "cloud" and not config.get("ANTHROPIC_API_KEY"):
         print("[-] ANTHROPIC_API_KEY is not set; the cloud benchmark makes paid API calls.", file=sys.stderr)
         return 2
     if not os.path.exists(os.path.join(FIXTURES, "manifest.json")):

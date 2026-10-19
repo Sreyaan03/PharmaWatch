@@ -281,12 +281,8 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="list quarters and what is already on disk")
     args = parser.parse_args(argv)
 
-    try:
-        from dotenv import load_dotenv
-        from core.config import BACKEND_DIR
-        load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
-    except ImportError:
-        pass
+    from core.config import load_env
+    load_env()
 
     if args.adopt:
         adopted, rejected = adopt_existing()

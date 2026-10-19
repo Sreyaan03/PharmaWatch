@@ -1,0 +1,130 @@
+{
+  "run_at": "2026-10-19T08:52:00Z",
+  "machine": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpus": 12,
+    "ram_gb": 16.8
+  },
+  "profile": "docker/docker-compose.scale.yml",
+  "checks": {
+    "load_balancing": {
+      "passed": true,
+      "web_copies": 2,
+      "copies_that_answered": [
+        "55c20baeb24c",
+        "82876370d82f"
+      ]
+    },
+    "job_on_a_worker": {
+      "passed": true,
+      "job": "057d8b8e-8acb-4767-af60-fabde277e56a",
+      "taken_by_web_copy": "55c20baeb24c",
+      "run_by": "78c6dbcc26ac:1",
+      "status_read_from": [
+        "55c20baeb24c",
+        "82876370d82f"
+      ],
+      "lines": 3
+    },
+    "worker_killed": {
+      "passed": true,
+      "job": "931b9bb0-dd82-43ae-af8f-d19d3ef08938",
+      "killed_worker": "78c6dbcc26ac:1",
+      "finished_by": "23a28111a3fe:1",
+      "attempts": 2,
+      "seconds_from_kill_to_done": 44.9,
+      "lease_seconds": 20
+    },
+    "shared_storage": {
+      "passed": true,
+      "uploads_left_in_store": 0,
+      "backend": "s3 (SeaweedFS)",
+      "model_files_in_store": 29,
+      "deployed_manifest_in_store": true
+    },
+    "spark_cluster": {
+      "passed": true,
+      "workers_registered": 2,
+      "workers_started": 2,
+      "cores": 4
+    },
+    "readiness": {
+      "passed": true,
+      "ready_with_kafka_stopped": 503,
+      "live_with_kafka_stopped": 200
+    }
+  },
+  "note": "Measured on one machine: this shows the scale-out mechanism works; cluster speedups will differ.",
+  "measurements": {
+    "workers_ocr_jobs": [
+      {
+        "workers": 1,
+        "torch_threads_per_worker": "default (one per core)",
+        "jobs": 24,
+        "seconds": 143.1,
+        "jobs_per_minute": 10.06
+      },
+      {
+        "workers": 2,
+        "torch_threads_per_worker": "default (one per core)",
+        "jobs": 24,
+        "seconds": 106.0,
+        "jobs_per_minute": 13.59
+      },
+      {
+        "workers": 4,
+        "torch_threads_per_worker": "default (one per core)",
+        "jobs": 24,
+        "seconds": 123.1,
+        "jobs_per_minute": 11.7
+      }
+    ],
+    "web_copies_load": [
+      {
+        "web_copies": 1,
+        "path": "/api/dashboard/top-events?limit=7",
+        "concurrency": 16,
+        "seconds": 30,
+        "requests": 18046,
+        "errors": 0,
+        "per_second": 601.5,
+        "p50_ms": 25.8,
+        "p95_ms": 35.6
+      },
+      {
+        "web_copies": 3,
+        "path": "/api/dashboard/top-events?limit=7",
+        "concurrency": 16,
+        "seconds": 30,
+        "requests": 27573,
+        "errors": 0,
+        "per_second": 919.1,
+        "p50_ms": 16.9,
+        "p95_ms": 26.0
+      }
+    ],
+    "workers_ocr_jobs_shared_cores": [
+      {
+        "workers": 1,
+        "torch_threads_per_worker": 12,
+        "jobs": 24,
+        "seconds": 150.4,
+        "jobs_per_minute": 9.57
+      },
+      {
+        "workers": 2,
+        "torch_threads_per_worker": 6,
+        "jobs": 24,
+        "seconds": 110.4,
+        "jobs_per_minute": 13.04
+      },
+      {
+        "workers": 4,
+        "torch_threads_per_worker": 3,
+        "jobs": 24,
+        "seconds": 88.0,
+        "jobs_per_minute": 16.37
+      }
+    ]
+  }
+}

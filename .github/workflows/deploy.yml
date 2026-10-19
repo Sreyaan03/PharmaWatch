@@ -53,7 +53,7 @@ jobs:
           MYSQL_PASSWORD: root
           MYSQL_DATABASE: pharmawatch_test
         run: |
-          python backend/db/migrate.py
+          cd backend && python -m db.migrate
 
       - name: Run Test Suite
         env:

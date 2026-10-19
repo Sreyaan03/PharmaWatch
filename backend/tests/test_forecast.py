@@ -118,7 +118,8 @@ def test_a_short_series_is_refused_not_padded():
 # ── training uses only the training window; stale models are not used ─────────
 @pytest.fixture
 def model_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(forecast, "MODEL_DIR", str(tmp_path))
+    from core import config
+    monkeypatch.setattr(config, "MODEL_DIR", str(tmp_path))         # the local storage area "models"
     return tmp_path
 
 

@@ -2,6 +2,8 @@
 """
 migrate.py — PharmaWatch MySQL Database Migration Runner
 Idempotently creates the MySQL schema, verifies tables, and optionally seeds clean legacy data.
+
+Run from the backend directory:  python -m db.migrate [--skip-seed]
 """
 
 import os
@@ -12,6 +14,8 @@ import sqlite3
 import time
 import pymysql
 from pymysql.cursors import DictCursor
+
+from core import config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +32,9 @@ LEGACY_SQLITE_PATH = os.path.join(BASE_DIR, "pharmawatch.db")
 ADDITIVE_COLUMNS = [
     ("signals_cache", "data_version", "VARCHAR(160) NULL AFTER `source`"),
     ("kafka_pipeline_stats", "partition_id", "INT NOT NULL DEFAULT 0 AFTER `topic`"),
+    ("jobs", "lease_owner", "VARCHAR(64) DEFAULT NULL"),
+    ("jobs", "lease_expires", "DATETIME DEFAULT NULL"),
+    ("jobs", "attempts", "INT NOT NULL DEFAULT 0"),
 ]
 
 # (table, index, columns) unique keys added to tables that may already exist. Duplicate rows are
@@ -46,20 +53,12 @@ RETIRED_ROWS = [
 
 
 def parse_args():
-    env_file = os.path.join(BASE_DIR, ".env")
-    if os.path.exists(env_file):
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(env_file, override=False)
-        except ImportError:
-            pass
-
     parser = argparse.ArgumentParser(description="PharmaWatch MySQL Schema Migration Runner")
-    parser.add_argument("--host", default=os.getenv("MYSQL_HOST", "127.0.0.1"), help="MySQL Host")
-    parser.add_argument("--port", type=int, default=int(os.getenv("MYSQL_PORT", 3306)), help="MySQL Port")
-    parser.add_argument("--user", default=os.getenv("MYSQL_USER", "root"), help="MySQL User")
-    parser.add_argument("--password", default=os.getenv("MYSQL_PASSWORD", ""), help="MySQL Password")
-    parser.add_argument("--database", default=os.getenv("MYSQL_DATABASE", "pharmawatch"), help="Target Database")
+    parser.add_argument("--host", default=config.get("MYSQL_HOST"), help="MySQL Host")
+    parser.add_argument("--port", type=int, default=config.get("MYSQL_PORT"), help="MySQL Port")
+    parser.add_argument("--user", default=config.get("MYSQL_USER"), help="MySQL User")
+    parser.add_argument("--password", default=config.get("MYSQL_PASSWORD"), help="MySQL Password")
+    parser.add_argument("--database", default=config.get("MYSQL_DATABASE"), help="Target Database")
     parser.add_argument("--skip-seed", action="store_true", help="Skip legacy SQLite clean data seeding")
     return parser.parse_args()
 

@@ -122,12 +122,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Load parsed FAERS quarters into DuckDB.")
     parser.add_argument("--quarters", nargs="+", metavar="YYYYqN", help="limit to these quarters")
     args = parser.parse_args(argv)
-    try:
-        from dotenv import load_dotenv
-        from core.config import BACKEND_DIR
-        load_dotenv(os.path.join(BACKEND_DIR, ".env"), override=False)
-    except ImportError:
-        pass
+    from core.config import load_env
+    load_env()
     try:
         load_database(quarters=args.quarters)
     except (FileNotFoundError, PermissionError) as exc:

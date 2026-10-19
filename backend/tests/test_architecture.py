@@ -83,6 +83,7 @@ def test_lower_layers_do_not_import_upward():
     # core/auth.py is the one request guard that legitimately needs Flask.
     problems = [p for p in _violations(["clients", "ml", "faers", "ingest"], upward)]
     problems += [p for p in _violations(["core"], {"routes", "services", "ml", "clients", "faers"})]
+    problems += [p for p in _violations(["workers"], {"routes", "flask"})]   # workers run handlers, not HTTP
     assert not problems, problems
 
 

@@ -95,12 +95,13 @@ def test_expired_jobs_and_their_files_are_purged():
     assert jobs.get(job_id) is None and not os.path.exists(_upload_dir(job_id))
 
 
-def test_jobs_interrupted_by_a_restart_are_reported_failed_not_lost():
+def test_jobs_interrupted_too_often_are_reported_failed_not_lost():
+    """Interrupted jobs are retried (see test_queue.py); after MAX_ATTEMPTS they fail with a reason."""
     job_id = jobs.create("t_interrupt", data=b"x", filename="a.txt")
-    mysql.execute("UPDATE jobs SET status = 'running' WHERE id = %s", (job_id,))
-    assert jobs.recover_interrupted() >= 1
+    mysql.execute("UPDATE jobs SET status = 'running', attempts = %s WHERE id = %s", (jobs.MAX_ATTEMPTS, job_id))
+    assert jobs.recover_interrupted(dispatch=False)[1] >= 1
     j = jobs.get(job_id)
-    assert j["status"] == "failed" and "restart" in j["error"] and not os.path.exists(_upload_dir(job_id))
+    assert j["status"] == "failed" and "restarts" in j["error"] and not os.path.exists(_upload_dir(job_id))
 
 
 def test_the_in_memory_task_dict_is_gone():

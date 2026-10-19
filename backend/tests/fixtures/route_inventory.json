@@ -998,6 +998,18 @@
         "GET"
       ],
       "rule": "/api/validation/summary"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/health/live"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/health/ready"
     }
   ]
 }

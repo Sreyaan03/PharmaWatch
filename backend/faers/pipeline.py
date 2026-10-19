@@ -7,9 +7,8 @@
 # the consumer; never inline in the consumer loop. The data version changes with the new quarter,
 # so every cached result computed on the old data stops being served.
 
-import os
 
-from core import jobs
+from core import config, jobs
 from db.mysql import execute, query, query_one
 from faers import downloader, identity_build, loader, parser
 from faers.registry import list_quarters
@@ -29,7 +28,7 @@ def loaded_quarters(db_file=None):
 
 
 def auto_refresh_enabled():
-    return os.getenv("FAERS_AUTO_REFRESH", "").strip().lower() in {"1", "true", "yes", "on"}
+    return config.get("FAERS_AUTO_REFRESH")
 
 
 def refresh(quarter, report=print):

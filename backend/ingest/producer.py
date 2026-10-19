@@ -13,7 +13,6 @@ Run:  python -m ingest.producer   (from the backend directory)
 Env:  KAFKA_BOOTSTRAP_SERVERS, FDA_API_KEY, NCBI_API_KEY (all from .env)
 """
 
-import os
 import sys
 import json
 import time
@@ -22,14 +21,8 @@ import datetime
 import requests
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
-from dotenv import load_dotenv
 
-# ── Load environment ──────────────────────────────────────────────────────────
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-
-FDA_API_KEY  = os.getenv("FDA_API_KEY", "")
-NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")
-KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+from core import config
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -53,14 +46,14 @@ def create_producer(retries=10, delay=5):
     for attempt in range(1, retries + 1):
         try:
             producer = KafkaProducer(
-                bootstrap_servers=KAFKA_SERVERS,
+                bootstrap_servers=config.get("KAFKA_BOOTSTRAP_SERVERS"),
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                 key_serializer=lambda k: k.encode("utf-8") if k else None,
                 acks="all",              # wait for leader + all replicas
                 retries=3,
                 max_block_ms=10000,
             )
-            log.info(f"✅ Connected to Kafka at {KAFKA_SERVERS}")
+            log.info(f"✅ Connected to Kafka at {config.get('KAFKA_BOOTSTRAP_SERVERS')}")
             return producer
         except KafkaError:
             log.warning(f"Kafka not ready (attempt {attempt}/{retries}), retrying in {delay}s...")
@@ -120,7 +113,7 @@ def poll_faers_release(producer):
 def poll_pubmed(producer):
     log.info("=== Polling PubMed NCBI ===")
     base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
-    api_suffix = f"&api_key={NCBI_API_KEY}" if NCBI_API_KEY else ""
+    api_suffix = f"&api_key={config.get('NCBI_API_KEY')}" if config.get("NCBI_API_KEY") else ""
     published = 0
 
     # Search terms — focus on drug safety, pharmacovigilance, adverse events
@@ -252,7 +245,7 @@ def poll_fda_alerts(producer):
     """Poll FDA drug enforcement (recalls/safety) via openFDA API."""
     log.info("=== Polling FDA Safety Alerts (openFDA enforcement) ===")
     base = "https://api.fda.gov/drug/enforcement.json"
-    api_suffix = f"&api_key={FDA_API_KEY}" if FDA_API_KEY else ""
+    api_suffix = f"&api_key={config.get('FDA_API_KEY')}" if config.get("FDA_API_KEY") else ""
     published = 0
 
     # Fetch the 20 most recent drug enforcement actions (recalls, market withdrawals)

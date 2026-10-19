@@ -3,7 +3,6 @@ mysql.py — Production MySQL Connection Pooling & Database Adapter for PharmaWa
 Provides thread-safe connection pooling, DictCursor results, and Decimal-safe type casting.
 """
 
-import os
 import logging
 from decimal import Decimal
 from contextlib import contextmanager
@@ -11,7 +10,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 from dbutils.pooled_db import PooledDB
 
-from dotenv import load_dotenv
+from core import config
 
 log = logging.getLogger("pharmawatch.db")
 
@@ -20,18 +19,14 @@ _POOL = None
 def get_db_config(load_env=True):
     """Retrieve MySQL credentials from environment variables."""
     if load_env:
-        env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-        if os.path.exists(env_path):
-            load_dotenv(env_path, override=False)
-        else:
-            load_dotenv(override=False)
+        config.load_env()
 
     return {
-        "host": os.getenv("MYSQL_HOST", "localhost"),
-        "port": int(os.getenv("MYSQL_PORT", 3306)),
-        "user": os.getenv("MYSQL_USER", "root"),
-        "password": os.getenv("MYSQL_PASSWORD", ""),
-        "database": os.getenv("MYSQL_DATABASE", "pharmawatch"),
+        "host": config.get("MYSQL_HOST"),
+        "port": config.get("MYSQL_PORT"),
+        "user": config.get("MYSQL_USER"),
+        "password": config.get("MYSQL_PASSWORD"),
+        "database": config.get("MYSQL_DATABASE"),
         "charset": "utf8mb4",
         "cursorclass": DictCursor,
         "connect_timeout": 10,
@@ -47,9 +42,9 @@ def get_pool():
         log.info(f"Initializing MySQL connection pool for {cfg['user']}@{cfg['host']}:{cfg['port']}/{cfg['database']}")
         _POOL = PooledDB(
             creator=pymysql,
-            maxconnections=int(os.getenv("MYSQL_MAX_CONNECTIONS", 20)),
-            mincached=int(os.getenv("MYSQL_MIN_CACHED", 2)),
-            maxcached=int(os.getenv("MYSQL_MAX_CACHED", 10)),
+            maxconnections=config.get("MYSQL_MAX_CONNECTIONS"),
+            mincached=config.get("MYSQL_MIN_CACHED"),
+            maxcached=config.get("MYSQL_MAX_CACHED"),
             blocking=True,
             ping=7,  # Ping on borrow to ensure live connection (auto-reconnect)
             **cfg

@@ -1,17 +1,17 @@
 # backend/services/pipeline.py
 # Business logic for backend/routes/pipeline.py (no Flask imports).
 
+from core import config
 from db.mysql import query, query_one
 
 
 def broker_reachable(timeout=1.0):
     """True when the first configured Kafka bootstrap server accepts a TCP connection."""
-    import os
     import socket
-    server = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").split(",")[0].strip()
-    host, _, port = server.partition(":")
+    server = config.get("KAFKA_BOOTSTRAP_SERVERS").split(",")[0].strip()
+    host, _, port = server.rpartition(":")
     try:
-        socket.create_connection((host or "localhost", int(port or 9092)), timeout=timeout).close()
+        socket.create_connection((host, int(port)), timeout=timeout).close()
         return True
     except (OSError, ValueError):
         return False

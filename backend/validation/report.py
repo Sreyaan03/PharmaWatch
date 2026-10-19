@@ -30,7 +30,7 @@ KNOWN_LIMITATIONS = [
 
 
 def _load(name, smoke):
-    base = name + ("_smoke" if smoke else "")
+    base = name + ("_smoke" if smoke and name not in SAME_FILE_FOR_SMOKE else "")
     path = os.path.join(REPORTS_DIR, base + ".json")
     if not os.path.exists(path):
         return None
@@ -116,8 +116,28 @@ def _prescription_component(d):
                       f"{o.get('wrong_ingredients_flagged_for_checking')}."}
 
 
+def _scaling_component(d):
+    rows = [{"set": f"Check: {name.replace('_', ' ')}", "pairs": None,
+             "metrics": {"Passed": [1.0 if c.get("passed") else 0.0, None]}}
+            for name, c in (d.get("checks") or {}).items()]
+    m = d.get("measurements") or {}
+    for key, label in (("workers_ocr_jobs", "default threads"), ("workers_ocr_jobs_shared_cores", "threads = cores / workers")):
+        for r in m.get(key) or []:
+            rows.append({"set": f"Workers: {r['workers']}, {label} ({r['jobs']} OCR jobs)", "pairs": r["jobs"],
+                         "metrics": {"Jobs per minute": [r["jobs_per_minute"], None], "Seconds": [r["seconds"], None]}})
+    for r in m.get("web_copies_load") or []:
+        rows.append({"set": f"Web copies: {r['web_copies']} ({r['concurrency']} concurrent clients)", "pairs": r["requests"],
+                     "metrics": {"Requests per second": [r["per_second"], None], "p95 ms": [r["p95_ms"], None],
+                                 "Errors": [r["errors"], None]}})
+    mach = d.get("machine") or {}
+    return {"title": "Architecture: scale-out", "reference": d.get("profile"),
+            "model": None, "data_version": f"{mach.get('cpus')} CPUs, {mach.get('ram_gb')} GB RAM, one machine",
+            "run_at": d.get("run_at"), "rows": rows, "caveat": d.get("note")}
+
+
 BUILDERS = {"signals": _signals_component, "ddi": _ddi_component, "ner": _ner_component,
-            "prescription": _prescription_component}
+            "prescription": _prescription_component, "scaling": _scaling_component}
+SAME_FILE_FOR_SMOKE = {"scaling"}          # measured on the scaled profile, never in a smoke run
 
 
 def build_summary(smoke=False, write=True):

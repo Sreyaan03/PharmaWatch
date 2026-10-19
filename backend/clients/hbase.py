@@ -1,8 +1,9 @@
 # backend/clients/hbase.py
 # HBase (Thrift) connection with a circuit breaker for the TWOSIDES interaction table.
 
-import os
 import time
+
+from core import config
 
 
 # ── HBase Circuit Breaker Cache ──────────────────────────────────────────────
@@ -45,8 +46,8 @@ def _hbase_connect():
 
     def _open_fresh():
         """Open a brand-new Thrift connection with a short timeout."""
-        host = os.getenv("HBASE_HOST", "127.0.0.1")
-        port = int(os.getenv("HBASE_PORT", 9090))
+        host = config.get("HBASE_HOST")
+        port = config.get("HBASE_PORT")
         c = happybase.Connection(host, port=port, timeout=3000)
         c.open()
         return c
@@ -76,6 +77,21 @@ def _hbase_connect():
         _hbase_online_cached = False
         _hbase_last_check = now
         raise
+
+
+def hbase_available():
+    """True when a Thrift connection opens now (the circuit breaker answers quickly when it is down)."""
+    try:
+        conn = _hbase_connect()
+    except Exception:
+        return False
+    if conn is None:
+        return False
+    try:
+        conn.close()
+    except Exception:
+        pass
+    return True
 
 
 def find_pair_row(name_a, name_b):

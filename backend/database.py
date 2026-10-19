@@ -15,7 +15,7 @@ log = logging.getLogger("pharmawatch.database")
 def init_db():
     """
     Verifies MySQL connectivity on application startup.
-    Detailed DDL migrations are handled idempotently via backend/db/migrate.py.
+    Detailed DDL migrations are handled idempotently via `python -m db.migrate` (backend/db/migrate.py).
     """
     try:
         status = ping()
@@ -260,7 +260,7 @@ def upsert_signal(drug, event, metrics, source="faers", data_version=None):
     except Exception as e:
         # A database created before data_version existed: store the row without it. The reader
         # treats an unversioned row as stale, so it is recomputed rather than trusted.
-        log.warning(f"[DB] upsert_signal with data_version failed ({e}); run backend/db/migrate.py")
+        log.warning(f"[DB] upsert_signal with data_version failed ({e}); run python -m db.migrate")
         try:
             execute(sql_plain, params)
         except Exception as e2:

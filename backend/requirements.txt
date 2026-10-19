@@ -7,6 +7,7 @@
 flask==3.0.3
 flask-cors==4.0.1
 flask-limiter==4.1.1
+redis==8.1.0                  # rate-limit counters shared by several web copies
 gunicorn==22.0.0
 
 # Database Engine & Connection Pooling (MySQL 8.0)
@@ -43,9 +44,13 @@ kafka-python==3.0.11
 praw==7.8.1
 fuzzywuzzy==0.18.0
 
+# Object storage (STORAGE_BACKEND=s3: MinIO, S3 or any S3-compatible store)
+boto3==1.43.114
+
 # Optional Big Data Connectors (used in scripts / HBase mock)
 happybase==1.3.0
 thriftpy2==0.6.0
 
 # Testing & Quality
 pytest>=8.2.0
+moto[s3]==5.2.4

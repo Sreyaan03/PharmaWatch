@@ -12,6 +12,7 @@ import statistics
 from services.prescription.lexicon import DrugLexicon
 from services.prescription.parse import parse_medications
 from services.prescription.schema import ExtractionResult, SchemaError, result_from_dict, tool_schema
+from core import config
 
 log = logging.getLogger(__name__)
 
@@ -169,8 +170,8 @@ class CloudVisionExtractor:
 
 def get_extractor():
     """Cloud when a key is configured and RX_EXTRACTOR allows it, otherwise local (works offline)."""
-    mode = os.getenv("RX_EXTRACTOR", "auto").lower()
-    if mode != "local" and os.getenv("ANTHROPIC_API_KEY"):
+    mode = config.get("RX_EXTRACTOR").lower()
+    if mode != "local" and config.get("ANTHROPIC_API_KEY"):
         return CloudVisionExtractor()
     return LocalExtractor()
 

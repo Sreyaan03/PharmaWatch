@@ -15,22 +15,15 @@ Every write is an upsert on a natural key, so a message delivered twice changes 
 
 import json
 import logging
-import os
 import sys
 import time
 
-from dotenv import load_dotenv
-
 # Run from the backend directory: `python -m ingest.consumer`
-backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-load_dotenv(os.path.join(backend_dir, ".env"))
-
-from db.mysql import execute, ping  # noqa: E402
-from faers import pipeline as faers_pipeline  # noqa: E402
-from faers.mentions import MentionIndex  # noqa: E402
-from faers.registry import database_path  # noqa: E402
-
-KAFKA_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+from core import config
+from db.mysql import execute, ping
+from faers import pipeline as faers_pipeline
+from faers.mentions import MentionIndex
+from faers.registry import database_path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -209,7 +202,7 @@ def create_consumer(retries=10, delay=5):
         try:
             consumer = KafkaConsumer(
                 *TOPIC_HANDLERS.keys(),
-                bootstrap_servers=KAFKA_SERVERS,
+                bootstrap_servers=config.get("KAFKA_BOOTSTRAP_SERVERS"),
                 value_deserializer=lambda v: json.loads(v.decode("utf-8")),
                 group_id="pharmawatch-consumer-group",
                 auto_offset_reset="earliest",
@@ -218,7 +211,7 @@ def create_consumer(retries=10, delay=5):
                 session_timeout_ms=30000,
                 max_poll_records=50,
             )
-            log.info(f"Consumer connected to Kafka at {KAFKA_SERVERS}; topics {list(TOPIC_HANDLERS)}")
+            log.info(f"Consumer connected to Kafka at {config.get('KAFKA_BOOTSTRAP_SERVERS')}; topics {list(TOPIC_HANDLERS)}")
             return consumer
         except KafkaError:
             log.warning(f"Kafka not ready (attempt {attempt}/{retries}), retrying in {delay}s...")

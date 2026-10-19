@@ -1,0 +1,35 @@
+# PharmaWatch — Caddy for the scaled profile (docker-compose.scale.yml): plain HTTP on :80,
+# round robin across every web copy. `dynamic a web 5000` re-reads the copies from Docker's DNS,
+# so changing WEB_REPLICAS needs no edit here. A copy that fails is skipped for 30 s (passive
+# health; each copy's /health/ready is also its container healthcheck).
+
+:80 {
+    encode gzip zstd
+
+    @backend path /api/* /health/*
+    handle @backend {
+        reverse_proxy {
+            dynamic a web 5000 {
+                refresh 5s
+            }
+            lb_policy round_robin
+            fail_duration 30s
+            max_fails 1
+            unhealthy_status 5xx
+            transport http {
+                response_header_timeout 120s
+            }
+        }
+    }
+
+    handle_path /static/* {
+        root * /app/src
+        file_server
+    }
+
+    handle {
+        root * /app/src
+        file_server
+        try_files {path} /index.html
+    }
+}

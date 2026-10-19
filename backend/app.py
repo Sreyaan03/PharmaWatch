@@ -4,19 +4,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 import logging
-import os
 import pathlib
+import socket
 from flask import Flask, send_from_directory
 from flask_cors import CORS
-from dotenv import load_dotenv
+from core import config
 
 from database import init_db
 
 # Request-time diagnostics go through logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-# Load environment variables
-load_dotenv()
+# Load backend/.env (existing environment variables win)
+config.load_env()
 
 # Initialize Database
 init_db()
@@ -28,10 +28,7 @@ SRC_DIR = str(pathlib.Path(__file__).parent.parent / "src")
 app = Flask(__name__, static_folder=SRC_DIR, static_url_path='/static')
 
 # Set up CORS based on configured origins
-_allowed_origins = os.getenv(
-    'ALLOWED_ORIGINS',
-    'http://localhost:5000,http://127.0.0.1:5000'
-).split(',')
+_allowed_origins = config.get("ALLOWED_ORIGINS").split(",")
 CORS(app, origins=_allowed_origins)
 
 # Initialize Rate Limiter with a graceful fallback if not installed globally
@@ -42,7 +39,7 @@ try:
         key_func=get_remote_address,
         app=app,
         default_limits=["10000 per hour"],
-        storage_uri="memory://"
+        storage_uri=config.get("RATE_LIMIT_STORAGE_URI")
     )
 except ImportError:
     class MockLimiter:
@@ -67,6 +64,16 @@ def serve_index():
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
     return resp
+
+_INSTANCE = socket.gethostname()
+
+
+@app.after_request
+def name_the_instance(response):
+    """Say which copy answered, so load balancing can be seen (and debugged) from outside."""
+    response.headers["X-Instance"] = _INSTANCE
+    return response
+
 
 @app.after_request
 def attach_provenance(response):
@@ -122,10 +129,12 @@ app.register_blueprint(validation_bp)
 app.register_blueprint(prescription_bp)
 
 def _job_housekeeping():
-    """Jobs left running by a previous process cannot finish; expired ones are removed."""
+    """Inline mode: jobs left by the previous process are requeued here (workers do this in kafka
+    mode, where other processes may still be running them). Expired jobs are removed."""
     try:
-        from core import jobs
-        jobs.recover_interrupted()
+        from core import jobs, queue
+        if queue.mode() == "inline":
+            jobs.recover_interrupted(startup=True)
         jobs.purge_expired()
     except Exception as exc:                      # the app runs without the job store
         logging.getLogger(__name__).warning(f"[JOBS] startup housekeeping skipped: {exc}")
@@ -134,4 +143,4 @@ def _job_housekeeping():
 _job_housekeeping()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host=config.get("HOST"), port=config.get("PORT"), debug=False)

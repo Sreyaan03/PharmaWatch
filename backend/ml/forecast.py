@@ -15,9 +15,9 @@ otherwise the baseline is shown and says so. A month is flagged only when its ac
 above the forecast interval.
 """
 
+import io
 import json
 import logging
-import os
 import re
 from datetime import datetime, timezone
 
@@ -25,10 +25,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from core.config import MODEL_DIR
+from core import storage
 
 log = logging.getLogger(__name__)
-os.makedirs(MODEL_DIR, exist_ok=True)
 
 SEQ_LENGTH = 12          # months of history the LSTM sees
 HOLDOUT = 12             # months in each of the validation and test windows
@@ -145,8 +144,9 @@ def _slug(drug):
     return re.sub(r"[^a-z0-9]+", "_", (drug or "").lower()).strip("_") or "drug"
 
 
-def _paths(drug):
-    base = os.path.join(MODEL_DIR, f"lstm_share_{_slug(drug)}")
+def _keys(drug):
+    """Storage keys (area 'models') of a drug's forecaster weights and metadata."""
+    base = f"lstm_share_{_slug(drug)}"
     return base + ".pt", base + "_meta.json"
 
 
@@ -185,17 +185,18 @@ def train_model(drug, months, share, totals, epochs=100, lr=0.01, seed=0):
     model.eval()
 
     result = evaluate(months, share, totals, _predictor(model, share, scale))
-    weights, meta_path = _paths(drug)
-    torch.save(model.state_dict(), weights)
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({
+    weights_key, meta_key = _keys(drug)
+    buffer = io.BytesIO()
+    torch.save(model.state_dict(), buffer)
+    storage.put("models", weights_key, buffer.getvalue())
+    storage.put("models", meta_key, json.dumps({
             "drug": drug, "scale": scale, "seq_length": SEQ_LENGTH,
             "months": n, "first_month": months[0], "last_month": months[-1],
             "train_end_month": months[train_end - 1], "epochs": epochs,
             "lstm_error": result["lstm_error"], "baseline_error": result["baseline_error"],
             "model_used": result["model_used"],
             "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }, f)
+        }).encode("utf-8"))
     log.info(f"[FORECAST] {drug}: LSTM error {result['lstm_error']} vs baseline "
              f"{result['baseline_error']} -> {result['model_used']}")
     return result, None
@@ -208,13 +209,14 @@ def predict(drug, months, share, totals):
     A model trained on different data (other months loaded) would have seen the validation or
     test window, so it is reported as stale and the baseline is used.
     """
-    weights, meta_path = _paths(drug)
+    weights_key, meta_key = _keys(drug)
     lstm_predict, status = None, "not_trained"
+    meta_bytes = storage.get("models", meta_key) if len(share) >= MIN_MONTHS_LSTM else None
+    weights = storage.local_path("models", weights_key) if meta_bytes else None
     if len(share) < MIN_MONTHS_LSTM:
         status = "insufficient_data"
-    elif os.path.exists(weights) and os.path.exists(meta_path):
-        with open(meta_path, encoding="utf-8") as f:
-            meta = json.load(f)
+    elif meta_bytes and weights:
+        meta = json.loads(meta_bytes)
         if (meta.get("months"), meta.get("first_month"), meta.get("last_month")) == \
                 (len(share), months[0], months[-1]):
             model = ADEForecaster()
