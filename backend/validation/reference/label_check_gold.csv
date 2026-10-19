@@ -1,0 +1,49 @@
+# Gold set for the label-text check (services/label_check.py). in_label = whether the adverse
+# effect is genuinely described in the drug's current FDA label, judged by reading the label and
+# by established label content, independent of the production matcher. The disagreements with the
+# matcher (which reads only the boxed-warning, warnings, precautions, contraindications and
+# adverse-reactions sections, with simple variants) are real and are what the benchmark measures.
+#
+# STATUS: author-labelled, PENDING FACULTY REVIEW. 40 pairs across 8 well-known drugs. This is a
+# small check, not a licensed-MedDRA audit.
+rxcui,ingredient,pt,in_label,basis,labelled_by
+6809,metformin,Lactic acidosis,yes,boxed warning,author
+6809,metformin,Vitamin B12 deficiency,yes,warnings and precautions,author
+6809,metformin,Pancreatitis,yes,postmarketing adverse reactions,author
+6809,metformin,Diarrhoea,yes,most common adverse reaction,author
+6809,metformin,Alopecia,no,not a described effect,author
+6809,metformin,Rhabdomyolysis,no,not described as a metformin effect,author
+11289,warfarin,Haemorrhage,yes,boxed warning: bleeding risk,author
+11289,warfarin,Skin necrosis,yes,warnings: necrosis/gangrene,author
+11289,warfarin,Calciphylaxis,yes,warnings,author
+11289,warfarin,Alopecia,yes,adverse reactions: hair loss,author
+11289,warfarin,Osteoporosis,no,not a described warfarin label effect,author
+11289,warfarin,Nausea,yes,adverse reactions,author
+32968,clopidogrel,Thrombotic thrombocytopenic purpura,yes,warnings: TTP,author
+32968,clopidogrel,Haemorrhage,yes,warnings: bleeding,author
+32968,clopidogrel,Neutropenia,yes,adverse reactions: described (rare),author
+32968,clopidogrel,Rash,yes,adverse reactions,author
+32968,clopidogrel,Myocardial infarction,no,indication context not an ADR,author
+83367,atorvastatin,Rhabdomyolysis,yes,warnings: myopathy/rhabdomyolysis,author
+83367,atorvastatin,Myalgia,yes,adverse reactions,author
+83367,atorvastatin,Hepatotoxicity,yes,warnings: hepatic dysfunction (different wording),author
+83367,atorvastatin,Diabetes mellitus,yes,warnings: increases in HbA1c/glucose,author
+83367,atorvastatin,Memory impairment,yes,adverse reactions: memory loss (postmarketing),author
+83367,atorvastatin,Cataract,no,not a described effect,author
+1191,aspirin,Gastrointestinal haemorrhage,yes,warnings: GI bleeding,author
+1191,aspirin,Reye's syndrome,yes,warning in children,author
+1191,aspirin,Tinnitus,yes,adverse reactions: salicylate effect (different wording),author
+1191,aspirin,Angioedema,yes,hypersensitivity reactions described,author
+1191,aspirin,Rhabdomyolysis,no,not a described aspirin effect,author
+42347,amoxicillin,Anaphylactic reaction,yes,warnings: serious hypersensitivity (different wording),author
+42347,amoxicillin,Clostridium difficile colitis,yes,warnings: CDAD (different wording),author
+42347,amoxicillin,Rash,yes,adverse reactions,author
+42347,amoxicillin,Hepatitis,yes,adverse reactions: hepatic,author
+42347,amoxicillin,Myocardial infarction,no,not a described effect,author
+161,acetaminophen,Hepatotoxicity,yes,hepatic injury heavily described (different wording),author
+161,acetaminophen,Stevens-Johnson syndrome,yes,serious skin reactions warning (different wording),author
+161,acetaminophen,Thrombocytopenia,no,not a described effect,author
+8640,prednisone,Adrenal insufficiency,yes,HPA-axis suppression described (different wording),author
+8640,prednisone,Osteoporosis,yes,adverse reactions/warnings,author
+8640,prednisone,Peptic ulcer,yes,adverse reactions: GI,author
+8640,prednisone,Cataract,yes,posterior subcapsular cataract described,author

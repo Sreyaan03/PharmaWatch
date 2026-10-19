@@ -493,6 +493,32 @@
       ],
       "status": 200
     },
+    "GET /api/surveillance/alerts": {
+      "keys": [
+        "alerts",
+        "count",
+        "meta",
+        "note"
+      ],
+      "status": 200
+    },
+    "GET /api/surveillance/summary": {
+      "keys": [
+        "counts",
+        "data_version",
+        "last_spark_run",
+        "meta",
+        "note"
+      ],
+      "status": 200
+    },
+    "GET /api/surveillance/watchlist": {
+      "keys": [
+        "drugs",
+        "error"
+      ],
+      "status": 503
+    },
     "GET /api/system/bigdata-status": {
       "keys": [
         "hbase_ready",
@@ -576,6 +602,12 @@
       ],
       "status": 403
     },
+    "POST /api/admin/surveillance/detect": {
+      "keys": [
+        "error"
+      ],
+      "status": 403
+    },
     "POST /api/graph/predict": {
       "keys": [
         "error"
@@ -629,6 +661,18 @@
         "error"
       ],
       "status": 503
+    },
+    "POST /api/surveillance/alerts/<int:alert_id>/status": {
+      "keys": [
+        "<text/html>"
+      ],
+      "status": 404
+    },
+    "POST /api/surveillance/watchlist": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
     }
   },
   "rules": [
@@ -643,6 +687,12 @@
         "POST"
       ],
       "rule": "/api/admin/faers/refresh"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/admin/surveillance/detect"
     },
     {
       "methods": [
@@ -979,6 +1029,42 @@
         "GET"
       ],
       "rule": "/api/signals/network"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/surveillance/alerts"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/surveillance/alerts/<int:alert_id>/status"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/surveillance/summary"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/surveillance/watchlist"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/surveillance/watchlist"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "rule": "/api/surveillance/watchlist/<rxcui>"
     },
     {
       "methods": [

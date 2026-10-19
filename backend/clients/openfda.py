@@ -115,3 +115,45 @@ def fetch_label(name: str) -> dict:
     except Exception as exc:
         return {"found": False, "error": type(exc).__name__, "pharm_class": [], "boxed_warning": None,
                 "brand_names": []}
+
+
+# ── label sections, for the surveillance label watcher and the label-text check ──────
+# The sections we store and compare. openFDA field -> the name we use.
+LABEL_SECTIONS = {
+    "boxed_warning": "boxed_warning",
+    "warnings_and_cautions": "warnings_and_cautions",
+    "warnings": "warnings",
+    "precautions": "precautions",
+    "adverse_reactions": "adverse_reactions",
+    "contraindications": "contraindications",
+}
+
+
+def fetch_label_sections(name: str) -> dict:
+    """The current FDA label's identity and safety sections for a generic name.
+
+    Returns {'found', 'set_id', 'effective_time', 'version', 'generic_name', 'sections': {name: text}}.
+    `sections` holds only non-empty safety sections. A lookup failure is {'found': False, 'error': ...}.
+    """
+    LABEL_BASE = "https://api.fda.gov/drug/label.json"
+    try:
+        res = http_requests.get(f'{LABEL_BASE}?search=openfda.generic_name:"{name}"&limit=1', timeout=8).json()
+    except Exception as exc:
+        return {"found": False, "error": type(exc).__name__}
+    if not res.get("results"):
+        return {"found": False, "error": "no_label"}
+    label = res["results"][0]
+    openfda = label.get("openfda", {})
+    sections = {}
+    for field, key in LABEL_SECTIONS.items():
+        text = " ".join(label.get(field, [])).strip()
+        if text:
+            sections[key] = text
+    return {
+        "found": True,
+        "set_id": label.get("set_id") or (openfda.get("spl_set_id") or [None])[0],
+        "effective_time": label.get("effective_time", ""),
+        "version": str(label.get("version", "")),
+        "generic_name": (openfda.get("generic_name") or [name])[0],
+        "sections": sections,
+    }

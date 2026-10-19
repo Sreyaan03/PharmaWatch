@@ -81,9 +81,11 @@ def test_services_have_no_flask_code():
 def test_lower_layers_do_not_import_upward():
     upward = {"routes", "services", "flask"}
     # core/auth.py is the one request guard that legitimately needs Flask.
-    problems = [p for p in _violations(["clients", "ml", "faers", "ingest"], upward)]
+    problems = [p for p in _violations(["clients", "ml", "faers"], upward)]
     problems += [p for p in _violations(["core"], {"routes", "services", "ml", "clients", "faers"})]
-    problems += [p for p in _violations(["workers"], {"routes", "flask"})]   # workers run handlers, not HTTP
+    # workers and the Kafka consumer/producer are event-driven orchestrators: they invoke services
+    # (detect alerts, link evidence, check labels) the way routes do, but never serve HTTP.
+    problems += [p for p in _violations(["workers", "ingest"], {"routes", "flask"})]
     assert not problems, problems
 
 

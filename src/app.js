@@ -1350,6 +1350,9 @@ function navigateTo(sectionId) {
   if (sectionId === 'prescription' && typeof initPrescription === 'function') {
     initPrescription();
   }
+  if (sectionId === 'surveillance' && typeof initSurveillance === 'function') {
+    initSurveillance();
+  }
   if (sectionId === 'validation' && typeof loadValidation === 'function') {
     loadValidation();
   }

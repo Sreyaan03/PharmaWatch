@@ -105,6 +105,7 @@ Every module-level value that persists between requests was checked: either it i
 | `ml/ddi/inference.py` `_scorer` | Loaded interaction model | Read-only, from storage; safe to duplicate (memory per copy). |
 | `services/evidence.py` `_identity` | Identity lookup service | Read-only, over the FAERS database; safe to duplicate. |
 | `services/signal_history.py` `_identity` | Identity lookup service | Read-only, over the FAERS database; safe to duplicate. |
+| `services/label_check.py` `_synonyms_cache` | Inverted event-synonym table | Read-only, loaded from a committed CSV; safe to duplicate. |
 | `services/provenance.py` `_version_cache` | Data version, 60 s | Read-only; at most 60 s stale per copy. |
 | `services/prescription/extract.py` `_lexicon_cache` | Drug-name dictionary | Read-only, keyed on the database file's timestamp; safe to duplicate. |
 

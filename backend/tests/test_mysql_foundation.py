@@ -31,6 +31,9 @@ EXPECTED_TABLES = [
     "jobs",
     "faers_releases",
     "evidence_links",
+    "label_snapshots",
+    "surveillance_watchlist",
+    "surveillance_alerts",
 ]
 
 def test_schema_sql_contains_all_tables():

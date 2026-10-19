@@ -231,3 +231,50 @@ CREATE TABLE IF NOT EXISTS evidence_links (
     INDEX idx_evidence_rxcui (rxcui),
     INDEX idx_evidence_pt (pt)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Latest stored FDA label (safety sections) per watched drug. The label watcher diffs a new
+-- fetch against this row and publishes label-change; sections_json is {section: text}.
+CREATE TABLE IF NOT EXISTS label_snapshots (
+    rxcui VARCHAR(16) NOT NULL PRIMARY KEY,
+    generic_name VARCHAR(191) DEFAULT NULL,
+    set_id VARCHAR(64) DEFAULT NULL,
+    version VARCHAR(16) DEFAULT NULL,
+    effective_time VARCHAR(16) DEFAULT NULL,
+    sections_json MEDIUMTEXT DEFAULT NULL,
+    fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_label_effective (effective_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Drugs a reviewer is watching (shared until accounts arrive in Phase 11).
+CREATE TABLE IF NOT EXISTS surveillance_watchlist (
+    rxcui VARCHAR(16) NOT NULL PRIMARY KEY,
+    ingredient VARCHAR(191) NOT NULL,
+    added_by VARCHAR(64) DEFAULT NULL,
+    added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Reviewable alerts. kind: new_signal | not_in_label | label_change. A disproportionality signal
+-- is a reporting pattern, not proof of causation; these are possible signals for review.
+-- status: new | reviewed | dismissed | escalated. detail_json carries the evidence (metrics,
+-- label section and sentence) shown in the feed. One alert per (kind, rxcui, pt, quarter).
+CREATE TABLE IF NOT EXISTS surveillance_alerts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(16) NOT NULL,
+    rxcui VARCHAR(16) NOT NULL,
+    ingredient VARCHAR(191) NOT NULL,
+    pt VARCHAR(191) NOT NULL DEFAULT '',
+    quarter VARCHAR(8) NOT NULL DEFAULT '',
+    ic025 DOUBLE DEFAULT NULL,
+    cases INT DEFAULT NULL,
+    detail_json MEDIUMTEXT DEFAULT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'new',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by VARCHAR(64) DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    UNIQUE KEY uq_alert (kind, rxcui, pt, quarter),
+    INDEX idx_alert_status (status),
+    INDEX idx_alert_kind (kind),
+    INDEX idx_alert_rxcui (rxcui),
+    INDEX idx_alert_rank (ic025)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

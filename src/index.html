@@ -88,6 +88,7 @@
         <li class="main-nav__item"><a href="#temporal-analysis" class="main-nav__link" data-section="temporal-analysis">Temporal Analysis</a></li>
         <li class="main-nav__item"><a href="#demographics" class="main-nav__link" data-section="demographics">Demographics</a></li>
         <li class="main-nav__item"><a href="#prescription" class="main-nav__link" data-section="prescription">Prescription Review</a></li>
+        <li class="main-nav__item"><a href="#surveillance" class="main-nav__link" data-section="surveillance">Surveillance</a></li>
         <li class="main-nav__item"><a href="#validation" class="main-nav__link" data-section="validation">Methods &amp; Validation</a></li>
         <li class="main-nav__item"><a href="#research-guide" class="main-nav__link" data-section="research-guide" style="color: #f0c040;">Research Guide</a></li>
       </ul>
@@ -1765,6 +1766,52 @@
       </div>
     </section>
 
+    <section id="surveillance" class="page-section" style="display:none;">
+      <style>
+        .sv-banner { background:#fff8e1; border-left:4px solid #f9a825; padding:8px 12px; font-size:0.84rem; margin:0 0 1rem; }
+        .sv-status { font-size:0.78rem; color:#667; margin:0.4rem 0 1rem; }
+        .sv-filters { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+        .sv-filters select, .sv-filters input { padding:5px 8px; font-size:0.82rem; border:1px solid #ccd; border-radius:4px; }
+        .sv-alert { border:1px solid #e3e3ea; border-left-width:4px; border-radius:6px; padding:10px 12px; margin-bottom:0.6rem; background:#fff; }
+        .sv-alert--not_in_label { border-left-color:#c0392b; }
+        .sv-alert--new_signal { border-left-color:#f39c12; }
+        .sv-alert--label_change { border-left-color:#2980b9; }
+        .sv-alert--dismissed { opacity:0.5; }
+        .sv-badge { display:inline-block; font-size:0.68rem; font-weight:600; padding:2px 7px; border-radius:10px; color:#fff; margin-right:0.4rem; }
+        .sv-badge--not_in_label { background:#c0392b; }
+        .sv-badge--new_signal { background:#f39c12; }
+        .sv-badge--label_change { background:#2980b9; }
+        .sv-meta { font-size:0.76rem; color:#667; margin:0.3rem 0; }
+        .sv-sentence { font-size:0.8rem; background:#f7f7fb; border-radius:4px; padding:6px 8px; margin:0.3rem 0; }
+        .sv-actions button { font-size:0.74rem; padding:3px 9px; margin-right:0.3rem; border:1px solid #ccd; background:#f4f4f8; border-radius:4px; cursor:pointer; }
+        .sv-chip { font-size:0.72rem; background:#eef; border-radius:10px; padding:2px 9px; margin-right:0.3rem; }
+      </style>
+      <div class="container">
+        <h1 class="section-title">Surveillance</h1>
+        <p>Possible safety signals for review. Each quarter, drug–event pairs that newly cross the signal
+          threshold become alerts, and those whose effect is <strong>not found in the drug's FDA label text</strong>
+          are ranked first. FDA label changes appear here too.</p>
+        <div class="sv-banner"><strong>Possible signals, for review only.</strong> A disproportionality signal is a
+          reporting pattern in FAERS, not proof that the drug causes the effect. "Not found in label text" is a
+          text search of the label, not a statement that the effect is unlabelled.</div>
+        <div id="sv-status" class="sv-status">Loading…</div>
+        <div class="sv-filters">
+          <select id="sv-kind"><option value="">All kinds</option><option value="not_in_label">Not in label</option>
+            <option value="new_signal">New signal</option><option value="label_change">Label change</option></select>
+          <select id="sv-statusf"><option value="new">New</option><option value="">Any status</option>
+            <option value="reviewed">Reviewed</option><option value="escalated">Escalated</option>
+            <option value="dismissed">Dismissed</option></select>
+          <input id="sv-drug" type="text" placeholder="drug (optional)" />
+          <button class="btn btn--sm" id="sv-apply">Apply</button>
+          <span style="margin-left:auto; font-size:0.82rem;">Watchlist:
+            <input id="sv-watch-add" type="text" placeholder="add a drug" style="width:120px;" />
+            <button class="btn btn--sm" id="sv-watch-btn">Add</button></span>
+        </div>
+        <div id="sv-watchlist" class="sv-meta"></div>
+        <div id="sv-feed"><p style="color:#889;">Loading alerts…</p></div>
+      </div>
+    </section>
+
     <section id="validation" class="page-section" style="display:none;">
       <div class="page-header">
         <h1>Methods &amp; Validation</h1>
@@ -1842,6 +1889,7 @@
   <script src="/static/demographics.js"></script>
   <script src="/static/validation.js"></script>
   <script src="/static/prescription.js"></script>
+  <script src="/static/surveillance.js"></script>
 
 </body>
 

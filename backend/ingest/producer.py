@@ -23,6 +23,7 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
 from core import config
+from ingest.label_watcher import poll_labels
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -296,16 +297,18 @@ def main():
 
     # Track last-run timestamps for each source
     last_release = 0   # once a day
+    last_labels  = 0   # once a day
     last_pubmed  = 0   # every 60 minutes
     last_trials  = 0   # every 60 minutes
     last_rss     = 0   # every 30 minutes
 
     RELEASE_INTERVAL = 24 * 60 * 60
+    LABELS_INTERVAL  = 24 * 60 * 60
     PUBMED_INTERVAL  = 60 * 60
     TRIALS_INTERVAL  = 60 * 60
     RSS_INTERVAL     = 20 * 60   # every 20 minutes (was 30)
 
-    log.info("✅ Producer running. Topics: faers-release | pubmed-stream | clinical-trials | fda-alerts")
+    log.info("✅ Producer running. Topics: faers-release | label-change | pubmed-stream | clinical-trials | fda-alerts")
 
     while True:
         now = time.time()
@@ -313,6 +316,10 @@ def main():
         if now - last_release >= RELEASE_INTERVAL:
             poll_faers_release(producer)
             last_release = time.time()
+
+        if now - last_labels >= LABELS_INTERVAL:
+            poll_labels(producer)
+            last_labels = time.time()
 
         if now - last_rss >= RSS_INTERVAL:
             poll_fda_alerts(producer)

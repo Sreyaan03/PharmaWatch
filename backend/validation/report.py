@@ -153,10 +153,25 @@ def _bigdata_component(d):
             "caveat": d.get("note")}
 
 
+def _label_check_component(d):
+    c = d.get("confusion") or {}
+    rows = [{"set": "Not-in-label detection (possible new signals)", "pairs": d.get("scored"),
+             "metrics": {"Precision": [d.get("precision_not_in_label"), None],
+                         "Recall": [d.get("recall_not_in_label"), None],
+                         "Accuracy": [d.get("accuracy"), None]}},
+            {"set": "Confusion (positive = not in label)", "pairs": d.get("scored"),
+             "metrics": {"True not-in-label": [c.get("true_not_in_label"), None],
+                         "Missed by matcher (in label, called absent)": [c.get("false_not_in_label"), None],
+                         "Over-called (absent effect, called present)": [c.get("false_in_label"), None]}}]
+    return {"title": "Label-text check", "reference": d.get("gold_set"), "model": None,
+            "data_version": None, "run_at": d.get("run_at"), "rows": rows,
+            "caveat": f"{d.get('status')}. {d.get('caveat')}"}
+
+
 BUILDERS = {"signals": _signals_component, "ddi": _ddi_component, "ner": _ner_component,
             "prescription": _prescription_component, "scaling": _scaling_component,
-            "bigdata_timing": _bigdata_component}
-SAME_FILE_FOR_SMOKE = {"scaling", "bigdata_timing"}   # measured runs, never part of a smoke run
+            "bigdata_timing": _bigdata_component, "label_check": _label_check_component}
+SAME_FILE_FOR_SMOKE = {"scaling", "bigdata_timing", "label_check"}   # measured runs, never a smoke run
 
 
 def build_summary(smoke=False, write=True):

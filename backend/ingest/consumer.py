@@ -9,6 +9,8 @@ comes only from the FAERS batch path (faers/), on the full database.
   pubmed-stream    → kafka_pubmed  + evidence_links (paper → drugs and terms named in its title)
   clinical-trials  → kafka_trials  + evidence_links (trial → the drug it studies)
   fda-alerts       → kafka_alerts  + evidence_links (recall → drugs named in the product)
+  signals-updated  → surveillance_alerts (pairs that became a signal in the latest quarter)
+  label-change     → surveillance_alerts (an FDA label gained a warning or new adverse effect)
 
 Every write is an upsert on a natural key, so a message delivered twice changes nothing.
 """
@@ -176,8 +178,24 @@ def handle_alerts(msg):
     link_evidence("alert", key, f"{summary} {title}", title=title, url=link or None, published=pub)
 
 
+def handle_signals_updated(msg):
+    """Spark produced a new all-pairs result: raise alerts for pairs that became a signal."""
+    from services.surveillance import on_signals_updated
+    summary = on_signals_updated(msg)
+    log.info(f"signals-updated {msg.get('latest_quarter')}: {summary}")
+    return summary
+
+
+def handle_label_change(msg):
+    """An FDA label changed: raise a label_change alert and link it to open signal alerts."""
+    from services.surveillance import on_label_change
+    return on_label_change(msg)
+
+
 TOPIC_HANDLERS = {
     "faers-release": handle_release,
+    "signals-updated": handle_signals_updated,
+    "label-change": handle_label_change,
     "pubmed-stream": handle_pubmed,
     "clinical-trials": handle_trials,
     "fda-alerts": handle_alerts,

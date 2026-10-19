@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19T11:17:43Z",
+  "generated_at": "2026-10-19T15:57:08Z",
   "smoke": false,
   "components": {
     "signals": {
@@ -824,6 +824,53 @@
         }
       ],
       "caveat": "One machine. DuckDB is the interactive engine and is expected to be faster here; Spark runs the batch job because the same job runs unchanged on a cluster (SPARK_MASTER). Spark ran inside Docker's VM and DuckDB on the host, so the comparison also includes that difference.",
+      "smoke": false
+    },
+    "label_check": {
+      "title": "Label-text check",
+      "reference": "label_check_gold.csv",
+      "model": null,
+      "data_version": null,
+      "run_at": "2026-10-19T15:36:26Z",
+      "rows": [
+        {
+          "set": "Not-in-label detection (possible new signals)",
+          "pairs": 40,
+          "metrics": {
+            "Precision": [
+              0.4118,
+              null
+            ],
+            "Recall": [
+              0.875,
+              null
+            ],
+            "Accuracy": [
+              0.725,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Confusion (positive = not in label)",
+          "pairs": 40,
+          "metrics": {
+            "True not-in-label": [
+              7,
+              null
+            ],
+            "Missed by matcher (in label, called absent)": [
+              10,
+              null
+            ],
+            "Over-called (absent effect, called present)": [
+              1,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "author-labelled, pending faculty review. The matcher reads only the boxed-warning, warnings, precautions, contraindications and adverse-reactions sections with simple variants, so an effect the label describes in other words or sections is missed. 'Not found in label text' never means 'unlabelled'.",
       "smoke": false
     }
   },
