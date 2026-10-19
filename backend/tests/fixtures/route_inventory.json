@@ -229,10 +229,14 @@
     },
     "GET /api/evidence": {
       "keys": [
-        "error",
-        "items"
+        "drug",
+        "ingredients",
+        "items",
+        "meta",
+        "note",
+        "resolved"
       ],
-      "status": 503
+      "status": 200
     },
     "GET /api/faers/releases": {
       "keys": [
@@ -467,6 +471,13 @@
         "total"
       ],
       "status": 200
+    },
+    "GET /api/signals/history": {
+      "keys": [
+        "error",
+        "series"
+      ],
+      "status": 503
     },
     "GET /api/signals/ner-mine/stream/<task_id>": {
       "keys": [
@@ -944,6 +955,12 @@
         "GET"
       ],
       "rule": "/api/signals"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/signals/history"
     },
     {
       "methods": [

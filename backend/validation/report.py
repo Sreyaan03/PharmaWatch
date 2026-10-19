@@ -135,9 +135,28 @@ def _scaling_component(d):
             "run_at": d.get("run_at"), "rows": rows, "caveat": d.get("note")}
 
 
+def _bigdata_component(d):
+    sp, dk, ag = d.get("spark") or {}, d.get("duckdb") or {}, d.get("agreement") or {}
+    rows = [{"set": f"Spark {sp.get('version')} ({sp.get('master')}, {sp.get('parallelism')} cores)", "pairs": sp.get("rows"),
+             "metrics": {"Seconds": [sp.get("seconds"), None], "Seconds incl. start-up": [sp.get("seconds_with_startup"), None]}},
+            {"set": f"DuckDB {dk.get('version')} (same job)", "pairs": dk.get("rows"),
+             "metrics": {"Seconds": [dk.get("seconds"), None]}},
+            {"set": "Spark vs DuckDB: every pair-quarter compared", "pairs": ag.get("spark_rows"),
+             "metrics": {"Rows in only one engine": [ag.get("rows_in_only_one_engine"), None],
+                         "Rows differing": [ag.get("rows_differing"), None]}}]
+    check = _load("spark_agreement", smoke=False)
+    if check:
+        rows.append({"set": "Spark vs the app's own statistics code (sampled)", "pairs": check.get("checked"),
+                     "metrics": {"Mismatches": [check.get("mismatches"), None]}})
+    return {"title": "Batch job: all pairs, all quarters (Spark)", "reference": d.get("job"), "model": None,
+            "data_version": (check or {}).get("data_version"), "run_at": d.get("run_at"), "rows": rows,
+            "caveat": d.get("note")}
+
+
 BUILDERS = {"signals": _signals_component, "ddi": _ddi_component, "ner": _ner_component,
-            "prescription": _prescription_component, "scaling": _scaling_component}
-SAME_FILE_FOR_SMOKE = {"scaling"}          # measured on the scaled profile, never in a smoke run
+            "prescription": _prescription_component, "scaling": _scaling_component,
+            "bigdata_timing": _bigdata_component}
+SAME_FILE_FOR_SMOKE = {"scaling", "bigdata_timing"}   # measured runs, never part of a smoke run
 
 
 def build_summary(smoke=False, write=True):

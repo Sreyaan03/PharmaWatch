@@ -313,7 +313,70 @@ function showSignalDetail(signal) {
 
   // Render D3 graph
   renderSignalNetworkGraph(signal.drug, signal.event);
+  ensureDetailBox('signal-history');               // placed before the evidence box
+  loadSignalHistory(signal.drug, signal.event);
   loadSignalEvidence(signal.drug, signal.event);
+}
+
+function ensureDetailBox(id) {
+  const body = document.getElementById('signal-detail-body');
+  let box = document.getElementById(id);
+  if (!box && body) {
+    box = document.createElement('div');
+    box.id = id;
+    box.style.cssText = 'margin-top:1rem; padding:1rem; border-radius:6px; border:1px solid rgba(255,255,255,0.05); background:rgba(15,23,42,0.4);';
+    body.appendChild(box);
+  }
+  return box;
+}
+
+/* How the signal developed, quarter by quarter: the Spark all-pairs results, served from HBase
+   (or the Parquet results when HBase is down). Values are cumulative to each quarter. */
+let signalHistoryChart = null;
+async function loadSignalHistory(drug, event) {
+  const box = ensureDetailBox('signal-history');
+  if (!box) return;
+  box.innerHTML = '<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">How this signal developed</h4><div style="color:var(--text-muted); font-size:0.85rem;">Loading…</div>';
+  try {
+    const res = await fetch(`/api/signals/history?drug=${encodeURIComponent(drug)}&event=${encodeURIComponent(event)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    const series = data.series || [];
+    if (!series.length) {
+      box.innerHTML = `<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">How this signal developed</h4><div style="color:var(--text-muted); font-size:0.85rem;">${escHtml(data.note || 'No history.')}</div>`;
+      return;
+    }
+    const first = data.first_signal_quarter ? `First a signal in ${escHtml(data.first_signal_quarter.toUpperCase())}.` : 'Not a signal in any loaded quarter.';
+    const store = data.store === 'hbase' ? 'Served from HBase.' : `Served from the Parquet results${data.store_note ? ' (' + escHtml(data.store_note) + ')' : ''}.`;
+    box.innerHTML = `<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">How this signal developed</h4>
+      <div style="position:relative; height:220px;"><canvas id="signal-history-canvas"></canvas></div>
+      <div style="font-size:0.8rem; margin-top:0.5rem;">${first} IC025 above 0 (dashed line) is one of the criteria for a strong signal.</div>
+      <div style="color:var(--text-muted); font-size:0.75rem; margin-top:0.25rem;">${escHtml(data.note || '')} ${store}${data.stale ? ' These results were computed on older data; rerun the batch job.' : ''}</div>`;
+    const colour = { strong_signal: '#ef4444', signal: '#f59e0b', none: '#64748b' };
+    if (signalHistoryChart) signalHistoryChart.destroy();
+    signalHistoryChart = new Chart(document.getElementById('signal-history-canvas'), {
+      type: 'line',
+      data: {
+        labels: series.map(s => s.quarter.toUpperCase()),
+        datasets: [
+          { label: 'IC025', data: series.map(s => s.ic025), borderColor: '#38bdf8', tension: 0.2,
+            pointBackgroundColor: series.map(s => colour[s.signal_strength] || '#64748b'), pointRadius: 4 },
+          { label: 'Threshold (0)', data: series.map(() => 0), borderColor: '#94a3b8', borderDash: [6, 4], pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { tooltip: { callbacks: { afterLabel: (ctx) => {
+          if (ctx.datasetIndex !== 0) return '';
+          const s = series[ctx.dataIndex];
+          return `cases ${s.a}, PRR ${s.prr}, ROR lower ${s.ror_ci_low}, ${s.signal_strength.replace('_', ' ')}`;
+        } } } },
+        scales: { y: { title: { display: true, text: 'IC025 (cumulative)' } } }
+      }
+    });
+  } catch (e) {
+    box.innerHTML = `<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">How this signal developed</h4><div style="color:var(--text-muted); font-size:0.85rem;">Not available (${escHtml(e.message)}).</div>`;
+  }
 }
 
 /* External evidence delivered by Kafka (recalls, papers, trials) and linked to the drug by name.
@@ -321,13 +384,7 @@ function showSignalDetail(signal) {
 async function loadSignalEvidence(drug, event) {
   const body = document.getElementById('signal-detail-body');
   if (!body) return;
-  let box = document.getElementById('signal-evidence');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'signal-evidence';
-    box.style.cssText = 'margin-top:1rem; padding:1rem; border-radius:6px; border:1px solid rgba(255,255,255,0.05); background:rgba(15,23,42,0.4);';
-    body.appendChild(box);
-  }
+  const box = ensureDetailBox('signal-evidence');
   box.innerHTML = '<h4 style="margin:0 0 0.5rem; font-size:0.9rem;">External evidence</h4><div style="color:var(--text-muted); font-size:0.85rem;">Loading…</div>';
   try {
     const res = await fetch(`/api/evidence?drug=${encodeURIComponent(drug)}`);

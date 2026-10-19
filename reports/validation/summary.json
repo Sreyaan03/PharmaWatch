@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19T09:10:57Z",
+  "generated_at": "2026-10-19T11:17:43Z",
   "smoke": false,
   "components": {
     "signals": {
@@ -571,7 +571,7 @@
       "reference": "docker/docker-compose.scale.yml",
       "model": null,
       "data_version": "12 CPUs, 16.8 GB RAM, one machine",
-      "run_at": "2026-10-19T08:52:00Z",
+      "run_at": "2026-10-19T11:04:47Z",
       "rows": [
         {
           "set": "Check: load balancing",
@@ -615,6 +615,16 @@
         },
         {
           "set": "Check: spark cluster",
+          "pairs": null,
+          "metrics": {
+            "Passed": [
+              1.0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Check: spark job on cluster",
           "pairs": null,
           "metrics": {
             "Passed": [
@@ -755,6 +765,65 @@
         }
       ],
       "caveat": "Measured on one machine: this shows the scale-out mechanism works; cluster speedups will differ.",
+      "smoke": false
+    },
+    "bigdata_timing": {
+      "title": "Batch job: all pairs, all quarters (Spark)",
+      "reference": "every ingredient x Preferred Term pair, every quarter, cumulative; 2x2 tables and metrics",
+      "model": null,
+      "data_version": "FAERS 2021Q3-2026Q2 (20 quarters, 7,222,094 cases, identity 37303f)",
+      "run_at": "2026-10-19T10:02:51Z",
+      "rows": [
+        {
+          "set": "Spark 3.5.3 (local[*], 12 cores)",
+          "pairs": 12955071,
+          "metrics": {
+            "Seconds": [
+              124.9,
+              null
+            ],
+            "Seconds incl. start-up": [
+              132.2,
+              null
+            ]
+          }
+        },
+        {
+          "set": "DuckDB 1.5.3 (same job)",
+          "pairs": 12955071,
+          "metrics": {
+            "Seconds": [
+              26.9,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Spark vs DuckDB: every pair-quarter compared",
+          "pairs": 12955071,
+          "metrics": {
+            "Rows in only one engine": [
+              0,
+              null
+            ],
+            "Rows differing": [
+              0,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Spark vs the app's own statistics code (sampled)",
+          "pairs": 630,
+          "metrics": {
+            "Mismatches": [
+              0,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "One machine. DuckDB is the interactive engine and is expected to be faster here; Spark runs the batch job because the same job runs unchanged on a cluster (SPARK_MASTER). Spark ran inside Docker's VM and DuckDB on the host, so the comparison also includes that difference.",
       "smoke": false
     }
   },

@@ -84,6 +84,26 @@ def identity_fingerprint(db_file=None):
     return hashlib.sha256("|".join(str(x) for x in row).encode()).hexdigest()[:6]
 
 
+def sample_percent(db_file=None):
+    """The share of cases a sample database holds (faers.sample_db), or None for full data."""
+    db_file = db_file or database_path()
+    if not os.path.exists(db_file):
+        return None
+    con = duckdb.connect(db_file, read_only=True)
+    try:
+        row = con.execute("SELECT value FROM identity_build_info WHERE key = 'sample_percent'").fetchone()
+    except duckdb.Error:
+        return None
+    finally:
+        con.close()
+    if not row:
+        return None
+    try:
+        return f"{float(row[0]):g}"
+    except ValueError:
+        return row[0]
+
+
 def data_version(db_file=None):
     """e.g. 'FAERS 2021Q3-2026Q2 (20 quarters, 6,912,331 cases, identity 3fa91c)'."""
     quarters = list_quarters(db_file)
@@ -96,4 +116,7 @@ def data_version(db_file=None):
     text = f"FAERS {first}-{last} ({len(quarters)} quarter{'s' if len(quarters) != 1 else ''}, {detail})"
     if any(q["is_fixture"] for q in quarters):
         text += " [test fixture]"
+    sample = sample_percent(db_file)
+    if sample:
+        text += f" [{sample}% sample]"
     return text

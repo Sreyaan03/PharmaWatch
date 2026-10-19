@@ -64,6 +64,8 @@ def isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(socket.socket, "connect", _refuse)
     monkeypatch.setattr(requests.sessions.Session, "request", _fake_request)
     monkeypatch.delenv("ADMIN_API_KEY", raising=False)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))       # no lake, uploads or caches from this machine
+    monkeypatch.setenv("STORAGE_BACKEND", "local")
     # Settings read backend/.env on first use; without this the developer's .env
     # (and its ADMIN_API_KEY) would leak into the snapshot and CI would differ.
     from core import config

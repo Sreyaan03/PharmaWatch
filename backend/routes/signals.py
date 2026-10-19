@@ -4,6 +4,7 @@
 
 from core.auth import require_admin
 from flask import Blueprint, request, jsonify, Response
+from services import signal_history as history_svc
 from services import signals as svc
 
 signals_bp = Blueprint("signals", __name__)
@@ -22,6 +23,17 @@ def get_signals():
     source = request.args.get("source")
     refresh = request.args.get("refresh", "").lower() == "true"
     payload, status = svc.get_signals(source, refresh)
+    return jsonify(payload), status
+
+
+@signals_bp.route("/api/signals/history", methods=["GET"])
+def signal_history():
+    """How a drug-event signal developed quarter by quarter (Spark results, served from HBase)."""
+    drug = (request.args.get("drug") or "").strip()
+    event = (request.args.get("event") or "").strip()
+    if not drug or not event:
+        return jsonify({"error": "drug and event are required"}), 400
+    payload, status = history_svc.history(drug, event)
     return jsonify(payload), status
 
 

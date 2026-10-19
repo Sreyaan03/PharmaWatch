@@ -38,6 +38,8 @@ python scripts/scale_check.py            # checks; add --measure for throughput 
 docker compose -p pwscale -f docker/docker-compose.scale.yml down -v
 ```
 
+The FAERS database is mounted read-only from `SCALE_FAERS_DB`. The default is the small fixture in the image; for realistic data use a sample made with `python -m faers.sample_db --percent 5 --out <file>`. The checks below were run on a 5% sample (360,384 cases).
+
 It shares nothing with the production stack: it has its own project, network and volumes, and no fixed container names. Only Caddy (`127.0.0.1:8088`, `SCALE_HTTP_PORT`) and the Spark UI (`127.0.0.1:18080`) are published.
 
 `scripts/scale_check.py` checks the stack from outside, through the load balancer:
@@ -70,8 +72,8 @@ The worker commits its Kafka offset only after the job has finished. A late resu
 | Storage | Point at S3, MinIO, SeaweedFS or another S3-compatible service. Run `python -m core.storage seed-models` once to copy the shipped models into the bucket. | `STORAGE_BACKEND=s3`, `S3_*` | Code that needs a real file path gets a cached local copy (`STORAGE_CACHE_DIR`), refreshed when the object changes. |
 | MySQL | Use a managed MySQL 8 instance; run `python -m db.migrate` against it. | `MYSQL_*` | One primary takes every write (jobs, caches, alerts). For heavy use, add a read replica for the dashboards or move caches to Redis. The pool size is per process (`MYSQL_MAX_CONNECTIONS`), so total connections = copies × pool size. |
 | Kafka | Use a managed Kafka or a multi-broker cluster. | `KAFKA_BOOTSTRAP_SERVERS` | Raise topic replication from 1 when there is more than one broker. |
-| Spark | Use a standalone cluster or a managed Spark service that reads the lake from the store (`s3a://`). | `SPARK_MASTER` | The batch job is added in plan 10-03. |
-| HBase | Point at a distributed HBase. | `HBASE_HOST`, `HBASE_PORT` | It is optional. The app answers without it (fallbacks), and plan 10-03 adds the signal-history table. |
+| Spark | Use a standalone cluster or a managed Spark service that reads the lake from the store (`s3a://`); `python -m bigdata.run_spark` submits the job. | `SPARK_MASTER` | On S3 the job uses the S3A magic committer (no renames) and appends to a results folder the runner has emptied, because S3-compatible stores differ on directory deletes. On one machine DuckDB runs the same job faster (27 s vs 125 s); Spark is the part that moves to a cluster unchanged. |
+| HBase | Point at a distributed HBase; reload with `python -m bigdata.hbase_history` after each Spark run. | `HBASE_HOST`, `HBASE_PORT` | It is optional. The app answers from the Parquet results when HBase is down (about 2 s instead of 0.1 s). The single-node container loads 651,603 rows in about 100 s; a cluster should pre-split regions by row-key prefix. |
 | FAERS database (DuckDB) | Ship a read-only copy with each web copy and worker (image layer or read-only volume). | `DATA_DIR` | DuckDB is a single-file, single-writer engine: it stays the per-copy interactive engine and does not scale out. Heavy all-data work belongs to Spark. A refresh writes a new file that is then distributed. |
 | Rate limits | Run Redis, or a managed Redis. | `RATE_LIMIT_STORAGE_URI` | With `memory://` each copy counts separately. |
 
@@ -102,6 +104,7 @@ Every module-level value that persists between requests was checked: either it i
 | `ml/ddi/inference.py` `_manifest` | Deployment manifest | Read-only, from storage; safe to duplicate. |
 | `ml/ddi/inference.py` `_scorer` | Loaded interaction model | Read-only, from storage; safe to duplicate (memory per copy). |
 | `services/evidence.py` `_identity` | Identity lookup service | Read-only, over the FAERS database; safe to duplicate. |
+| `services/signal_history.py` `_identity` | Identity lookup service | Read-only, over the FAERS database; safe to duplicate. |
 | `services/provenance.py` `_version_cache` | Data version, 60 s | Read-only; at most 60 s stale per copy. |
 | `services/prescription/extract.py` `_lexicon_cache` | Drug-name dictionary | Read-only, keyed on the database file's timestamp; safe to duplicate. |
 

@@ -48,6 +48,11 @@ x-app: &app
   image: pharmawatch-app:scale
   networks: [scale-net]
   environment: *app-env
+  # The FAERS database, read-only. Default: the small fixture in the image. For realistic data use a
+  # sample made with `python -m faers.sample_db --percent 5 --out <file>` (or the full database):
+  #   SCALE_FAERS_DB=C:/PharmaWatchData/faers_sample_5pct.duckdb
+  volumes:
+    - ${SCALE_FAERS_DB:-../data/pharmawatch_faers.duckdb}:/app/data/pharmawatch_faers.duckdb:ro
   depends_on:
     setup:
       condition: service_completed_successfully
@@ -148,13 +153,15 @@ services:
     networks: [scale-net]
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master"]
     ports: ["127.0.0.1:18080:8080"]
+    volumes: ["../backend/bigdata:/job:ro"]         # spark-submit runs the job from here
 
   spark-worker:
     image: apache/spark:3.5.3
     networks: [scale-net]
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker",
-              "--cores", "2", "--memory", "1g", "spark://spark-master:7077"]
+              "--cores", "2", "--memory", "1500m", "spark://spark-master:7077"]
     depends_on: [spark-master]
+    volumes: ["../backend/bigdata:/job:ro"]
     deploy:
       replicas: ${SPARK_WORKERS:-2}
 

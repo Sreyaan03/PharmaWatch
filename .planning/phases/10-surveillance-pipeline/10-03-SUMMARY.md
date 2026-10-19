@@ -1,0 +1,24 @@
+# 10-03 Summary: Spark all-pairs job, HBase signal history
+
+## Done
+- **Data lake.** `faers.export_lake` writes `lake/clean/{case,case_drug,reaction}` (Parquet, partitioned by quarter, through the storage layer) with a manifest per table. These are exactly the rows `faers.stats.contingency` counts: de-duplicated cases, suspect drugs, lower-case terms. On real data: 7,222,094 cases, 11,463,548 suspect-drug rows and 21,632,378 reaction rows, about 200 MB, in 12 s. It runs at the end of every identity build and on its own.
+- **Spark job** (`bigdata/spark_signals.py`, Python 3.8+, pure Spark SQL). For every ingredient × Preferred Term pair and every quarter, cumulative: the 2×2 table, PRR, ROR, chi-square, IC and IC025, and the class, with the same formulas as `compute_metrics`. Pairs are kept from their first quarter with 3+ cases. On real data: 12,955,071 pair-quarter rows. In the latest quarter 1,045,584 pairs (the same number DuckDB counts independently): 509,007 strong signals, 45,803 signals, 490,774 none. It ran in 119–125 s in local mode, in the official Spark image under Docker.
+- **Runner** (`bigdata.run_spark`): local mode needs only Docker, not Java; cluster mode submits inside the scaled profile with the lake on S3. It records a run manifest and announces `signals-updated` on Kafka when the broker is up.
+- **Agreement with the app's own code.**
+  - `bigdata.verify` sampled 630 pair-quarters (first, middle and last quarter, including zero-cell tables) and recomputed each with `contingency` and `compute_metrics`: **0 mismatches** in cells, class or metrics.
+  - DuckDB running the same job agreed with Spark on **all 12,955,071 rows**: none missing from either side, none differing.
+- **Timings, published as they came.** Spark took 124.9 s (132 s with start-up) and DuckDB 26.9 s on the same machine. The Methods page says DuckDB is the interactive engine and Spark is the part that moves to a cluster.
+- **HBase serving.** `bigdata.hbase_history` loads table `signal_history` (row `rxcui|term`, one column per quarter). The 651,603 pairs that were a signal in some quarter, 8,649,490 cells, loaded in about 100 s. `GET /api/signals/history?drug=&event=` answers from HBase in 0.08–0.33 s; with HBase stopped it answers from Parquet in about 2.4 s, and the response says which store answered and why. Results computed on older data are flagged as stale.
+- **Chart.** The signal detail now has "How this signal developed": IC025 by quarter with the threshold marked, points coloured by class, and cases, PRR and ROR in the tooltip. Checked in headless Chrome on real data with no JS errors. That check found the chart drew no line in headless Chrome, where Chart.js's entry animation never ran; the animation is now off for this data chart.
+- **Cluster run.** The scaled profile mounts a 5% sample database (`faers.sample_db`, 360,384 cases, data version marked "[5% sample]"). The scale check's new `spark_job_on_cluster` test exports the lake to S3, runs the job in local mode and on the 2-worker cluster, and Spark compares the outputs: 1,638,192 rows, **0 differing** (36.8 s local, 46.3 s cluster). The scale check passes 7/7.
+- **Tests.** Lake contents, every pair-quarter against `contingency` + `compute_metrics`, the first-quarter rule, the zero-cell correction, concomitant drugs excluded, the verifier catching a corrupted value, the sample database, the `signals-updated` message. History: HBase and Parquet return identical series; fallback reasons; 404/422/503 cases. A Spark-vs-DuckDB fixture test runs in CI (PySpark 3.5.3 added; this laptop has Java 8, so it skips here and says why). Route inventory isolation fixed: the snapshot no longer depends on this machine's data.
+
+## Problems met on S3 (SeaweedFS), and the fixes
+- Spark's default committer renames files, which S3 stores don't support → the S3A magic committer (the staging committer hung in cluster mode, because its pending state lives on each executor's local disk).
+- Spark's overwrite deletes the output folder, and SeaweedFS answers 500 → the runner empties the folder through the storage layer and the job appends; S3A directory markers are kept; retries are capped, so failures surface in seconds.
+
+## Limits
+- A case counts from the quarter of the report version kept after de-duplication, so a case first reported earlier and updated later appears in the later quarter. The "first signal" quarter is therefore conservative (late), and the replay and lead-time study in 10-05 must state this.
+- Cumulative from 2021Q3 only: pairs already strong in the first loaded quarter have no earlier history here.
+- HBase holds pairs that were ever a signal (651,603), not all 1.05 M kept pairs; the rest come from Parquet. The single-node HBase container is a demonstration, not a sized deployment.
+- On one machine Spark is about 4.6 times slower than DuckDB for this job.

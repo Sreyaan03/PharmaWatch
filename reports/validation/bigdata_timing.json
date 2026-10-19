@@ -1,0 +1,33 @@
+{
+  "job": "every ingredient x Preferred Term pair, every quarter, cumulative; 2x2 tables and metrics",
+  "input": {
+    "cases": 7222094,
+    "lake": "lake/clean (Parquet, partitioned by quarter)"
+  },
+  "spark": {
+    "version": "3.5.3",
+    "master": "local[*]",
+    "parallelism": 12,
+    "seconds": 124.9,
+    "seconds_with_startup": 132.2,
+    "rows": 12955071,
+    "where": "official Spark image in Docker (driver memory 5 GB), local mode"
+  },
+  "duckdb": {
+    "version": "1.5.3",
+    "seconds": 26.9,
+    "rows": 12955071,
+    "where": "in process on the host"
+  },
+  "agreement": {
+    "spark_rows": 12955071,
+    "rows_in_only_one_engine": 0,
+    "rows_differing": 0
+  },
+  "machine": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpus": 12
+  },
+  "note": "One machine. DuckDB is the interactive engine and is expected to be faster here; Spark runs the batch job because the same job runs unchanged on a cluster (SPARK_MASTER). Spark ran inside Docker's VM and DuckDB on the host, so the comparison also includes that difference.",
+  "run_at": "2026-10-19T10:02:51Z"
+}

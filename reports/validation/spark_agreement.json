@@ -1,0 +1,17 @@
+{
+  "checked": 630,
+  "mismatches": 0,
+  "examples": [],
+  "quarters": [
+    "2021q3",
+    "2024q1",
+    "2026q2"
+  ],
+  "per_quarter": 200,
+  "seed": 7,
+  "spark_run_id": "20261019T100006",
+  "data_version": "FAERS 2021Q3-2026Q2 (20 quarters, 7,222,094 cases, identity 37303f)",
+  "rule": "cells and class identical; metrics within half a unit of the app's 4-decimal rounding",
+  "seconds": 392.2,
+  "run_at": "2026-10-19T10:59:27Z"
+}

@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-10-19T08:52:00Z",
+  "run_at": "2026-10-19T11:04:47Z",
   "machine": {
     "os": "Windows-11-10.0.26200-SP0",
     "cpus": 12,
@@ -11,28 +11,28 @@
       "passed": true,
       "web_copies": 2,
       "copies_that_answered": [
-        "55c20baeb24c",
-        "82876370d82f"
+        "4ec33242c378",
+        "64ae4097c17c"
       ]
     },
     "job_on_a_worker": {
       "passed": true,
-      "job": "057d8b8e-8acb-4767-af60-fabde277e56a",
-      "taken_by_web_copy": "55c20baeb24c",
-      "run_by": "78c6dbcc26ac:1",
+      "job": "e25228d9-de81-49ec-a31e-0ccb5781866f",
+      "taken_by_web_copy": "64ae4097c17c",
+      "run_by": "70be57443680:1",
       "status_read_from": [
-        "55c20baeb24c",
-        "82876370d82f"
+        "4ec33242c378",
+        "64ae4097c17c"
       ],
       "lines": 3
     },
     "worker_killed": {
       "passed": true,
-      "job": "931b9bb0-dd82-43ae-af8f-d19d3ef08938",
-      "killed_worker": "78c6dbcc26ac:1",
-      "finished_by": "23a28111a3fe:1",
+      "job": "03067748-1475-4aae-86a2-e7be2242613f",
+      "killed_worker": "689a94b9b045:1",
+      "finished_by": "70be57443680:1",
       "attempts": 2,
-      "seconds_from_kill_to_done": 44.9,
+      "seconds_from_kill_to_done": 42.1,
       "lease_seconds": 20
     },
     "shared_storage": {
@@ -47,6 +47,20 @@
       "workers_registered": 2,
       "workers_started": 2,
       "cores": 4
+    },
+    "spark_job_on_cluster": {
+      "passed": true,
+      "rows": 1638192,
+      "quarters": 20,
+      "local_seconds": 36.8,
+      "cluster_seconds": 46.3,
+      "cluster_master": "spark://spark-master:7077",
+      "comparison": {
+        "compared_with": "s3a://pharmawatch/lake/results/signals_local",
+        "rows_in_only_one": 0,
+        "rows_differing": 0
+      },
+      "data": "FAERS 2021Q3-2026Q2 (20 quarters, 360,384 cases, identity 37303f) [5% sample]"
     },
     "readiness": {
       "passed": true,

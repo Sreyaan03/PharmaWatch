@@ -191,6 +191,9 @@ def main(argv=None):
         con.execute("CHECKPOINT")
     finally:
         con.close()
+    # The lake (Parquet for batch engines) follows the database it was cut from.
+    from faers.export_lake import export
+    export(db_file)
     return 0
 
 

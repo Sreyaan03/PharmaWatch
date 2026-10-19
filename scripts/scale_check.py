@@ -14,6 +14,7 @@ Checks:
   worker_killed       a worker killed in the middle of a job: another worker finishes it
   shared_storage      uploads are gone from shared storage after the job; models are there
   spark_cluster       the Spark master sees every worker
+  spark_job_on_cluster  the all-pairs job on the cluster (lake in S3) equals the same job in local mode
   readiness           a copy reports not-ready when a required dependency (Kafka) is stopped
 
 Measurements are made on one machine. They show that the scale-out mechanism works and how it
@@ -160,6 +161,50 @@ def check_spark_cluster():
     return alive == want, {"workers_registered": alive, "workers_started": want, "cores": info.get("cores")}
 
 
+S3A = ["--packages", "org.apache.hadoop:hadoop-aws:3.3.4,org.apache.spark:spark-hadoop-cloud_2.12:3.5.3",
+       "--conf", "spark.hadoop.fs.s3a.endpoint=http://objectstore:8333",
+       "--conf", "spark.hadoop.fs.s3a.access.key=pwstore",
+       "--conf", "spark.hadoop.fs.s3a.secret.key=pwstore-local-only",
+       "--conf", "spark.hadoop.fs.s3a.path.style.access=true",
+       "--conf", "spark.hadoop.fs.s3a.connection.ssl.enabled=false",
+       "--conf", "spark.hadoop.fs.s3a.committer.name=magic",                # S3 has no rename: tasks upload, the job commits
+       "--conf", "spark.hadoop.fs.s3a.committer.magic.enabled=true",
+       "--conf", "spark.hadoop.fs.s3a.directory.marker.retention=keep",     # never delete directory markers
+       "--conf", "spark.hadoop.fs.s3a.retry.limit=3",                       # fail in seconds, not minutes
+       "--conf", "spark.hadoop.fs.s3a.attempts.maximum=3",
+       "--conf", "spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol",
+       "--conf", "spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter",
+       "--conf", "spark.jars.ivy=/tmp/.ivy2"]
+LAKE = "s3a://pharmawatch/lake"
+
+
+def _spark_submit(master, *job_args):
+    out = compose("exec", "-T", "spark-master", "/opt/spark/bin/spark-submit", "--master", master, *S3A,
+                  "--executor-memory", "1g", "/job/spark_signals.py", "--lake", LAKE, *job_args)
+    line = next((l for l in out.splitlines() if l.startswith("MANIFEST ")), None)
+    if line is None:
+        raise RuntimeError("the Spark job printed no manifest")
+    return json.loads(line[len("MANIFEST "):])
+
+
+def check_spark_job_on_cluster():
+    """The batch job on the Spark cluster gives exactly what it gives in local mode, on the lake in S3."""
+    compose("exec", "-T", "web", "python", "-m", "faers.export_lake")
+    # Clear earlier results through the app's storage layer, so Spark's overwrite has nothing to
+    # delete (S3-compatible stores differ in how they handle S3A's directory deletes).
+    in_web("from core import storage; [storage.delete_prefix('lake', p) for p in "
+           "('results/signals_local', 'results/signals_by_quarter')]; print('cleared')")
+    local = _spark_submit("local[2]", "--out-name", "signals_local", "--run-id", "scale-local")
+    cluster = _spark_submit("spark://spark-master:7077", "--run-id", "scale-cluster",
+                            "--compare-with", f"{LAKE}/results/signals_local")
+    cmp_ = cluster.get("comparison", {})
+    ok = cluster["rows"] > 0 and cmp_.get("rows_in_only_one") == 0 and cmp_.get("rows_differing") == 0
+    return ok, {"rows": cluster["rows"], "quarters": len(cluster["quarters"]),
+                "local_seconds": local["seconds"], "cluster_seconds": cluster["seconds"],
+                "cluster_master": cluster["master"], "comparison": cmp_,
+                "data": in_web("from faers.registry import data_version; print(data_version())")}
+
+
 def check_readiness_follows_dependencies():
     compose("stop", "kafka")
     try:
@@ -251,6 +296,7 @@ def machine():
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--measure", action="store_true", help="also measure throughput against copy counts")
+    ap.add_argument("--only", nargs="+", help="run only these checks (earlier results for the others are kept)")
     ap.add_argument("--measure-workers-shared-cores", action="store_true",
                     help="only re-measure workers with TORCH_THREADS = CPUs / workers, keeping other results")
     args = ap.parse_args(argv)
@@ -261,7 +307,10 @@ def main(argv=None):
                      ("worker_killed", check_worker_killed),
                      ("shared_storage", check_shared_storage),
                      ("spark_cluster", check_spark_cluster),
+                     ("spark_job_on_cluster", check_spark_job_on_cluster),
                      ("readiness", check_readiness_follows_dependencies)]:
+        if args.only and name not in args.only:
+            continue
         try:
             ok, detail = fn()
         except Exception as exc:
@@ -269,6 +318,9 @@ def main(argv=None):
         checks[name] = {"passed": bool(ok), **detail}
         print(f"{'PASS' if ok else 'FAIL'} {name}  {json.dumps(detail)[:300]}", flush=True)
 
+    if args.only and os.path.exists(OUT):               # keep earlier results of the checks not rerun
+        previous = json.load(open(OUT, encoding="utf-8")).get("checks", {})
+        checks = {**{k: v for k, v in previous.items() if k not in checks}, **checks}
     report = {"run_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "machine": machine(),
               "profile": "docker/docker-compose.scale.yml", "checks": checks,
               "note": "Measured on one machine: this shows the scale-out mechanism works; cluster speedups will differ."}

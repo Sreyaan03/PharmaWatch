@@ -115,3 +115,18 @@ def find_pair_row(name_a, name_b):
             conn.close()
         except Exception:
             pass
+
+
+def read_row(table_name, key):
+    """One row as {column bytes: value bytes} ({} when absent). None when happybase is missing;
+    connection errors propagate (the caller decides on a fallback)."""
+    conn = _hbase_connect()
+    if not conn:
+        return None
+    try:
+        return conn.table(table_name).row(key)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
