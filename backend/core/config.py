@@ -82,6 +82,9 @@ SETTINGS = [
     Setting("ANTHROPIC_API_KEY", "", str, "external", "Enables the optional cloud prescription extractor", secret=True),
     Setting("RX_EXTRACTOR", "auto", str, "external", "Prescription extractor: auto, local or cloud"),
     Setting("RX_VISION_MODEL", "claude-opus-5-5", str, "external", "Model used by the cloud extractor"),
+    Setting("SRLC_USER_AGENT",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            str, "external", "Browser User-Agent for fetching FDA SrLC label-change pages (validation/fetch_srlc.py)"),
 ]
 _BY_NAME = {s.name: s for s in SETTINGS}
 _TRUE = {"1", "true", "yes", "on"}

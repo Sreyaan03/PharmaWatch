@@ -48,7 +48,13 @@ def _prescription(smoke):
     return prescription_benchmark.run("local", smoke=smoke)[1]
 
 
-STEPS = [("signals", _signals), ("ddi", _ddi), ("ner", _ner), ("prescription", _prescription)]
+def _lead_time(smoke):
+    from validation import lead_time
+    return lead_time.run(smoke=smoke)[1]       # skips (FileNotFoundError) without label_changes.csv or the lake
+
+
+STEPS = [("signals", _signals), ("ddi", _ddi), ("ner", _ner), ("prescription", _prescription),
+         ("lead_time", _lead_time)]
 
 
 def main(argv=None):

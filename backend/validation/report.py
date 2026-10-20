@@ -26,6 +26,9 @@ KNOWN_LIMITATIONS = [
     "NER results come from published case-report text, not from prescriptions or social media.",
     "Prescription extraction was measured on synthetic printed documents. Handwriting is untested, and "
     "brand names missing from FAERS (for example many Indian brands) are not recognised; they are flagged for checking.",
+    "The lead-time study compares FAERS signals with FDA label changes over only 20 quarters; "
+    "reporting rises after label changes, FAERS dates are receipt dates, and the label-change "
+    "reference maps label text to Preferred Terms automatically and is pending faculty review.",
 ]
 
 
@@ -168,10 +171,28 @@ def _label_check_component(d):
             "caveat": f"{d.get('status')}. {d.get('caveat')}"}
 
 
+def _lead_time_component(d):
+    g = d.get("groups") or {}
+    rows = [{"set": "Flagged before the label change", "pairs": d.get("pairs"),
+             "metrics": {"Pairs": [g.get("flagged_before"), None],
+                         "Share of all pairs": [d.get("share_flagged_before"), d.get("share_flagged_before_ci")],
+                         "Median lead (quarters)": [d.get("median_lead_quarters"), d.get("median_lead_ci")]}},
+            {"set": "Flagged at or after the change", "pairs": None,
+             "metrics": {"Pairs": [g.get("flagged_at_or_after"), None]}},
+            {"set": "Left-censored (signal already present at the start of our data)", "pairs": None,
+             "metrics": {"Pairs": [g.get("left_censored"), None]}},
+            {"set": "Never flagged in any loaded quarter", "pairs": None,
+             "metrics": {"Pairs": [g.get("never_flagged"), None]}}]
+    return {"title": "Early-warning lead time vs FDA label changes", "reference": d.get("gold_set"),
+            "model": None, "data_version": d.get("data_version"), "run_at": d.get("run_at"), "rows": rows,
+            "caveat": f"{d.get('status')}. Window {d.get('window')}. " + " ".join(d.get("caveats", []))}
+
+
 BUILDERS = {"signals": _signals_component, "ddi": _ddi_component, "ner": _ner_component,
             "prescription": _prescription_component, "scaling": _scaling_component,
-            "bigdata_timing": _bigdata_component, "label_check": _label_check_component}
-SAME_FILE_FOR_SMOKE = {"scaling", "bigdata_timing", "label_check"}   # measured runs, never a smoke run
+            "bigdata_timing": _bigdata_component, "label_check": _label_check_component,
+            "lead_time": _lead_time_component}
+SAME_FILE_FOR_SMOKE = {"scaling", "bigdata_timing", "label_check", "lead_time"}   # measured runs, never a smoke run
 
 
 def build_summary(smoke=False, write=True):

@@ -1,4 +1,11 @@
-# 10-05 Summary (Part A): Replay history through the pipeline
+# 10-05 Summary
+
+Part A (replay + timeline) and Part B (lead-time study) are both done. Part B's section is at the
+bottom; Part A follows immediately below.
+
+---
+
+# Part A: Replay history through the pipeline
 
 The loaded quarters can be replayed through the surveillance pipeline, in order, in a few minutes.
 A replay feeds each quarter's precomputed Spark results back through the **same** alert detector
@@ -67,3 +74,54 @@ an account. Deferred until the user decides on the data source — see "Pending"
   10-03 first-signal-quarter dating caveat.
 - `replay-signals` idempotency is covered by `test_replay`, not the 10-01 replay test (it needs the
   lake), the same arrangement as `signals-updated`.
+
+---
+
+# Part B: Lead-time study — did FAERS signal before the FDA label changed?
+
+Turns the replay into a measured answer. For each drug-event pair the FDA added to a safety section
+of a label (2021Q3-2026Q2), we find the first quarter the pair was a signal in our Spark results and
+compare it with the quarter of the label change. Four groups are reported **separately, never
+merged**, with bootstrap CIs. The reference is **author-built and pending faculty review**.
+
+## Done
+- **Label-change reference** (`validation/fetch_srlc.py`, `reference/srlc_index.csv` ->
+  `reference/label_changes.csv`). From FDA's Drug Safety-related Labeling Changes (SrLC) export,
+  kept the drugs that map to a FAERS ingredient we hold (salt-stripped, combos split) and changed in
+  window, fetched all **1,636** detail pages (0 errors, cached under `DATA_DIR/srlc_cache`), and
+  parsed every safety-section change: date, section (boxed warning / warnings / contraindications /
+  adverse reactions), and the **underlined added text**. The added text is matched to FAERS Preferred
+  Terms with the same `MentionIndex` the consumer uses, giving **3,771 change rows -> 3,052 distinct
+  (ingredient, PT) label-change pairs** in our own vocabulary. Mapping is automated and marked
+  PENDING FACULTY REVIEW.
+- **Study** (`validation/lead_time.py`, pure `compute()` + IO). First-signal quarter per (rxcui,
+  pt_lower) from the Spark results (cumulative, `signal_strength <> 'none'`). Each pair is classified
+  flagged-before (with lead time in quarters) / flagged-at-or-after / left-censored (already a signal
+  in the earliest loaded quarter) / never-flagged. Share flagged-before and median lead time each
+  carry a 2,000-sample bootstrap 95% CI. Writes `reports/validation/lead_time.json` (+ a
+  `lead_time_pairs.json` sidecar with per-pair detail, kept out of the published summary).
+- **Wired in**: `report.py` renders a "Early-warning lead time vs FDA label changes" component (four
+  groups, share+CI, median+CI, caveats) and a new known-limitation; `run_all.py` runs it as a step
+  that skips cleanly when the lake or `label_changes.csv` is absent; the Methods page shows it with
+  no frontend change (components render generically). `provenance.py` classifies the replay routes.
+- 6 unit tests (`test_lead_time.py`) cover each group, the lead-time arithmetic, the left-censoring
+  rule, a label change dated before the window, and the share/median/distribution.
+
+## Measured result (real data, 3,052 pairs)
+- **Flagged before the label change: 592 (19.4%, 95% CI 18.1-20.8%)**, median lead **7 quarters**
+  (CI 7-8).
+- Flagged at or after: 322. Left-censored: 607. Never flagged: 1,531 (~50%).
+
+Read honestly: about a fifth of label-changed pairs had a FAERS signal first, but half were never a
+signal in our 20 quarters and a fifth were left-censored. The 7-quarter median lead largely reflects
+long-known associations that signalled early and were re-labelled years later (stimulated reporting /
+known associations), **not** proof of early detection of novel harms. This is agreement-timing with
+FDA labelling, not a sensitivity claim.
+
+## Limits and open points
+- Reference mapping is automated (PT mention match) and **pending faculty review**; a wrong
+  label-text -> PT mapping mis-scores a pair. SrLC covers brand NDA/BLA products, not generics.
+- 20 quarters only; FAERS receipt dates; label changes are not a complete truth set; reporting rises
+  after a change. All four caveats are shown on the Methods page.
+- The underlined-additions parse can miss changes a label marked by other means; a few SrLC entries
+  omit the added text ("refer to label") and yield no PT.

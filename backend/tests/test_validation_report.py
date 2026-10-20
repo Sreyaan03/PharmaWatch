@@ -23,7 +23,7 @@ def test_the_summary_contains_only_values_from_the_component_files(tmp_path, mon
     monkeypatch.setattr(report, "REPORTS_DIR", str(tmp_path))
     (tmp_path / "ddi.json").write_text(json.dumps(DDI), encoding="utf-8")
     s = report.build_summary()
-    assert list(s["components"]) == ["ddi"] and set(s["not_run"]) == {"signals", "ner", "prescription", "scaling", "bigdata_timing", "label_check"}
+    assert list(s["components"]) == ["ddi"] and set(s["not_run"]) == {"signals", "ner", "prescription", "scaling", "bigdata_timing", "label_check", "lead_time"}
     row = s["components"]["ddi"]["rows"][0]
     assert row["metrics"]["AUPRC"] == [0.81, None] and row["metrics"]["ECE (served score)"] == [0.03, None]
     assert (tmp_path / "summary.json").exists()
@@ -33,7 +33,7 @@ def test_the_summary_contains_only_values_from_the_component_files(tmp_path, mon
 def test_a_missing_component_is_listed_not_filled_in(tmp_path, monkeypatch):
     monkeypatch.setattr(report, "REPORTS_DIR", str(tmp_path))
     s = report.build_summary(write=False)
-    assert s["components"] == {} and set(s["not_run"]) == {"signals", "ddi", "ner", "prescription", "scaling", "bigdata_timing", "label_check"}
+    assert s["components"] == {} and set(s["not_run"]) == {"signals", "ddi", "ner", "prescription", "scaling", "bigdata_timing", "label_check", "lead_time"}
 
 
 def test_the_draft_outcome_map_is_called_out_on_the_signals_component(tmp_path, monkeypatch):

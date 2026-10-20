@@ -1,0 +1,52 @@
+{
+  "pairs": 3052,
+  "groups": {
+    "flagged_before": 592,
+    "flagged_at_or_after": 322,
+    "left_censored": 607,
+    "never_flagged": 1531
+  },
+  "share_flagged_before": 0.194,
+  "share_flagged_before_ci": [
+    0.1805,
+    0.2077
+  ],
+  "median_lead_quarters": 7.0,
+  "median_lead_ci": [
+    7.0,
+    8.0
+  ],
+  "lead_time_quarters_distribution": {
+    "1": 46,
+    "2": 46,
+    "3": 36,
+    "4": 28,
+    "5": 51,
+    "6": 54,
+    "7": 53,
+    "8": 41,
+    "9": 38,
+    "10": 25,
+    "11": 35,
+    "12": 26,
+    "13": 25,
+    "14": 27,
+    "15": 19,
+    "16": 24,
+    "17": 12,
+    "18": 6
+  },
+  "gold_set": "FDA Drug Safety-related Labeling Changes (SrLC), Jul 2021-Jun 2026, mapped to FAERS ingredients and Preferred Terms",
+  "status": "author-built by automated PT mention match; PENDING FACULTY REVIEW",
+  "window": "2021q3-2026q2",
+  "data_version": "FAERS 2021Q3-2026Q2 (20 quarters, 7,222,094 cases, identity 37303f)",
+  "run_at": "2026-10-20T11:09:16Z",
+  "smoke": false,
+  "caveats": [
+    "Only 20 quarters (2021Q3-2026Q2) are loaded, so lead times are bounded by that window and the first-signal quarter can be left-censored.",
+    "Reporting to FAERS often rises after a label change or press coverage (stimulated reporting), which can make a signal appear around the change rather than before it.",
+    "FAERS dates are report-receipt dates, not event dates, and a case counts from its latest report version, so the first-signal quarter is conservative (late).",
+    "Label changes are not a complete or exclusive list of a drug's true adverse effects, so this measures agreement with FDA labelling, not detection of all real harms.",
+    "The label-change reference maps added label text to Preferred Terms automatically and is pending faculty review; a mismatch in that mapping mis-scores a pair."
+  ]
+}

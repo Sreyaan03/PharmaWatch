@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19T15:57:08Z",
+  "generated_at": "2026-10-20T11:09:37Z",
   "smoke": false,
   "components": {
     "signals": {
@@ -872,6 +872,71 @@
       ],
       "caveat": "author-labelled, pending faculty review. The matcher reads only the boxed-warning, warnings, precautions, contraindications and adverse-reactions sections with simple variants, so an effect the label describes in other words or sections is missed. 'Not found in label text' never means 'unlabelled'.",
       "smoke": false
+    },
+    "lead_time": {
+      "title": "Early-warning lead time vs FDA label changes",
+      "reference": "FDA Drug Safety-related Labeling Changes (SrLC), Jul 2021-Jun 2026, mapped to FAERS ingredients and Preferred Terms",
+      "model": null,
+      "data_version": "FAERS 2021Q3-2026Q2 (20 quarters, 7,222,094 cases, identity 37303f)",
+      "run_at": "2026-10-20T11:09:16Z",
+      "rows": [
+        {
+          "set": "Flagged before the label change",
+          "pairs": 3052,
+          "metrics": {
+            "Pairs": [
+              592,
+              null
+            ],
+            "Share of all pairs": [
+              0.194,
+              [
+                0.1805,
+                0.2077
+              ]
+            ],
+            "Median lead (quarters)": [
+              7.0,
+              [
+                7.0,
+                8.0
+              ]
+            ]
+          }
+        },
+        {
+          "set": "Flagged at or after the change",
+          "pairs": null,
+          "metrics": {
+            "Pairs": [
+              322,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Left-censored (signal already present at the start of our data)",
+          "pairs": null,
+          "metrics": {
+            "Pairs": [
+              607,
+              null
+            ]
+          }
+        },
+        {
+          "set": "Never flagged in any loaded quarter",
+          "pairs": null,
+          "metrics": {
+            "Pairs": [
+              1531,
+              null
+            ]
+          }
+        }
+      ],
+      "caveat": "author-built by automated PT mention match; PENDING FACULTY REVIEW. Window 2021q3-2026q2. Only 20 quarters (2021Q3-2026Q2) are loaded, so lead times are bounded by that window and the first-signal quarter can be left-censored. Reporting to FAERS often rises after a label change or press coverage (stimulated reporting), which can make a signal appear around the change rather than before it. FAERS dates are report-receipt dates, not event dates, and a case counts from its latest report version, so the first-signal quarter is conservative (late). Label changes are not a complete or exclusive list of a drug's true adverse effects, so this measures agreement with FDA labelling, not detection of all real harms. The label-change reference maps added label text to Preferred Terms automatically and is pending faculty review; a mismatch in that mapping mis-scores a pair.",
+      "smoke": false
     }
   },
   "not_run": [],
@@ -883,6 +948,7 @@
     "Interaction-model test sets use sampled negatives (unlabelled pairs, not confirmed non-interactions) at a 1:1 ratio, so precision at k is read against a base rate of 0.5.",
     "NER precision is a lower bound: the ADE corpus annotates only entities in annotated relations.",
     "NER results come from published case-report text, not from prescriptions or social media.",
-    "Prescription extraction was measured on synthetic printed documents. Handwriting is untested, and brand names missing from FAERS (for example many Indian brands) are not recognised; they are flagged for checking."
+    "Prescription extraction was measured on synthetic printed documents. Handwriting is untested, and brand names missing from FAERS (for example many Indian brands) are not recognised; they are flagged for checking.",
+    "The lead-time study compares FAERS signals with FDA label changes over only 20 quarters; reporting rises after label changes, FAERS dates are receipt dates, and the label-change reference maps label text to Preferred Terms automatically and is pending faculty review."
   ]
 }
