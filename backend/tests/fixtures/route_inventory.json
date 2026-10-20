@@ -502,6 +502,12 @@
       ],
       "status": 200
     },
+    "GET /api/surveillance/replay/<run_id>": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
     "GET /api/surveillance/summary": {
       "keys": [
         "counts",
@@ -667,6 +673,18 @@
         "<text/html>"
       ],
       "status": 404
+    },
+    "POST /api/surveillance/replay/<run_id>/step": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
+    },
+    "POST /api/surveillance/replay/start": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
     },
     "POST /api/surveillance/watchlist": {
       "keys": [
@@ -1041,6 +1059,24 @@
         "POST"
       ],
       "rule": "/api/surveillance/alerts/<int:alert_id>/status"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/surveillance/replay/<run_id>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/surveillance/replay/<run_id>/step"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/surveillance/replay/start"
     },
     {
       "methods": [

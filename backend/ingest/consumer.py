@@ -192,10 +192,20 @@ def handle_label_change(msg):
     return on_label_change(msg)
 
 
+def handle_replay_signals(msg):
+    """A replay event for one historical quarter: run the alert detector into the replay store.
+    Writes only to replay_alerts, never to the live tables."""
+    from services.surveillance import on_replay_signals
+    result = on_replay_signals(msg)
+    log.info(f"replay-signals run={msg.get('run_id')} quarter={msg.get('quarter')}: {result}")
+    return result
+
+
 TOPIC_HANDLERS = {
     "faers-release": handle_release,
     "signals-updated": handle_signals_updated,
     "label-change": handle_label_change,
+    "replay-signals": handle_replay_signals,
     "pubmed-stream": handle_pubmed,
     "clinical-trials": handle_trials,
     "fda-alerts": handle_alerts,

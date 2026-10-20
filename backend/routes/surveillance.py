@@ -65,6 +65,35 @@ def watchlist_remove(rxcui):
     return jsonify(payload), status
 
 
+@surveillance_bp.route("/api/surveillance/replay/start", methods=["POST"])
+def replay_start():
+    """Begin an isolated replay over the loaded quarters. Writes only to the replay store."""
+    body = request.get_json(silent=True) or {}
+    payload, status = svc.start_replay(from_quarter=(body.get("from") or "").strip() or None,
+                                       to_quarter=(body.get("to") or "").strip() or None)
+    return jsonify(payload), status
+
+
+@surveillance_bp.route("/api/surveillance/replay/<run_id>/step", methods=["POST"])
+def replay_step(run_id):
+    """Compute one historical quarter of a replay (the browser timeline drives this per tick)."""
+    body = request.get_json(silent=True) or {}
+    payload, status = svc.replay_step(run_id, (body.get("quarter") or "").strip())
+    return jsonify(payload), status
+
+
+@surveillance_bp.route("/api/surveillance/replay/<run_id>", methods=["GET"])
+def replay_status(run_id):
+    """A replay's status, per-quarter counts, and (with ?quarter= or ?upto=) its alerts."""
+    payload, status = svc.replay_status(run_id)
+    q, upto = request.args.get("quarter"), request.args.get("upto")
+    if status == 200 and (q or upto):
+        feed, _ = svc.list_replay_alerts(run_id, quarter=q, upto=upto,
+                                         limit=min(int(request.args.get("limit", 200)), 500))
+        payload["alerts"] = feed.get("alerts", [])
+    return jsonify(payload), status
+
+
 @surveillance_bp.route("/api/admin/surveillance/detect", methods=["POST"])
 @require_admin
 def detect():

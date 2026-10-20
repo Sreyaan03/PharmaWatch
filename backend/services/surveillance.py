@@ -33,6 +33,10 @@ NON_CLINICAL_LIKE = ["product%", "%off label%", "%drug ineffective%", "%use issu
                      "%poor quality product%", "%storage%", "%contamination%"]
 POSSIBLE_SIGNAL = ("Possible signal: needs review. A disproportionality signal is a reporting "
                    "pattern, not proof that the drug causes the effect.")
+REPLAY_CAP = 100                     # alerts per quarter in a replay (keep each step quick)
+REPLAY_NOTE = ("Replay of historical data. These alerts are what the system would have raised at "
+               "the time. A replay writes to its own store and changes no live data.")
+_NO_PREVIOUS = "__none__"            # stand-in "previous quarter" so every current signal is new
 
 
 def _results_glob():
@@ -121,16 +125,47 @@ def upsert_alert(kind, rxcui, ingredient, pt, quarter, ic025=None, cases=None, d
     return 0 if before else 1
 
 
+def _kind_for(p):
+    return "not_in_label" if p["label_check"]["status"] == "not_found_in_label_text" else "new_signal"
+
+
+def _classify_and_rank(pairs, cap):
+    """Attach the label check to each pair, then order not-in-label first and strongest IC025
+    first, capped so one quarter cannot flood the feed. Shared by the live detector and replay."""
+    for p in pairs:
+        p["label_check"] = label_check.find(p["rxcui"], p["pt"])
+    not_in_label = [p for p in pairs if _kind_for(p) == "not_in_label"]
+    new_signal = [p for p in pairs if _kind_for(p) == "new_signal"]
+    return (not_in_label + new_signal)[:cap]
+
+
+def _alert_detail(p, quarter, previous):
+    """The evidence stored on an alert (live or replay)."""
+    return {"prr": round(p["prr"], 4), "ic025": round(p["ic025"], 4), "cases": p["cases"],
+            "ror_ci_low": round(p["ror_ci_low"], 4), "class": p["signal_strength"],
+            "became_signal_in": quarter, "was_not_a_signal_in": previous,
+            "label": p["label_check"], "note": POSSIBLE_SIGNAL}
+
+
+def _quarters(glob):
+    """The ordered list of quarters present in the Spark results ([] if the lake is absent)."""
+    import duckdb
+    con = duckdb.connect()
+    try:
+        return [r[0] for r in con.execute(
+            f"SELECT DISTINCT quarter FROM read_parquet('{glob}', hive_partitioning = 1) ORDER BY 1").fetchall()]
+    except duckdb.IOException:               # no results parquet on this machine yet
+        return []
+    finally:
+        con.close()
+
+
 def detect_new_signals(quarter=None, cap=MAX_ALERTS_PER_RUN, candidate_limit=CANDIDATE_LIMIT):
     """Raise alerts for pairs that became a signal in the latest quarter. Returns a summary."""
     glob = _results_glob()
     if glob is None:
         return {"error": "Spark results are not in local storage", "created": 0}
-    import duckdb
-    con = duckdb.connect()
-    quarters = [r[0] for r in con.execute(
-        f"SELECT DISTINCT quarter FROM read_parquet('{glob}', hive_partitioning = 1) ORDER BY 1").fetchall()]
-    con.close()
+    quarters = _quarters(glob)
     if len(quarters) < 2:
         return {"error": "need at least two quarters of results", "created": 0}
     quarter = quarter or quarters[-1]
@@ -138,21 +173,10 @@ def detect_new_signals(quarter=None, cap=MAX_ALERTS_PER_RUN, candidate_limit=CAN
     pairs, total = _newly_signalling(glob, quarter, previous, candidate_limit)
 
     created = {"new_signal": 0, "not_in_label": 0}
-    not_in_label, new_signal = [], []
-    for p in pairs:
-        check = label_check.find(p["rxcui"], p["pt"])
-        p["label_check"] = check
-        (not_in_label if check["status"] == "not_found_in_label_text" else new_signal).append(p)
-
-    # not-in-label first, then strongest new signals, capped so one quarter cannot flood the feed
-    for p in (not_in_label + new_signal)[:cap]:
-        kind = "not_in_label" if p["label_check"]["status"] == "not_found_in_label_text" else "new_signal"
-        detail = {"prr": round(p["prr"], 4), "ic025": round(p["ic025"], 4), "cases": p["cases"],
-                  "ror_ci_low": round(p["ror_ci_low"], 4), "class": p["signal_strength"],
-                  "became_signal_in": quarter, "was_not_a_signal_in": previous,
-                  "label": p["label_check"], "note": POSSIBLE_SIGNAL}
+    for p in _classify_and_rank(pairs, cap):
+        kind = _kind_for(p)
         upsert_alert(kind, p["rxcui"], p["ingredient"], p["pt"], quarter,
-                     round(p["ic025"], 4), p["cases"], detail)
+                     round(p["ic025"], 4), p["cases"], _alert_detail(p, quarter, previous))
         created[kind] += 1
     summary = {"quarter": quarter, "previous": previous, "newly_signalling_total": total,
                "candidates_examined": len(pairs), "created": sum(created.values()), "by_kind": created,
@@ -196,6 +220,115 @@ def on_signals_updated(msg):
 
 def on_label_change(msg):
     return handle_label_change(msg or {})
+
+
+def on_replay_signals(msg):
+    """A `replay-signals` event (one historical quarter). Writes only to the replay store."""
+    msg = msg or {}
+    result, _ = replay_step(msg.get("run_id"), msg.get("quarter"))
+    return result
+
+
+# ── replay: isolated history playback (never touches the live tables) ─────────
+def start_replay(from_quarter=None, to_quarter=None):
+    """Begin a replay over the loaded quarters. Returns the run id and the quarter span."""
+    glob = _results_glob()
+    if glob is None:
+        return {"error": "Spark results are not in local storage"}, 400
+    quarters = _quarters(glob)
+    if len(quarters) < 2:
+        return {"error": "Need at least two quarters of Spark results to replay."}, 400
+    lo = from_quarter if from_quarter in quarters else quarters[0]
+    hi = to_quarter if to_quarter in quarters else quarters[-1]
+    i, j = sorted((quarters.index(lo), quarters.index(hi)))
+    span = quarters[i:j + 1]
+    import uuid
+    run_id = uuid.uuid4().hex
+    try:
+        execute("INSERT INTO replay_runs (run_id, from_quarter, to_quarter, quarters_json, status) "
+                "VALUES (%s, %s, %s, %s, 'running')",
+                (run_id, span[0], span[-1], json.dumps(quarters)))
+    except Exception:
+        return {"error": "Replay store unavailable (MySQL is not reachable)."}, 503
+    return {"run_id": run_id, "quarters": span, "all_quarters": quarters, "note": REPLAY_NOTE}, 200
+
+
+def replay_step(run_id, quarter, cap=REPLAY_CAP):
+    """Compute and store one quarter of a replay. Idempotent: re-stepping a quarter changes nothing."""
+    if not run_id or not quarter:
+        return {"error": "run_id and quarter are required."}, 400
+    try:
+        run = query_one("SELECT quarters_json, to_quarter FROM replay_runs WHERE run_id = %s", (run_id,))
+    except Exception:
+        return {"error": "Replay store unavailable."}, 503
+    if not run:
+        return {"error": "No such replay run."}, 404
+    glob = _results_glob()
+    if glob is None:
+        return {"error": "Spark results are not in local storage"}, 400
+    all_q = json.loads(run["quarters_json"])
+    if quarter not in all_q:
+        return {"error": f"{quarter} is not a loaded quarter."}, 400
+    idx = all_q.index(quarter)
+    previous = all_q[idx - 1] if idx > 0 else _NO_PREVIOUS
+    pairs, total = _newly_signalling(glob, quarter, previous, CANDIDATE_LIMIT)
+    prev_label = None if previous == _NO_PREVIOUS else previous
+
+    created = {"new_signal": 0, "not_in_label": 0}
+    for p in _classify_and_rank(pairs, cap):
+        kind = _kind_for(p)
+        execute(
+            "INSERT INTO replay_alerts (run_id, quarter, kind, rxcui, ingredient, pt, ic025, cases, detail_json) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE ingredient = VALUES(ingredient), ic025 = VALUES(ic025), "
+            "cases = VALUES(cases), detail_json = VALUES(detail_json)",
+            (run_id, quarter, kind, p["rxcui"], p["ingredient"], p["pt"],
+             round(p["ic025"], 4), p["cases"], json.dumps(_alert_detail(p, quarter, prev_label))))
+        created[kind] += 1
+    if quarter == run["to_quarter"]:
+        execute("UPDATE replay_runs SET status = 'done' WHERE run_id = %s", (run_id,))
+    return {"run_id": run_id, "quarter": quarter, "previous": prev_label,
+            "newly_signalling_total": total, "created": sum(created.values()), "by_kind": created}, 200
+
+
+def replay_status(run_id):
+    """A replay's span, status and per-quarter new-alert counts (for the timeline)."""
+    try:
+        run = query_one("SELECT run_id, from_quarter, to_quarter, quarters_json, status, created_at "
+                        "FROM replay_runs WHERE run_id = %s", (run_id,))
+    except Exception:
+        return {"error": "Replay store unavailable."}, 503
+    if not run:
+        return {"error": "No such replay run."}, 404
+    rows = query("SELECT quarter, kind, COUNT(*) AS n FROM replay_alerts WHERE run_id = %s "
+                 "GROUP BY quarter, kind", (run_id,))
+    by_quarter = {}
+    for r in rows:
+        by_quarter.setdefault(r["quarter"], {})[r["kind"]] = int(r["n"])
+    all_q = json.loads(run["quarters_json"])
+    span = all_q[all_q.index(run["from_quarter"]):all_q.index(run["to_quarter"]) + 1]
+    return {"run_id": run_id, "from": run["from_quarter"], "to": run["to_quarter"], "quarters": span,
+            "status": run["status"], "counts_by_quarter": by_quarter, "note": REPLAY_NOTE}, 200
+
+
+def list_replay_alerts(run_id, quarter=None, upto=None, limit=200):
+    """Replay alerts for a run, for one quarter or cumulatively up to a quarter."""
+    where, params = ["run_id = %s"], [run_id]
+    if quarter:
+        where.append("quarter = %s"); params.append(quarter)
+    if upto:
+        where.append("quarter <= %s"); params.append(upto)
+    sql = ("SELECT quarter, kind, rxcui, ingredient, pt, ic025, cases, detail_json FROM replay_alerts "
+           "WHERE " + " AND ".join(where) +
+           " ORDER BY (kind = 'not_in_label') DESC, ic025 DESC LIMIT %s")
+    try:
+        rows = query(sql, tuple(params + [int(limit)]))
+    except Exception:
+        return {"error": "Replay store unavailable.", "alerts": []}, 503
+    alerts = [{"quarter": r["quarter"], "kind": r["kind"], "rxcui": r["rxcui"], "ingredient": r["ingredient"],
+               "pt": r["pt"], "ic025": r["ic025"], "cases": r["cases"],
+               "detail": json.loads(r["detail_json"]) if r["detail_json"] else {}} for r in rows]
+    return {"alerts": alerts, "count": len(alerts), "note": REPLAY_NOTE}, 200
 
 
 # ── feed, review, watchlist (read by routes) ──────────────────────────────────

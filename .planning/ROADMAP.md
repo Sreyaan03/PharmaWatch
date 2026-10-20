@@ -171,7 +171,7 @@ Plans (in execution order):
 - [x] 10-02: Scale-ready: one configuration surface, storage interface (local or S3-compatible), queue interface (inline or Kafka workers), stateless web tier and health checks, scaled Compose profile with an automated check, measured scaling, docs/SCALING.md runbook
 - [x] 10-03: Data lake export; Spark quarterly all-pairs job matched to `compute_metrics`; HBase `signal_history` with Parquet fallback and history chart; Spark vs DuckDB timings
 - [x] 10-04: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist
-- [ ] 10-05: Isolated replay through Kafka with a timeline view; lead-time study against FDA safety labelling changes (checkpoint: reference source)
+- [~] 10-05: Isolated replay through Kafka with a timeline view [done]; lead-time study against FDA safety labelling changes [pending checkpoint: reference source]
 - [ ] 10-06: Navigation regroup, drug profile page (with alerts and history), evidence badge component
 - [ ] 10-07: Text Mining area (correct model name, negation handling, exploratory label), Pipeline area with live state only, frontend contract test, browser smoke test
 

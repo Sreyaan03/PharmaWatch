@@ -278,3 +278,34 @@ CREATE TABLE IF NOT EXISTS surveillance_alerts (
     INDEX idx_alert_rxcui (rxcui),
     INDEX idx_alert_rank (ic025)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Isolated replay of history. An admin replays the loaded quarters through the SAME alert
+-- detector, quarter by quarter, writing only here (never to surveillance_alerts), keyed by a
+-- run id. These are the alerts the system WOULD have raised at the time; a replay changes no
+-- live data. The quarters list is stored so a quarter's "previous" is known during stepping.
+CREATE TABLE IF NOT EXISTS replay_runs (
+    run_id CHAR(32) NOT NULL PRIMARY KEY,
+    from_quarter VARCHAR(8) NOT NULL,
+    to_quarter VARCHAR(8) NOT NULL,
+    quarters_json TEXT NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'running',   -- running | done
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Alerts produced by a replay. One row per (run, quarter, kind, rxcui, pt), so re-stepping a
+-- quarter changes nothing. detail_json carries the same evidence as a live alert.
+CREATE TABLE IF NOT EXISTS replay_alerts (
+    run_id CHAR(32) NOT NULL,
+    quarter VARCHAR(8) NOT NULL,
+    kind VARCHAR(16) NOT NULL,
+    rxcui VARCHAR(16) NOT NULL,
+    ingredient VARCHAR(191) NOT NULL,
+    pt VARCHAR(191) NOT NULL DEFAULT '',
+    ic025 DOUBLE DEFAULT NULL,
+    cases INT DEFAULT NULL,
+    detail_json MEDIUMTEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (run_id, quarter, kind, rxcui, pt),
+    INDEX idx_replay_run_q (run_id, quarter)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

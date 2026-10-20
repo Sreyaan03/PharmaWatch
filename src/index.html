@@ -1785,6 +1785,16 @@
         .sv-sentence { font-size:0.8rem; background:#f7f7fb; border-radius:4px; padding:6px 8px; margin:0.3rem 0; }
         .sv-actions button { font-size:0.74rem; padding:3px 9px; margin-right:0.3rem; border:1px solid #ccd; background:#f4f4f8; border-radius:4px; cursor:pointer; }
         .sv-chip { font-size:0.72rem; background:#eef; border-radius:10px; padding:2px 9px; margin-right:0.3rem; }
+        .sv-tabs { display:flex; gap:0.3rem; margin:0 0 1rem; border-bottom:1px solid #e3e3ea; }
+        .sv-tab { font-size:0.84rem; padding:7px 14px; border:none; background:none; cursor:pointer; color:#667; border-bottom:2px solid transparent; }
+        .sv-tab--active { color:#2c3e50; font-weight:600; border-bottom-color:#2980b9; }
+        .sv-replay-bar { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:0.8rem; }
+        .sv-replay-bar button, .sv-replay-bar select { font-size:0.82rem; padding:5px 10px; border:1px solid #ccd; border-radius:4px; background:#f4f4f8; cursor:pointer; }
+        .sv-timeline { display:flex; gap:3px; flex-wrap:wrap; margin:0.6rem 0 1rem; }
+        .sv-qtile { min-width:62px; text-align:center; font-size:0.7rem; padding:5px 4px; border:1px solid #e3e3ea; border-radius:4px; background:#fafafd; color:#889; }
+        .sv-qtile--done { background:#eef6ff; color:#2c3e50; border-color:#bcd; }
+        .sv-qtile--current { background:#2980b9; color:#fff; border-color:#2980b9; }
+        .sv-qtile b { display:block; font-size:0.9rem; }
       </style>
       <div class="container">
         <h1 class="section-title">Surveillance</h1>
@@ -1795,20 +1805,48 @@
           reporting pattern in FAERS, not proof that the drug causes the effect. "Not found in label text" is a
           text search of the label, not a statement that the effect is unlabelled.</div>
         <div id="sv-status" class="sv-status">Loading…</div>
-        <div class="sv-filters">
-          <select id="sv-kind"><option value="">All kinds</option><option value="not_in_label">Not in label</option>
-            <option value="new_signal">New signal</option><option value="label_change">Label change</option></select>
-          <select id="sv-statusf"><option value="new">New</option><option value="">Any status</option>
-            <option value="reviewed">Reviewed</option><option value="escalated">Escalated</option>
-            <option value="dismissed">Dismissed</option></select>
-          <input id="sv-drug" type="text" placeholder="drug (optional)" />
-          <button class="btn btn--sm" id="sv-apply">Apply</button>
-          <span style="margin-left:auto; font-size:0.82rem;">Watchlist:
-            <input id="sv-watch-add" type="text" placeholder="add a drug" style="width:120px;" />
-            <button class="btn btn--sm" id="sv-watch-btn">Add</button></span>
+
+        <div class="sv-tabs">
+          <button class="sv-tab sv-tab--active" id="sv-tab-live" data-view="live">Live alerts</button>
+          <button class="sv-tab" id="sv-tab-replay" data-view="replay">Replay history</button>
         </div>
-        <div id="sv-watchlist" class="sv-meta"></div>
-        <div id="sv-feed"><p style="color:#889;">Loading alerts…</p></div>
+
+        <div id="sv-live">
+          <div class="sv-filters">
+            <select id="sv-kind"><option value="">All kinds</option><option value="not_in_label">Not in label</option>
+              <option value="new_signal">New signal</option><option value="label_change">Label change</option></select>
+            <select id="sv-statusf"><option value="new">New</option><option value="">Any status</option>
+              <option value="reviewed">Reviewed</option><option value="escalated">Escalated</option>
+              <option value="dismissed">Dismissed</option></select>
+            <input id="sv-drug" type="text" placeholder="drug (optional)" />
+            <button class="btn btn--sm" id="sv-apply">Apply</button>
+            <span style="margin-left:auto; font-size:0.82rem;">Watchlist:
+              <input id="sv-watch-add" type="text" placeholder="add a drug" style="width:120px;" />
+              <button class="btn btn--sm" id="sv-watch-btn">Add</button></span>
+          </div>
+          <div id="sv-watchlist" class="sv-meta"></div>
+          <div id="sv-feed"><p style="color:#889;">Loading alerts…</p></div>
+        </div>
+
+        <div id="sv-replay" style="display:none;">
+          <div class="sv-banner" style="background:#eef6ff; border-left-color:#2980b9;">
+            <strong>Replay of historical data.</strong> Each loaded quarter is fed back through the same alert
+            detector, in order. These are the alerts the system would have raised at the time. A replay writes to
+            its own store and changes no live data.</div>
+          <div class="sv-replay-bar">
+            <button id="sv-rp-start">▶ Start replay</button>
+            <button id="sv-rp-pause" disabled>❚❚ Pause</button>
+            <label style="font-size:0.82rem;">Speed:
+              <select id="sv-rp-speed">
+                <option value="4000">Slow</option>
+                <option value="2000" selected>Normal</option>
+                <option value="800">Fast</option>
+              </select></label>
+            <span id="sv-rp-progress" class="sv-meta" style="margin:0;"></span>
+          </div>
+          <div id="sv-rp-timeline" class="sv-timeline"></div>
+          <div id="sv-rp-feed"><p style="color:#889;">Press “Start replay” to play the loaded quarters through the pipeline.</p></div>
+        </div>
       </div>
     </section>
 
