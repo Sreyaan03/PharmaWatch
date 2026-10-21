@@ -1302,14 +1302,53 @@ function initPRRCalculator() {
 /* ──────────────── NAVIGATION ──────────────────────────────── */
 let chartsInitialized = {};
 
+/* Seven top-level areas; each groups existing sections as sub-tabs. Nothing inside a section
+   changed — only where it sits. The first section of an area is its landing sub-tab. */
+const NAV_AREAS = [
+  { id: 'monitor', label: 'Monitor',
+    sections: [['dashboard', 'Dashboard'], ['signals', 'Signal Detection'], ['surveillance', 'Surveillance']] },
+  { id: 'investigate', label: 'Investigate',
+    sections: [['drug-search', 'Drug Profile'], ['boxed-warnings', 'Boxed Warnings'],
+               ['temporal-analysis', 'Temporal'], ['demographics', 'Demographics']] },
+  { id: 'interactions-area', label: 'Interactions', sections: [['interactions', 'Interactions']] },
+  { id: 'prescription-area', label: 'Prescription Review', sections: [['prescription', 'Prescription Review']] },
+  { id: 'textmining-area', label: 'Text Mining', sections: [['text-mining', 'Clinical NER']] },
+  { id: 'pipeline', label: 'Pipeline', sections: [['data-sources', 'Data Pipeline']] },
+  { id: 'methods', label: 'Methods & Validation',
+    sections: [['validation', 'Validation'], ['methodology', 'Methodology'],
+               ['research-guide', 'Research Guide'], ['about', 'About']] },
+];
+const SECTION_TO_AREA = {};
+NAV_AREAS.forEach(a => a.sections.forEach(([sid]) => { SECTION_TO_AREA[sid] = a.id; }));
+
+/* Render the seven area buttons and, for the active area, its sub-tabs. */
+function renderNav(activeSection) {
+  const areaOf = SECTION_TO_AREA[activeSection] || NAV_AREAS[0].id;
+  const areaList = document.getElementById('main-nav-list');
+  if (areaList) {
+    areaList.innerHTML = NAV_AREAS.map(a =>
+      `<li class="main-nav__item${a.id === areaOf ? ' active' : ''}">` +
+      `<a href="#${a.sections[0][0]}" class="main-nav__link" data-area="${a.id}" ` +
+      `data-section="${a.sections[0][0]}">${escHtml(a.label)}</a></li>`).join('');
+  }
+  const area = NAV_AREAS.find(a => a.id === areaOf);
+  const subList = document.getElementById('sub-nav-list');
+  const subNav = document.getElementById('sub-nav');
+  if (subList && area) {
+    const multi = area.sections.length > 1;
+    subList.innerHTML = area.sections.map(([sid, label]) =>
+      `<li class="sub-nav__item${sid === activeSection ? ' active' : ''}">` +
+      `<a href="#${sid}" class="sub-nav__link" data-section="${sid}">${escHtml(label)}</a></li>`).join('');
+    if (subNav) subNav.style.display = multi ? 'block' : 'none';   // hide the bar for single-section areas
+  }
+}
+
 function navigateTo(sectionId) {
   document.querySelectorAll('.page-section').forEach(s => { s.style.display = 'none'; s.classList.remove('active-section'); });
   const target = document.getElementById(sectionId);
   if (target) { target.style.display = 'block'; target.classList.add('active-section'); }
 
-  document.querySelectorAll('.main-nav__item').forEach(item => {
-    item.classList.toggle('active', item.querySelector('[data-section]')?.dataset.section === sectionId);
-  });
+  renderNav(sectionId);
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -1399,13 +1438,17 @@ function navigateTo(sectionId) {
 }
 
 function initNavigation() {
-  // Nav links
-  document.querySelectorAll('.main-nav__link').forEach(link => {
-    link.addEventListener('click', e => {
-      e.preventDefault();
-      navigateTo(link.dataset.section);
-    });
-  });
+  renderNav('dashboard');
+
+  // Area buttons and sub-tabs are injected by renderNav(), so delegate from their containers.
+  const onNavClick = e => {
+    const link = e.target.closest('[data-section]');
+    if (!link) return;
+    e.preventDefault();
+    navigateTo(link.dataset.section);
+  };
+  document.getElementById('main-nav-list')?.addEventListener('click', onNavClick);
+  document.getElementById('sub-nav-list')?.addEventListener('click', onNavClick);
 
   // Footer links
   document.querySelectorAll('.footer-link[data-nav]').forEach(link => {
@@ -1423,6 +1466,12 @@ function initNavigation() {
         navigateTo(el.dataset.nav);
       });
     }
+  });
+
+  // Old #hash links (and bookmarks) keep working: #section-id navigates to that section.
+  window.addEventListener('hashchange', () => {
+    const id = decodeURIComponent(location.hash.replace(/^#/, ''));
+    if (id && document.getElementById(id)) navigateTo(id);
   });
 
   // Mobile menu
@@ -2596,7 +2645,9 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFaersReleaseNotice();
 
   // Boot the dashboard section (default)
-  navigateTo('dashboard');
+  // Honor an initial #hash (old bookmarks/links) on first load; default to dashboard.
+  const initialHash = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+  navigateTo(initialHash && document.getElementById(initialHash) ? initialHash : 'dashboard');
   updateSystemStatus();
   setInterval(updateSystemStatus, 30000);
 

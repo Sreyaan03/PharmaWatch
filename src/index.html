@@ -70,30 +70,13 @@
   <!-- ===== MAIN NAVIGATION ===== -->
   <nav class="main-nav" id="main-nav" role="navigation" aria-label="Main navigation">
     <div class="container main-nav__inner">
-      <ul class="main-nav__list" id="main-nav-list">
-        <li class="main-nav__item active"><a href="#dashboard" class="main-nav__link"
-            data-section="dashboard">Dashboard</a></li>
-        <li class="main-nav__item"><a href="#signals" class="main-nav__link" data-section="signals">Signal Detection</a>
-        </li>
-        <li class="main-nav__item"><a href="#drug-search" class="main-nav__link" data-section="drug-search">Drug
-            Search</a></li>
-        <li class="main-nav__item"><a href="#interactions" class="main-nav__link"
-            data-section="interactions">Interactions</a></li>
-        <li class="main-nav__item"><a href="#boxed-warnings" class="main-nav__link"
-            data-section="boxed-warnings">Boxed Warnings</a></li>
-        <li class="main-nav__item"><a href="#data-sources" class="main-nav__link" data-section="data-sources">Data
-            Sources</a></li>
-        <li class="main-nav__item"><a href="#methodology" class="main-nav__link"
-            data-section="methodology">Methodology</a></li>
-        <li class="main-nav__item"><a href="#temporal-analysis" class="main-nav__link" data-section="temporal-analysis">Temporal Analysis</a></li>
-        <li class="main-nav__item"><a href="#demographics" class="main-nav__link" data-section="demographics">Demographics</a></li>
-        <li class="main-nav__item"><a href="#prescription" class="main-nav__link" data-section="prescription">Prescription Review</a></li>
-        <li class="main-nav__item"><a href="#surveillance" class="main-nav__link" data-section="surveillance">Surveillance</a></li>
-        <li class="main-nav__item"><a href="#validation" class="main-nav__link" data-section="validation">Methods &amp; Validation</a></li>
-        <li class="main-nav__item"><a href="#research-guide" class="main-nav__link" data-section="research-guide" style="color: #f0c040;">Research Guide</a></li>
-      </ul>
+      <!-- Seven top-level areas; sub-tabs for the active area render into #sub-nav-list from app.js (NAV_AREAS). -->
+      <ul class="main-nav__list" id="main-nav-list"><!-- areas injected by renderNav() --></ul>
     </div>
   </nav>
+  <div class="sub-nav" id="sub-nav" role="navigation" aria-label="Section navigation">
+    <div class="container"><ul class="sub-nav__list" id="sub-nav-list"><!-- sub-tabs injected by renderNav() --></ul></div>
+  </div>
 
   <!-- ===== ALERT BANNER ===== -->
   <div class="alert-banner alert-banner--warning" id="alert-banner" role="alert">
@@ -410,8 +393,32 @@
           </div>
         </div>
 
-        <!-- NEW OCR/NER Clinical Mining Panel -->
+        <!-- Clinical Narrative Signal Mining moved to its own "Text Mining" area (#text-mining). -->
+
         <div class="dashboard-card" style="margin-top:2rem;">
+          <div class="card-header">
+            <h2 class="card-title">PRR Distribution — Current Snapshot</h2>
+          </div>
+          <div class="chart-container">
+            <canvas id="prr-distribution-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================
+         TEXT MINING (Clinical NER)
+    ============================= -->
+    <section id="text-mining" class="page-section" style="display:none;">
+      <div class="section-hero section-hero--navy">
+        <div class="container">
+          <h1 class="section-hero__title">Text Mining</h1>
+          <p class="section-hero__desc">Extract drug and adverse-event mentions from clinical narratives with
+            BioBERT NER, then score them against FAERS. Research use only; de-identified text only.</p>
+        </div>
+      </div>
+      <div class="container section-body">
+        <div class="dashboard-card">
           <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
             <h2 class="card-title">🔬 Clinical Narrative Signal Mining (BioBERT OCR + NER)</h2>
           </div>
@@ -419,14 +426,14 @@
             <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
               Drag & drop de-identified PDF discharge summaries, upload text files, or paste clinical notes. The system will run OCR on scanned PDFs, perform Named Entity Recognition (NER), and query openFDA to calculate real disproportionality signals in real-time.
             </p>
-            
+
             <div id="ner-drop-zone" style="border: 2px dashed rgba(59, 130, 246, 0.4); border-radius: 8px; padding: 2rem; text-align: center; background: rgba(59, 130, 246, 0.02); cursor: pointer; transition: all 0.3s ease;">
               <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📄</div>
               <p style="font-weight: 500; margin-bottom: 0.3rem;">Drag & drop de-identified PDF/TXT files here, or click to browse</p>
               <p style="font-size: 0.8rem; color: var(--text-muted);">PDF summaries will be parsed via EasyOCR and fitz</p>
               <input type="file" id="ner-file-input" accept=".pdf,.txt" style="display: none;" />
             </div>
-            
+
             <div id="ner-file-info" style="display: none; align-items: center; justify-content: space-between; margin-top: 1rem; padding: 0.8rem; background: rgba(59, 130, 246, 0.08); border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.15);">
               <span id="ner-file-name" style="font-weight: 500; font-size: 0.9rem;">No file selected</span>
               <button class="btn btn--sm" id="ner-remove-file-btn" style="padding: 2px 8px; background: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">Remove</button>
@@ -463,15 +470,6 @@
                 <!-- Injected cards -->
               </div>
             </div>
-          </div>
-        </div>
-
-        <div class="dashboard-card" style="margin-top:2rem;">
-          <div class="card-header">
-            <h2 class="card-title">PRR Distribution — Current Snapshot</h2>
-          </div>
-          <div class="chart-container">
-            <canvas id="prr-distribution-chart"></canvas>
           </div>
         </div>
       </div>
@@ -1910,7 +1908,7 @@
     </div>
     <div class="site-footer__bottom">
       <div class="container">
-        <span>⚠ This is a research simulation platform. Data is illustrative and not for clinical use.</span>
+        <span>For research and education only. PharmaWatch analyses public FAERS reports and openFDA data; a disproportionality signal is a reporting pattern, not proof of causation, and nothing here is medical advice or a basis for clinical or prescribing decisions.</span>
       </div>
     </div>
   </footer>
