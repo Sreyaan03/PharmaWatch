@@ -85,6 +85,9 @@ SETTINGS = [
     Setting("SRLC_USER_AGENT",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             str, "external", "Browser User-Agent for fetching FDA SrLC label-change pages (validation/fetch_srlc.py)"),
+    Setting("REDDIT_CLIENT_ID", "", str, "external", "Reddit API client id for exploratory social listening; empty disables it", secret=True),
+    Setting("REDDIT_CLIENT_SECRET", "", str, "external", "Reddit API client secret; empty disables social listening", secret=True),
+    Setting("REDDIT_USER_AGENT", "PharmaWatch/1.0 (research use)", str, "external", "User-Agent sent to the Reddit API"),
 ]
 _BY_NAME = {s.name: s for s in SETTINGS}
 _TRUE = {"1", "true", "yes", "on"}

@@ -173,7 +173,7 @@ Plans (in execution order):
 - [x] 10-04: Label watcher (`label-change`), label-text check with measured accuracy, alert detector (`new_signal`, `not_in_label`, `label_change`), Surveillance area with review states and watchlist
 - [x] 10-05: Isolated replay through Kafka with a timeline view; lead-time study against FDA safety labelling changes (SrLC: 592/3052 pairs flagged before the change, 19.4%, median 7 quarters; pending faculty review)
 - [x] 10-06: Navigation regroup (seven areas), drug profile endpoint (/api/drug/<name>/profile, one resolution), cross-area drug selection, evidence badge primitive (on primary result cards; full per-card sweep deferred)
-- [ ] 10-07: Text Mining area (correct model name, negation handling, exploratory label), Pipeline area with live state only, frontend contract test, browser smoke test
+- [x] 10-07: Text Mining (DistilBERT biomedical NER, sentence-scoped pairing + negation, mentions not signals), Pipeline shows real state or "not connected"/"not running" (simulations removed), Reddit env-gated + exploratory, frontend contract test + UAT checklist (Phase-5 alias cleanup deferred)
 
 ### Phase 11 (Day 7): Platform & Pilot Release
 **Goal**: A secured, auditable build that runs locally with one command and can move to a server by changing configuration only.

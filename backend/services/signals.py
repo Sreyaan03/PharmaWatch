@@ -207,16 +207,14 @@ def ner_endpoint(data):
 
     try:
         entities = run_ner(text)
-
-        drugs_found = [e for e in entities if e["label"] in ("Medication", "Drug")]
-        events_found = [e for e in entities if e["label"] in ("Disease_disorder", "Sign_symptom")]
-        for d in drugs_found:
-            for ev in events_found:
-                insert_drug_event(d["token"], ev["token"], source="biobert",
-                                  confidence=min(d["score"], ev["score"]),
-                                  raw_text=text[:500])
-
-        return {"entities": entities}, 200
+        from services import text_mining
+        # mentions: drug + event in the same sentence, negated events dropped. Stored as mentions
+        # (source text_mining), never as signals and never in a 2x2 count.
+        mentions = text_mining.pair_mentions(text, entities)
+        for p in mentions[:20]:
+            insert_drug_event(p["drug"], p["event"], source="text_mining",
+                              confidence=p["confidence"], raw_text=text[:500])
+        return {"entities": entities, "mentions": mentions}, 200
     except Exception as exc:
         return {"error": str(exc)}, 500
 
@@ -425,28 +423,21 @@ def _mine_text(job, report):
 
     report("NER: Mining text with the biomedical NER model...")
     entities = run_ner(text)
-    drugs = {e["token"].lower(): e for e in entities if e["label"] in ("Medication", "Drug")}
-    events = {e["token"].lower(): e for e in entities if e["label"] in ("Disease_disorder", "Sign_symptom")}
-    pairs = sorted(
-        ({"drug": d["token"], "event": ev["token"], "confidence": round(d["score"] * ev["score"], 4)}
-         for d in drugs.values() for ev in events.values()),
-        key=lambda x: x["confidence"], reverse=True)[:5]
-
+    from services import text_mining
+    # Pair a drug with an event only within one sentence; drop negated events.
+    pairs = text_mining.pair_mentions(text, entities)
     if not pairs:
-        report("No drug-event associations found in text.")
-        return {"signals": [], "entities": entities}
+        report("No in-sentence drug-event mentions found in text.")
+        return {"mentions": [], "unresolved": [], "entities": entities}
 
-    computed_signals = []
-    for idx, p in enumerate(pairs):
-        report(f"FAERS: Scoring pair {idx + 1}/{len(pairs)} ({p['drug']} + {p['event']})...")
-        metrics = compute_disproportionality_helper(p["drug"], p["event"])
-        if metrics:
-            upsert_signal(p["drug"], p["event"], metrics, source="ner_clinical")
-            insert_drug_event(p["drug"], p["event"], source="biobert", confidence=p["confidence"], raw_text=text[:500])
-            signal_data = metrics.copy()
-            signal_data.update({"drug": p["drug"], "event": p["event"], "source": "ner_clinical"})
-            computed_signals.append(signal_data)
-    return {"signals": computed_signals, "entities": entities}
+    report(f"Resolving and scoring {min(len(pairs), 5)} mention(s) against FAERS...")
+    # Resolve through the identity service; only resolved pairs are scored against FAERS. Mentions
+    # are stored with source text_mining — they are not signals and never enter a 2x2 count.
+    mentions, unresolved = text_mining.resolve_and_score(pairs, limit=5)
+    for m in mentions:
+        insert_drug_event(m["drug"], m["event"], source="text_mining",
+                          confidence=m["confidence"], raw_text=text[:500])
+    return {"mentions": mentions, "unresolved": unresolved, "entities": entities}
 
 
 jobs.register("ner_mining", _mine_text)
@@ -487,11 +478,21 @@ def stream_ner_task(task_id):
 
 
 def trigger_scrape():
+    from reddit_scraper import reddit_configured
+    if not reddit_configured():
+        return {"status": "not_configured",
+                "note": "Social listening is not configured (set REDDIT_CLIENT_ID/SECRET). "
+                        "It is exploratory and unverified, and never feeds FAERS statistics."}, 200
     count = scrape_all(limit_per_sub=25)
-    return {"status": "ok", "posts_scraped": count}, 200
+    return {"status": "ok", "posts_scraped": count,
+            "note": "Exploratory, unverified social mentions; never part of a FAERS statistic."}, 200
 
 
 def trigger_processing():
+    from reddit_scraper import reddit_configured
+    if not reddit_configured():
+        return {"status": "not_configured",
+                "note": "Social listening is not configured; nothing to process."}, 200
     process_posts_with_ner(run_ner)
-    return {"status": "ok"}, 200
+    return {"status": "ok", "note": "Mentions only (source text_mining); never a signal."}, 200
 

@@ -1100,52 +1100,31 @@ function animateCounter(el, target, duration = 1600, suffix = '') {
 }
 
 async function initCounters() {
-  let stats = {
-    reports_analyzed: 14283740,
-    signals_detected: 47,
-    drugs_monitored: 12490
-  };
+  // Real counts from the loaded FAERS data; no fabricated fallback. If the API is down, the
+  // counters show "—" rather than an invented number.
+  let stats = { reports_analyzed: null, signals_detected: null, drugs_monitored: null };
   try {
     const res = await fetch('/api/local-stats');
     const data = await res.json();
     if (data && !data.error) {
-      stats.reports_analyzed = data.reports_analyzed || stats.reports_analyzed;
-      stats.signals_detected = data.signals_detected || stats.signals_detected;
-      stats.drugs_monitored = data.drugs_monitored || stats.drugs_monitored;
+      if (data.reports_analyzed != null) stats.reports_analyzed = data.reports_analyzed;
+      if (data.signals_detected != null) stats.signals_detected = data.signals_detected;
+      if (data.drugs_monitored != null) stats.drugs_monitored = data.drugs_monitored;
     }
   } catch (e) {
-    console.warn("[Counters] Failed to fetch live local-stats, using fallback values:", e);
+    console.warn("[Counters] live local-stats unavailable; counters show a dash, not a fallback:", e);
   }
 
-  const elReports = document.querySelector('#stat-reports .stat-card__number');
-  if (elReports) elReports.dataset.target = stats.reports_analyzed;
-
-  const elSignals = document.querySelector('#stat-signals .stat-card__number');
-  if (elSignals) elSignals.dataset.target = stats.signals_detected;
-
-  const elDrugs = document.querySelector('#stat-drugs .stat-card__number');
-  if (elDrugs) elDrugs.dataset.target = stats.drugs_monitored;
-
-  document.querySelectorAll('[data-target]').forEach(el => {
-    const target = parseFloat(el.dataset.target);
-    animateCounter(el, target);
-  });
-}
-
-/* ──────────────── SOURCE METERS ───────────────────────────── */
-function animateMeters() {
-  const meters = [
-    { fill: document.getElementById('fda-bar'), val: document.getElementById('fda-val'), target: 72, label: '14,283 msg/min' },
-    { fill: document.getElementById('ehr-bar'), val: document.getElementById('ehr-val'), target: 54, label: '9,840 msg/min' },
-    { fill: document.getElementById('social-bar'), val: document.getElementById('social-val'), target: 38, label: '6,120 msg/min' },
-    { fill: document.getElementById('ct-bar'), val: document.getElementById('ct-val'), target: 19, label: '2,340 msg/min' },
-  ];
-  setTimeout(() => {
-    meters.forEach(m => {
-      if (m.fill) m.fill.style.width = m.target + '%';
-      if (m.val) m.val.textContent = m.label;
-    });
-  }, 400);
+  const set = (sel, value) => {
+    const el = document.querySelector(sel + ' .stat-card__number');
+    if (!el) return;
+    if (value == null) { el.textContent = '—'; return; }
+    el.dataset.target = value;
+    animateCounter(el, parseFloat(value));
+  };
+  set('#stat-reports', stats.reports_analyzed);
+  set('#stat-signals', stats.signals_detected);
+  set('#stat-drugs', stats.drugs_monitored);
 }
 
 /* ──────────────── PIPELINE METRICS ────────────────────────── */
@@ -1184,12 +1163,12 @@ function updatePipelineMetrics() {
     setInterval(updateLSTMMetric, 30000);
   }
 
-  // NLP metric — already handled by ml_models.js BioBERT throughput measurement.
-  // No hardcoding needed here; ml_models.js pings the real BioBERT server.
+  // NLP metric — already handled by ml_models.js NER throughput measurement.
+  // No hardcoding needed here; ml_models.js pings the real NER server.
   // We only set a fallback if that module isn't loaded.
   const nlpEl = document.getElementById('nlp-metric');
   if (nlpEl && typeof MLModels === 'undefined') {
-    nlpEl.textContent = 'BioBERT module not loaded';
+    nlpEl.textContent = 'NER module not loaded';
   }
 }
 
@@ -1760,11 +1739,8 @@ function initNerPanel() {
         progressLog.innerHTML += `<div style="color:#10b981; font-weight:bold;">[Success] Mining completed!</div>`;
         updateProgress(100, 'Analysis complete.');
         
-        // Show results grid
-        renderNerResults(resData.signals);
-        
-        // Refresh signals list
-        await fetchAndRenderSignals();
+        // Show results grid (mentions, not signals)
+        renderNerResults(resData.mentions || [], resData.unresolved || []);
       });
 
       sse.addEventListener('error', e => {
@@ -1786,47 +1762,51 @@ function initNerPanel() {
     progressText.textContent = text;
   }
 
-  function renderNerResults(signals) {
+  function renderNerResults(mentions, unresolved) {
     resultsContainer.style.display = 'block';
-    
-    if (signals.length === 0) {
+
+    if ((!mentions || mentions.length === 0) && (!unresolved || unresolved.length === 0)) {
       resultsGrid.innerHTML = `
         <div style="grid-column: 1/-1; padding: 1.5rem; text-align: center; color: var(--text-muted); background: rgba(0,0,0,0.1); border-radius: 6px;">
-          No statistically significant drug-event signals detected in the clinical narrative.
+          No in-sentence drug-event mentions were found in the narrative.
         </div>`;
       return;
     }
 
-    resultsGrid.innerHTML = signals.map(s => {
+    const num = v => (typeof v === 'number' ? v.toFixed(2) : '—');
+    let html = (mentions || []).map(m => {
+      const f = m.faers || {};
+      const cls = normalizeSignalClass(f.signal_strength);
       return `
         <div class="dashboard-card" style="margin: 0; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); background: rgba(15, 23, 42, 0.3);">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-            <span class="status-pill status-pill--${SIGNAL_CLASS_META[normalizeSignalClass(s.signal_strength)].pill}">${SIGNAL_CLASS_META[normalizeSignalClass(s.signal_strength)].label}</span>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">Source: EHR NER</span>
+            <span class="status-pill status-pill--${SIGNAL_CLASS_META[cls].pill}">${SIGNAL_CLASS_META[cls].label}</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Mention · text mining</span>
           </div>
-          <h4 style="font-size: 1rem; font-weight: 700; margin: 0.2rem 0;">${escHtml(s.drug)}</h4>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 0.8rem 0;">↳ ${escHtml(s.event)}</p>
+          <h4 style="font-size: 1rem; font-weight: 700; margin: 0.2rem 0;">${escHtml(m.drug)}</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 0.8rem 0;">↳ ${escHtml(m.event)}</p>
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 4px;">
-            <div>
-              <div style="font-weight: bold; color: #3b82f6;">${s.prr.toFixed(2)}</div>
-              <div style="font-size: 0.65rem; color: var(--text-muted);">PRR</div>
-            </div>
-            <div>
-              <div style="font-weight: bold; color: #8b5cf6;">${s.ror.toFixed(2)}</div>
-              <div style="font-size: 0.65rem; color: var(--text-muted);">ROR</div>
-            </div>
-            <div>
-              <div style="font-weight: bold; color: #10b981;">${s.bcpnn_ic.toFixed(2)}</div>
-              <div style="font-size: 0.65rem; color: var(--text-muted);">IC</div>
-            </div>
+            <div><div style="font-weight: bold; color: #3b82f6;">${num(f.prr)}</div><div style="font-size: 0.65rem; color: var(--text-muted);">PRR (FAERS)</div></div>
+            <div><div style="font-weight: bold; color: #8b5cf6;">${num(f.ror_ci_low)}</div><div style="font-size: 0.65rem; color: var(--text-muted);">ROR lower</div></div>
+            <div><div style="font-weight: bold; color: #10b981;">${num(f.ic025)}</div><div style="font-size: 0.65rem; color: var(--text-muted);">IC025</div></div>
           </div>
-          <div style="margin-top: 0.8rem; font-size: 0.75rem; display: flex; justify-content: space-between; color: var(--text-muted);">
-            <span>Co-reports: <strong>${s.n_reports}</strong></span>
-            <span style="color: #10b981; font-weight: 500;">Signal Persistent</span>
+          <div style="margin-top: 0.8rem; font-size: 0.72rem; color: var(--text-muted);">
+            FAERS cases for this pair: <strong>${f.a != null ? f.a : '—'}</strong>.
+            A mention is a pattern in the text scored against FAERS — not a signal, and never part of a 2×2 count.
           </div>
         </div>
       `;
     }).join('');
+
+    if (unresolved && unresolved.length) {
+      html += `
+        <div class="dashboard-card" style="grid-column: 1/-1; margin: 0; padding: 1rem; border: 1px solid rgba(255,255,255,0.05); background: rgba(15,23,42,0.3);">
+          <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Unresolved mentions (not scored)</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">${unresolved.map(u =>
+            `${escHtml(u.drug)} — ${escHtml(u.event)}`).join('; ')}</div>
+        </div>`;
+    }
+    resultsGrid.innerHTML = html;
   }
 }
 

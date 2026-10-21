@@ -105,10 +105,12 @@ def test_jobs_interrupted_too_often_are_reported_failed_not_lost():
 
 
 def test_the_in_memory_task_dict_is_gone():
-    import importlib.util
-    from services import signals
+    # Mining runs through durable jobs, not an in-memory task dict. (services/text_mining.py exists
+    # again from 10-07, but only as pure drug-event pairing logic — it must hold no task registry.)
+    from services import signals, text_mining
     assert not hasattr(signals, "MINING_TASKS")
-    assert importlib.util.find_spec("services.text_mining") is None
+    assert not hasattr(text_mining, "MINING_TASKS")
+    assert hasattr(text_mining, "pair_mentions")
 
 
 # ── the NER mining endpoints still work, now on jobs ─────────────────────────

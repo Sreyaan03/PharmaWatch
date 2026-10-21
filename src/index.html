@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PharmaWatch | Real-Time Adverse Drug Event Detection</title>
   <meta name="description"
-    content="PharmaWatch is a real-time, multi-source big data pipeline for detecting adverse drug events using Apache Kafka, Spark, BioBERT, and LSTM models." />
+    content="PharmaWatch is a research pharmacovigilance platform over public FAERS and openFDA data, using Apache Kafka, Spark, a biomedical NER model, and LSTM forecasting." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -249,7 +249,7 @@
             line-height: 1.4;
           ">
             <span style="font-size:1rem; flex-shrink:0;">⚡</span>
-            <span><strong>Architecture Demo</strong> — Kafka, Spark, and HDFS/HBase metrics are simulated to illustrate the intended big-data pipeline. Only <strong>BioBERT NLP</strong> and <strong>LSTM Predictor</strong> run on real live data.</span>
+            <span><strong>What runs for real:</strong> FAERS statistics, the biomedical NER model, the LSTM forecast, and Kafka ingestion (when the broker is up) use real data. The Spark all-pairs job runs offline as a batch (measured run time and rows on the Methods page); HDFS/HBase are an architecture illustration with no cluster connected and read "not connected". No panel shows a simulated number.</span>
           </div>
           <div class="pipeline-stages">
             <div class="pipeline-stage pipeline-stage--ok" id="ps-kafka">
@@ -261,14 +261,14 @@
             <div class="pipeline-arrow">→</div>
             <div class="pipeline-stage pipeline-stage--ok" id="ps-spark">
               <div class="pipeline-stage__icon">🔥</div>
-              <div class="pipeline-stage__name">Spark Streaming</div>
+              <div class="pipeline-stage__name">Spark batch</div>
               <div class="pipeline-stage__metric" id="spark-metric">Loading…</div>
               <div class="pipeline-stage__status">● Online</div>
             </div>
             <div class="pipeline-arrow">→</div>
             <div class="pipeline-stage pipeline-stage--ok" id="ps-nlp">
               <div class="pipeline-stage__icon">🤖</div>
-              <div class="pipeline-stage__name">BioBERT NLP</div>
+              <div class="pipeline-stage__name">Biomedical NER</div>
               <div class="pipeline-stage__metric" id="nlp-metric">Loading…</div>
               <div class="pipeline-stage__status">● Online</div>
             </div>
@@ -414,13 +414,13 @@
         <div class="container">
           <h1 class="section-hero__title">Text Mining</h1>
           <p class="section-hero__desc">Extract drug and adverse-event mentions from clinical narratives with
-            BioBERT NER, then score them against FAERS. Research use only; de-identified text only.</p>
+            a DistilBERT-based biomedical NER model, then score them against FAERS. Research use only; de-identified text only.</p>
         </div>
       </div>
       <div class="container section-body">
         <div class="dashboard-card">
           <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-            <h2 class="card-title">🔬 Clinical Narrative Signal Mining (BioBERT OCR + NER)</h2>
+            <h2 class="card-title">🔬 Clinical Narrative Mention Mining (OCR + biomedical NER)</h2>
           </div>
           <div class="card-body" style="padding: 1.5rem;">
             <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
@@ -465,7 +465,7 @@
 
             <!-- Extracted Mined signals -->
             <div id="ner-results-container" style="display: none; margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 1.5rem;">
-              <h3 style="font-size: 1rem; margin-bottom: 1rem; font-weight: 600;">Mined Safety Signals (From BioBERT + FAERS)</h3>
+              <h3 style="font-size: 1rem; margin-bottom: 1rem; font-weight: 600;">Mentions (biomedical NER), scored against FAERS</h3>
               <div id="ner-results-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
                 <!-- Injected cards -->
               </div>
@@ -974,7 +974,7 @@
               <div class="arch-node arch-node--orange" id="node-social">
                 <div class="arch-node__icon">💬</div>
                 <div class="arch-node__name">Social Media NLP</div>
-                <div class="arch-node__detail">Reddit / forums via BioBERT</div>
+                <div class="arch-node__detail">Reddit / forums via biomedical NER</div>
                 <div class="arch-node__metric" id="social-rate">6,120 msg/min</div>
               </div>
               <div class="arch-node arch-node--purple" id="node-ct">
@@ -989,7 +989,7 @@
           <div class="arch-connector">▼ Apache Kafka Topics (partitioned, replicated) ▼</div>
 
           <div class="arch-layer" id="arch-processing">
-            <div class="arch-layer__title">Processing Layer (Spark Streaming)</div>
+            <div class="arch-layer__title">Processing Layer (Spark batch)</div>
             <div class="arch-layer__nodes">
               <div class="arch-node arch-node--spark">
                 <div class="arch-node__icon">🔥</div>
@@ -998,7 +998,7 @@
               </div>
               <div class="arch-node arch-node--spark">
                 <div class="arch-node__icon">🤖</div>
-                <div class="arch-node__name">BioBERT UDF</div>
+                <div class="arch-node__name">Biomedical NER UDF</div>
                 <div class="arch-node__detail">Entity extraction → {drug, event, severity}</div>
               </div>
               <div class="arch-node arch-node--spark">
@@ -1056,8 +1056,8 @@
         <!-- Spark Live Task Stream Log -->
         <div class="dashboard-card" style="margin-top:2rem;">
           <div class="card-header">
-            <h2 class="card-title">🔥 Spark Streaming — Live Micro-Batch Task Log</h2>
-            <span style="font-size:0.75rem; color:#888; align-self:center;">Updates every ~1.2s</span>
+            <h2 class="card-title">🔥 Spark batch job</h2>
+            <span style="font-size:0.75rem; color:#888; align-self:center;">Runs offline; see Methods &amp; Validation</span>
           </div>
           <div id="spark-task-log" style="
             font-family: 'Courier New', monospace;
@@ -1070,7 +1070,7 @@
             overflow-y: auto;
             line-height: 1.8;
           ">
-            <div style="color:#5e81f4;">Spark Streaming engine initializing... waiting for first batch...</div>
+            <div style="color:#5e81f4;">The all-pairs Spark job runs offline as a batch, not a live stream.</div>
           </div>
           <style>
             .spark-log-entry {
@@ -1105,8 +1105,8 @@
           <div class="method-card" id="method-nlp">
             <div class="method-card__num">01</div>
             <div class="method-card__icon">🤖</div>
-            <h2 class="method-card__title">BioBERT Natural Language Processing</h2>
-            <p class="method-card__desc">Patient-reported outcomes on social media are processed by a BioBERT model
+            <h2 class="method-card__title">Biomedical NER (DistilBERT)</h2>
+            <p class="method-card__desc">Clinical and patient-reported text is processed by a DistilBERT-based biomedical NER model (d4data/biomedical-ner-all)
               deployed as a Spark UDF. It extracts medical entities from colloquial text, converting them into
               structured <code>{drug, event, severity}</code> tuples mapped to MedDRA codes.</p>
             <div class="method-card__live">
@@ -1117,14 +1117,14 @@
             <!-- ── Real BioBERT Interactive Panel ── -->
             <div style="margin-top:1.5rem; border-top:1px solid rgba(0,0,0,0.08); padding-top:1rem;">
               <h3 style="font-size:0.9rem; font-weight:600; margin-bottom:0.5rem;">
-                🔬 Try BioBERT Live
+                🔬 Try the NER model live
               </h3>
               <textarea id="biobert-input" rows="3" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px;
                        font-family:inherit; font-size:0.85rem; resize:vertical;"
                 placeholder="Paste a biomedical sentence, e.g. Patient experienced severe nausea after taking Metformin…"></textarea>
               <button id="biobert-run-btn" style="margin-top:0.5rem; padding:6px 16px; background:#003d7c;
                        color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:0.85rem;">
-                Run BioBERT
+                Run NER
               </button>
               <div id="biobert-status" style="font-size:0.78rem; color:#888; margin-top:4px; min-height:1.2em;"></div>
 
@@ -1189,7 +1189,7 @@
 
                 if (!text) { status.textContent = '⚠ Please enter some text first.'; return; }
 
-                status.textContent = '⏳ Connecting to BioBERT server…';
+                status.textContent = '⏳ Connecting to the NER server…';
                 highlightedDiv.style.display = 'none';
                 summaryDiv.style.display = 'none';
                 entitiesDiv.style.display = 'none';
@@ -1387,7 +1387,7 @@
               <p style="margin-top:1rem;">PharmaWatch proposes a near real-time, multi-source signal detection
                 architecture. By leveraging a robust big data stack including <strong>Apache Kafka</strong>,
                 <strong>Apache Spark</strong>, and distributed Hadoop storage, alongside advanced machine learning
-                models (<strong>BioBERT</strong>, <strong>LSTMs</strong>, and <strong>Graph-theoretic models</strong>),
+                models (<strong>biomedical NER</strong>, <strong>LSTMs</strong>, and <strong>Graph-theoretic models</strong>),
                 this system ingests heterogeneous data streams to identify and alert stakeholders to emerging ADEs
                 before they reach statistical severity.</p>
             </div>
@@ -1402,7 +1402,7 @@
                 <div class="tech-stack-item"><span class="tech-stack-icon">🗄</span><span>HDFS + HBase +
                     Hive</span><small>Distributed storage</small></div>
                 <div class="tech-stack-item"><span
-                    class="tech-stack-icon">🤖</span><span>BioBERT</span><small>Biomedical NLP</small></div>
+                    class="tech-stack-icon">🤖</span><span>Biomedical NER</span><small>DistilBERT NLP</small></div>
                 <div class="tech-stack-item"><span class="tech-stack-icon">📈</span><span>LSTM
                     Networks</span><small>Temporal prediction</small></div>
                 <div class="tech-stack-item"><span class="tech-stack-icon">🕸</span><span>Graph
@@ -1452,12 +1452,12 @@
                     class="ref-link">ClinicalTrials.gov →</a></li>
                 <li><a href="https://www.meddra.org/" target="_blank" rel="noopener" class="ref-link">MedDRA Terminology
                     →</a></li>
-                <li><a href="https://huggingface.co/dmis-lab/biobert-base-cased-v1.2" target="_blank" rel="noopener"
-                    class="ref-link">BioBERT Model (HuggingFace) →</a></li>
+                <li><a href="https://huggingface.co/d4data/biomedical-ner-all" target="_blank" rel="noopener"
+                    class="ref-link">Biomedical NER model — d4data/biomedical-ner-all (HuggingFace) →</a></li>
                 <li><a href="https://kafka.apache.org/" target="_blank" rel="noopener" class="ref-link">Apache Kafka
                     →</a></li>
                 <li><a href="https://spark.apache.org/streaming/" target="_blank" rel="noopener" class="ref-link">Apache
-                    Spark Streaming →</a></li>
+                    Spark batch →</a></li>
               </ul>
             </div>
           </div>

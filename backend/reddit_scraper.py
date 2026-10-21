@@ -8,12 +8,13 @@ try:
 except ImportError:
     PRAW_AVAILABLE = False
 import time
+from core import config
 from database import insert_reddit_post, get_unprocessed_posts, mark_post_processed
 
-# ── FILL THESE IN from Step 3.1 ──
-REDDIT_CLIENT_ID = "YOUR_CLIENT_ID"
-REDDIT_CLIENT_SECRET = "YOUR_CLIENT_SECRET"
-REDDIT_USER_AGENT = "PharmaWatch:v1.0 (by u/YOUR_REDDIT_USERNAME)"
+# Credentials come from the environment (core/config). With none set, social listening is disabled
+# and the endpoints report "not configured" — there are no hard-coded placeholders in source.
+def reddit_configured():
+    return bool(PRAW_AVAILABLE and config.get("REDDIT_CLIENT_ID") and config.get("REDDIT_CLIENT_SECRET"))
 
 # Subreddits with drug/health discussions
 TARGET_SUBREDDITS = [
@@ -29,12 +30,12 @@ DRUG_KEYWORDS = [
 ]
 
 def create_reddit_client():
-    if not PRAW_AVAILABLE:
+    if not reddit_configured():
         return None
     return praw.Reddit(
-        client_id=REDDIT_CLIENT_ID,
-        client_secret=REDDIT_CLIENT_SECRET,
-        user_agent=REDDIT_USER_AGENT,
+        client_id=config.get("REDDIT_CLIENT_ID"),
+        client_secret=config.get("REDDIT_CLIENT_SECRET"),
+        user_agent=config.get("REDDIT_USER_AGENT"),
     )
 
 def scrape_subreddit(reddit, subreddit_name, limit=50):
@@ -55,8 +56,8 @@ def scrape_subreddit(reddit, subreddit_name, limit=50):
     return count
 
 def scrape_all(limit_per_sub=50):
-    if not PRAW_AVAILABLE:
-        print("[Reddit] praw not installed — Reddit scraping disabled.")
+    if not reddit_configured():
+        print("[Reddit] not configured (set REDDIT_CLIENT_ID/SECRET) — social listening disabled.")
         return 0
     reddit = create_reddit_client()
     total = 0
@@ -69,23 +70,23 @@ def scrape_all(limit_per_sub=50):
     return total
 
 def process_posts_with_ner(ner_func):
-    """Run unprocessed posts through BioBERT NER."""
+    """Run unprocessed posts through the biomedical NER model, forming mentions within a sentence
+    (negation handled) — the same text-mining path as clinical notes. Exploratory and unverified;
+    stored with source `text_mining`, never a signal and never in a 2x2 count."""
     from database import insert_drug_event
+    from services import text_mining
     posts = get_unprocessed_posts(limit=100)
     print(f"[NER] Processing {len(posts)} posts...")
     for post in posts:
         text = f"{post['title']}. {post['body']}"
         try:
             entities = ner_func(text)
-            drugs = [e for e in entities if e.get("entity_group") in
-                    ("Medication", "Drug", "Clinical_event")]
-            events = [e for e in entities if e.get("entity_group") in
-                     ("Disease_disorder", "Sign_symptom")]
-            for drug in drugs:
-                for event in events:
-                    insert_drug_event(drug["word"], event["word"], source="reddit",
-                                    confidence=min(drug["score"], event["score"]),
-                                    raw_text=text[:500])
+            # ner_func may return 'entity_group' (raw pipeline) or 'label' (cleaned); normalise.
+            for e in entities:
+                e.setdefault("label", e.get("entity_group"))
+            for p in text_mining.pair_mentions(text, entities)[:20]:
+                insert_drug_event(p["drug"], p["event"], source="text_mining",
+                                  confidence=p["confidence"], raw_text=text[:500])
             mark_post_processed(post["id"])
         except Exception as e:
             print(f"[NER] Error: {e}")

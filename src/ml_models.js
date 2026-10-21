@@ -1,6 +1,6 @@
 /* ============================================================
-   ml_models.js — Visual Simulation of ML Engine Logic
-   Centralizes BioBERT and LSTM simulated algorithms
+   ml_models.js — model demo panels (biomedical NER + LSTM)
+   Drives the Methodology demo panels; they call the real backend endpoints.
    ============================================================ */
 
 function escapeHtml(text) {

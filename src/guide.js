@@ -128,9 +128,9 @@ const GLOSSARY_TERMS = [
   },
   {
     id: "biobert",
-    term: "BioBERT / NER",
-    plain: "An AI trained on millions of medical papers that can read clinical text and automatically identify drug names, diseases, and side effects — without you having to highlight them manually.",
-    technical: "PharmaWatch uses d4data/biomedical-ner-all (HuggingFace), a BERT model fine-tuned on biomedical NER datasets. Extracts entities tagged as Drug (DRUG), Disease (DISE), and Chemical (CHEM). Supports both raw text and PDF upload (via EasyOCR).",
+    term: "Biomedical NER",
+    plain: "An AI model that reads clinical text and automatically identifies drug names, diseases, and side effects — without you having to highlight them manually.",
+    technical: "PharmaWatch uses d4data/biomedical-ner-all (HuggingFace), a DistilBERT-based model fine-tuned on biomedical NER datasets. Extracts entities tagged as Drug (DRUG), Disease (DISE), and Chemical (CHEM). Supports both raw text and PDF upload (via EasyOCR).",
     formula: "NER = classify each token t_i into {B-DRUG, I-DRUG, B-DISE, I-DISE, O, ...} using softmax over BERT hidden states",
     example: "Input: 'Patient was prescribed Metformin 500mg for type 2 diabetes, developed nausea'. Output: DRUG: [Metformin], DISE: [type 2 diabetes, nausea]. These are then scored against FAERS for pharmacovigilance signals.",
     links_to: "signals"
@@ -145,7 +145,7 @@ const WORKFLOW_PERSONAS = [
       { title: "Find Signals", desc: "Open Signal Detection → set PRR threshold to 2.0 and report count > 3. Sort by ROR descending to find strongest signals.", icon: "📊", link: "signals" },
       { title: "Verify with BCPNN", desc: "For each flagged signal, check the IC025 column. Only signals where IC025 > 0 are statistically confirmed — discard the rest to avoid false positives.", icon: "🔬", link: "signals" },
       { title: "Temporal Check", desc: "Click a signal → jump to Temporal Analysis. Look for velocity spikes and check if the Weber Effect is driving the numbers. If Weber peak is present, apply a 40–60% discount to the reported PRR.", icon: "📈", link: "dashboard" },
-      { title: "Cross-check NER", desc: "Upload a clinical report PDF in the Signals tab. BioBERT will extract drug and disease names. Match extracted entities against current signal list to find unlabeled events.", icon: "📄", link: "signals" },
+      { title: "Cross-check NER", desc: "Upload a clinical report PDF in the Text Mining area. The biomedical NER model extracts drug and disease mentions. Match extracted entities against the current signal list to find unlabelled events.", icon: "📄", link: "text-mining" },
       { title: "Report Gap", desc: "Run the Warning Gap Predictor in ML Models for any drug with a rising LSTM signal. If the drug has no boxed warning and no ClinicalTrials monitoring, flag for regulatory escalation.", icon: "⚠️", link: "drug-search" }
     ]
   },
@@ -237,7 +237,7 @@ const FEATURE_MANUAL = [
       "Filter by severity (Critical / High / Moderate) using the dropdown",
       "Sort by PRR, ROR, or IC column headers",
       "Click any row to open the signal network graph for that drug-event pair",
-      "Use the BioBERT NER text box to paste clinical note text — extracted entities are matched against the signal table",
+      "Use the biomedical NER text box to paste clinical note text — extracted entities are matched against the signal table",
       "PDF upload runs OCR → NER → FAERS matching in a streaming pipeline"
     ],
     tips: "A 'Critical' signal (PRR > 4, IC025 > 1) that has no boxed warning = potential research gap. The Warning Gap Predictor in ML Models can quantify this."

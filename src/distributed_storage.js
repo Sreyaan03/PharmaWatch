@@ -299,167 +299,82 @@ const DistributedStorage = {
   },
 
   /* ══════════════════════════════════════════════════════════════
-     SIMULATED SPARK MICRO-BATCH (architecture demo only)
+     COMPONENT STATE — honest labels only, no simulated numbers.
+     Spark runs as an offline batch job (not a live stream) and HDFS/HBase are an
+     architecture illustration with no cluster connected; both read "not connected".
   ══════════════════════════════════════════════════════════════ */
 
-  startSparkSimulation() {
-    setInterval(() => {
-      this.spark.activeBatches = Math.floor(Math.random() * 3) + 1;
-      this.spark.recordsPerBatch = Math.floor(Math.random() * 2000 + 800);
-      this.spark.stagesCompleted += 2;
-      this.spark.tasksRunning = this.spark.executors * this.spark.coresPerExecutor;
-      this.spark.totalTasksCompleted += this.spark.tasksRunning;
-
-      const sparkEl = document.getElementById('spark-metric');
-      if (sparkEl) {
-        const eventsPerSec = Math.floor(this.spark.recordsPerBatch * 2);
-        sparkEl.textContent = `${eventsPerSec.toLocaleString()} events/s | ${this.spark.activeBatches} active batch(es)`;
-      }
-    }, this.spark.batchDurationMs);
-
-    setInterval(() => {
-      const logEl = document.getElementById('spark-task-log');
-      if (!logEl) return;
-      const stages = ['Schema normalisation', 'MedDRA mapping', 'BioBERT UDF', 'PRR computation', 'LSTM prediction', 'HBase write'];
-      const stage = stages[Math.floor(Math.random() * stages.length)];
-      const ms = Math.floor(Math.random() * 140 + 60);
-      const entry = document.createElement('div');
-      entry.className = 'spark-log-entry';
-      entry.innerHTML = `<span class="spark-log-time">${new Date().toLocaleTimeString()}</span> Stage: <b>${stage}</b> — ${this.spark.tasksRunning} tasks / ${ms}ms`;
-      logEl.prepend(entry);
-      while (logEl.children.length > 8) logEl.removeChild(logEl.lastChild);
-    }, 1200);
+  renderComponentState() {
+    const sparkEl = document.getElementById('spark-metric');
+    if (sparkEl) sparkEl.textContent = 'Spark batch — runs offline (not a live stream)';
+    const logEl = document.getElementById('spark-task-log');
+    if (logEl) logEl.innerHTML = '<div class="spark-log-entry" style="color:var(--text-muted);">' +
+      'The all-pairs Spark job runs as a batch, not a live stream; see Methods &amp; Validation for its measured run time and row count.</div>';
+    const hdfsEl = document.getElementById('hdfs-metric');
+    if (hdfsEl) hdfsEl.textContent = 'Not connected (no cluster)';
   },
 
-  /* ══════════════════════════════════════════════════════════════
-     SIMULATED HDFS + HBASE (architecture demo)
-  ══════════════════════════════════════════════════════════════ */
-
-  startHDFSSimulation() {
-    setInterval(() => {
-      const newBlocks = Math.floor(Math.random() * 12 + 4);
-      this.hdfs.totalBlocks += newBlocks;
-      this.hdfs.replicatedBlocks += Math.floor(newBlocks * this.kafka.replicationFactor);
-      this.hdfs.totalGB += Math.random() * 0.04;
-      this.hdfs.writtenMBLast5min += Math.random() * 18 + 8;
-      if (this.hdfs.writtenMBLast5min > 500) this.hdfs.writtenMBLast5min = 0;
-
-      const hdfsEl = document.getElementById('hdfs-metric');
-      if (hdfsEl) hdfsEl.textContent = `${this.hdfs.totalGB.toFixed(1)} TB | ${this.hdfs.totalBlocks.toLocaleString()} blocks`;
-    }, 3000);
-
-    setInterval(() => {
-      this.hbase.putOpsPerSec = Math.floor(Math.random() * 12000 + 8000);
-      this.hbase.getOpsPerSec = Math.floor(Math.random() * 6000 + 3000);
-      this.hbase.rowsScanned  += Math.floor(Math.random() * 5000 + 2000);
-    }, 1000);
-  },
-
-  /* ══════════════════════════════════════════════════════════════
-     THROUGHPUT CHART (24h sliding window — simulated pattern)
-  ══════════════════════════════════════════════════════════════ */
-
-  buildLabels24h() {
-    const now = new Date();
-    return Array.from({ length: 24 }, (_, i) => {
-      const h = new Date(now - (23 - i) * 3600000);
-      return `${String(h.getHours()).padStart(2, '0')}:00`;
-    });
-  },
-
+  /* THROUGHPUT CHART — real Kafka messages/min per topic from /api/pipeline/stats, or "not
+     running". Never a simulated series. */
   initThroughputChart() {
     const ctx = document.getElementById('throughput-chart');
     if (!ctx) return;
     if (this.throughputChart) this.throughputChart.destroy();
-
-    const baseData = Array.from({ length: 24 }, (_, i) => {
-      const hour = (new Date().getHours() - 23 + i + 24) % 24;
-      const base = hour >= 8 && hour <= 20 ? 34000 : 24000;
-      return base + Math.floor(Math.random() * 4000 - 2000);
-    });
-
     this.throughputChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: this.buildLabels24h(),
-        datasets: [
-          {
-            label: 'Total Kafka Throughput (msg/min)',
-            data: baseData,
-            borderColor: '#003d7c',
-            backgroundColor: 'rgba(0,61,124,0.12)',
-            tension: 0.4, fill: true, pointRadius: 3, pointHoverRadius: 6,
-          },
-          {
-            label: 'Spark Records Processed (events/min)',
-            data: baseData.map(v => Math.floor(v * 0.91 + Math.random() * 800 - 400)),
-            borderColor: '#e65100',
-            backgroundColor: 'rgba(230,81,0,0.06)',
-            tension: 0.4, fill: true, pointRadius: 2, borderDash: [4, 2],
-          }
-        ]
-      },
+      type: 'bar',
+      data: { labels: [], datasets: [{
+        label: 'Messages / min (last 10 min, by topic)', data: [],
+        backgroundColor: '#003d7c', borderRadius: 4,
+      }] },
       options: {
         responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} ${ctx.datasetIndex === 0 ? 'msg/min' : 'events/min'}` } }
-        },
-        scales: {
-          x: { ticks: { maxTicksLimit: 12, font: { size: 10 } } },
-          y: { beginAtZero: false, title: { display: true, text: 'Volume / min' } }
-        }
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} msg/min` } } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'Messages / min' } } }
       }
     });
+    this._refreshThroughput();
+    setInterval(() => this._refreshThroughput(), 30000);
+  },
 
-    setInterval(() => {
-      if (!this.throughputChart) return;
-      const now = new Date();
-      const newLabel = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const newKafka = 28000 + Math.floor(Math.random() * 8000);
-      const newSpark = Math.floor(newKafka * 0.91 + Math.random() * 800 - 400);
-      this.throughputChart.data.labels.push(newLabel);
-      this.throughputChart.data.labels.shift();
-      this.throughputChart.data.datasets[0].data.push(newKafka);
-      this.throughputChart.data.datasets[0].data.shift();
-      this.throughputChart.data.datasets[1].data.push(newSpark);
-      this.throughputChart.data.datasets[1].data.shift();
+  async _refreshThroughput() {
+    if (!this.throughputChart) return;
+    try {
+      const d = await (await fetch('/api/pipeline/stats')).json();
+      const topics = d.topics || {};
+      const labels = Object.keys(topics);
+      this.throughputChart.data.labels = labels;
+      this.throughputChart.data.datasets[0].data = labels.map(t => topics[t].msgs_per_min || 0);
+      this.throughputChart.data.datasets[0].label = d.kafka_running
+        ? 'Messages / min (last 10 min, by topic)' : 'Kafka not running';
       this.throughputChart.update();
-    }, 60000);
+    } catch (e) { /* leave the chart empty; no simulated fallback */ }
   },
 
   /* ══════════════════════════════════════════════════════════════
-     SOURCE METERS (progress bars on the Data Sources panel)
+     SOURCE METERS — real ingested totals per topic, or nothing. Bar widths are
+     relative to the largest topic; no fixed/simulated widths.
   ══════════════════════════════════════════════════════════════ */
 
   animateMeters() {
-    const meters = [
-      { fill: 'fda-bar',    val: 'fda-val',    target: 72, topic: 'faers-release' },
-      { fill: 'social-bar', val: 'social-val', target: 22, topic: 'fda-alerts' },
-      { fill: 'ct-bar',     val: 'ct-val',     target: 19, topic: 'clinical-trials' },
+    this._meters = [
+      { fill: 'fda-bar',    val: 'fda-val',    topic: 'faers-release' },
+      { fill: 'social-bar', val: 'social-val', topic: 'fda-alerts' },
+      { fill: 'ct-bar',     val: 'ct-val',     topic: 'clinical-trials' },
     ];
-
-    setTimeout(() => {
-      meters.forEach(m => {
-        const fill = document.getElementById(m.fill);
-        if (fill) fill.style.width = m.target + '%';
-        this._updateMeterLabel(m);
-      });
-    }, 400);
-
-    setInterval(() => {
-      meters.forEach(m => this._updateMeterLabel(m));
-    }, 10000);  // update from real data every 10s
+    this._updateMeters();
+    setInterval(() => this._updateMeters(), 10000);
   },
 
-  _updateMeterLabel(m) {
-    const val = document.getElementById(m.val);
-    if (!val) return;
-    const t = this.kafka.topics[m.topic];
-    if (t && t.total > 0) {
-      val.textContent = `${t.total.toLocaleString()} msgs ingested`;
-    }
+  _updateMeters() {
+    const totals = (this._meters || []).map(m => (this.kafka.topics[m.topic]?.total) || 0);
+    const max = Math.max(1, ...totals);
+    (this._meters || []).forEach((m, i) => {
+      const fill = document.getElementById(m.fill);
+      const val = document.getElementById(m.val);
+      if (fill) fill.style.width = `${Math.round((totals[i] / max) * 100)}%`;
+      if (val) val.textContent = totals[i] > 0 ? `${totals[i].toLocaleString()} msgs ingested` : 'not running';
+    });
   },
 
   /* ══════════════════════════════════════════════════════════════
@@ -552,8 +467,10 @@ const DistributedStorage = {
     `;
     badge.innerHTML = `
       <span style="font-size:1rem;flex-shrink:0;">⚡</span>
-      <span><strong>Architecture Demo</strong> — Spark, HDFS, and HBase charts
-      are simulated to demonstrate pipeline scaling. Kafka data (above) is real.</span>
+      <span><strong>What is live here:</strong> Kafka ingestion and the counts above are real.
+      The Spark all-pairs job runs offline as a batch (its measured run time and row count are on the
+      Methods &amp; Validation page). HDFS/HBase are an architecture illustration with no cluster
+      connected, so those panels read "not connected" — never a simulated number.</span>
     `;
     container.appendChild(badge);
   },
@@ -567,9 +484,8 @@ const DistributedStorage = {
     this.injectKafkaPanel();
     this.injectArchBadge();
 
-    // Start architectural simulations
-    this.startSparkSimulation();
-    this.startHDFSSimulation();
+    // Honest component state (no simulations) + real source meters
+    this.renderComponentState();
     this.animateMeters();
     this.startKafkaMetricBar();
 
