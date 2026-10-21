@@ -213,7 +213,7 @@ function showExplorerEmpty(title, desc) {
 }
 
 function renderExplorerPairResult(data, container) {
-  const harmful = (data.predicted_interaction ?? data.is_harmful) === true;
+  const harmful = data.predicted_interaction === true;
   const severity = getInteractionSeverity(data);
   const confidence = Number.isFinite(Number(data.confidence)) ? `${(Number(data.confidence) * 100).toFixed(0)}%` : 'N/A';
   const drugA = data.drug_a || 'Drug A';
@@ -226,11 +226,13 @@ function renderExplorerPairResult(data, container) {
     : 'No known harmful signal in the current model output; continue normal clinical review.';
   const predicted = (data.predicted_interactions || []).join('; ') || data.prediction || summary;
 
+  const badge = (typeof ApiLayer !== 'undefined')
+    ? ApiLayer.renderEvidence(data.meta || { evidence: 'modelled', model_version: data.model_version || 'ddi-gnn' }) : '';
   container.innerHTML = `
     <div class="interaction-card interaction-card--${harmful ? 'harmful' : 'safe'} interaction-card--detail">
       <div class="interaction-card__icon">${harmful ? '!' : '-'}</div>
       <div class="interaction-card__body">
-        <div class="interaction-card__drugs">${escHtml(drugA)} + ${escHtml(drugB)}</div>
+        <div class="interaction-card__drugs">${escHtml(drugA)} + ${escHtml(drugB)} ${badge}</div>
         <div class="interaction-card__effect">${escHtml(summary)}</div>
         <div class="interaction-card__details">
           <div><strong>Severity:</strong> ${escHtml(severity.label)}</div>
@@ -255,7 +257,7 @@ function normalizeDrugName(name) {
 }
 
 function getInteractionSeverity(item) {
-  const harmful = (item?.predicted_interaction ?? item?.is_harmful) === true;
+  const harmful = item?.predicted_interaction === true;
   const confidence = Number(item?.confidence || 0);
   if (!harmful) return { key: 'safe', label: 'No evidence found', color: '#69db7c', width: 1.5 };
   if (confidence >= 0.85) return { key: 'critical', label: 'High risk', color: '#c0392b', width: 4 };
@@ -499,7 +501,7 @@ function normalizePolyGraph(graph, pairs) {
       ...link,
       source,
       target,
-      is_harmful:   pair.predicted_interaction ?? pair.is_harmful ?? link.predicted_interaction ?? link.is_harmful,
+      harmful:      pair.predicted_interaction ?? link.predicted_interaction,
       confidence:   Number(pair.confidence ?? link.confidence ?? 0),
       side_effects: pair.side_effects ?? link.side_effects ?? [],
       pair_key:     makePairKey(source, target)
@@ -537,8 +539,8 @@ function drawPolypharmacyGraph(graph, container, options = {}) {
   const H = 380;
   container.innerHTML = '';
   const showSafePairs = options.showAll ?? (document.getElementById('poly-show-safe-toggle')?.checked === true);
-  const visibleLinks = (graph.links || []).filter(link => showSafePairs || link.is_harmful === true);
-  const hasHarmfulLinks = (graph.links || []).some(link => link.is_harmful === true);
+  const visibleLinks = (graph.links || []).filter(link => showSafePairs || link.harmful === true);
+  const hasHarmfulLinks = (graph.links || []).some(link => link.harmful === true);
 
   if (!graph.nodes || graph.nodes.length === 0) {
     renderPolyGraphMessage(container, 'No medications selected.');
@@ -593,7 +595,7 @@ function drawPolypharmacyGraph(graph, container, options = {}) {
 
   const link = g.append('g').selectAll('line').data(visibleLinks).join('line')
     .attr('stroke', d => getInteractionSeverity(d).color)
-    .attr('stroke-opacity', d => d.is_harmful ? 0.85 : 0.45)
+    .attr('stroke-opacity', d => d.harmful ? 0.85 : 0.45)
     .attr('stroke-width', d => getInteractionSeverity(d).width)
     .style('cursor', 'pointer')
     .on('mouseover', (event, d) => {
@@ -663,7 +665,7 @@ function drawPolypharmacyGraph(graph, container, options = {}) {
 function renderPolyPairs(pairs, container) {
   if (!container) return;
   const showSafePairs = document.getElementById('poly-show-safe-toggle')?.checked === true;
-  const visiblePairs = (pairs || []).filter(p => showSafePairs || p.is_harmful === true);
+  const visiblePairs = (pairs || []).filter(p => showSafePairs || p.predicted_interaction === true);
   container.innerHTML = '';
   if (!pairs || !pairs.length) {
     container.innerHTML = '<p style="color:var(--gray-600);padding:1rem;">No pair results were returned.</p>';
@@ -674,7 +676,7 @@ function renderPolyPairs(pairs, container) {
     return;
   }
   container.innerHTML = visiblePairs.map(p => {
-    const harmful  = p.is_harmful;
+    const harmful  = p.predicted_interaction === true;
     const conf     = (p.confidence * 100).toFixed(0);
     const severity = getInteractionSeverity(p);
     const seText   = (p.side_effects || []).slice(0, 2).join(', ');
@@ -727,8 +729,8 @@ async function loadRecentPredictions() {
           <span class="recent-pred-row__pair">
             ${escHtml(p.drug_a)} + ${escHtml(p.drug_b)}
           </span>
-          <span class="poly-pair-item__badge poly-pair-item__badge--${p.is_harmful ? 'harmful' : 'safe'}" style="font-size:0.7rem;">
-            ${p.is_harmful ? '&#x26a0; Interaction flagged' : 'No evidence found'}
+          <span class="poly-pair-item__badge poly-pair-item__badge--${p.predicted_interaction ? 'harmful' : 'safe'}" style="font-size:0.7rem;">
+            ${p.predicted_interaction ? '&#x26a0; Interaction flagged' : 'No evidence found'}
           </span>
           <span class="recent-pred-row__time">${escHtml(when)}</span>
         </div>`;

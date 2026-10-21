@@ -63,12 +63,15 @@ def build_profile(name):
     ingredient = identity["ingredients"][0]
     rxcui = str(ingredient["rxcui"])
     canonical = ingredient.get("name") or name
+    dv = _data_version()
 
     from faers import analytics
     profile = {
         "input": name, "resolved": True, "identity": identity,
         "ingredient": {"rxcui": rxcui, "name": canonical},
-        "data_version": _data_version(),
+        "data_version": dv,
+        # composite: measured FAERS statistics combined with retrieved external evidence
+        "meta": {"evidence": "composite", "data_version": dv, "model_version": None},
         "report_count": None, "top_reactions": [], "boxed_warning": None,
         "trials": None, "evidence": None, "alerts": [],
         "note": ("A disproportionality signal is a reporting pattern in FAERS, not proof that the "

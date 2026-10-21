@@ -248,6 +248,22 @@ code {
 .sub-nav__item.active .sub-nav__link { color: var(--cdc-blue); border-bottom-color: var(--cdc-blue); }
 @media (max-width: 768px) { .sub-nav { top: auto; position: static; } }
 
+/* ── Evidence / provenance badge ───────────────────────────── */
+.evidence-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid currentColor;
+  background: rgba(255,255,255,0.6);
+  cursor: help;
+  vertical-align: middle;
+}
+.evidence-badge--unknown { color: #c0392b; border-color: #c0392b; }
+
 /* ── Alert Banner ──────────────────────────────────────────── */
 .alert-banner {
   padding: var(--space-3) 0;

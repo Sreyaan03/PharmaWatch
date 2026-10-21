@@ -227,7 +227,7 @@ function rxRenderReport(r) {
     const flagged = (p) => p.tier !== 'no_evidence_found';
     drawPolypharmacyGraph({
       nodes: names.map(n => ({ id: n, harmful_count: r.pairs.filter(p => flagged(p) && (p.drug_a === n || p.drug_b === n)).length })),
-      links: r.pairs.map(p => ({ source: p.drug_a, target: p.drug_b, tier: p.tier, is_harmful: flagged(p),
+      links: r.pairs.map(p => ({ source: p.drug_a, target: p.drug_b, tier: p.tier, harmful: flagged(p),
         interaction_likelihood_score: p.interaction_likelihood_score })),
     }, graph, { showAll: true });
   }

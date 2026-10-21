@@ -88,6 +88,7 @@ async function loadTopEvents() {
 
 /* ──────────────── SIGNALS TABLE ──────────────────────────── */
 let signalsData = [];
+let signalsDataVersion = '';
 let gaugePRRChart = null;
 let gaugeRORChart = null;
 let gaugeICChart = null;
@@ -102,6 +103,7 @@ async function fetchAndRenderSignals(forceRefresh = false) {
     const res = await fetch(url);
     const json = await res.json();
     if (json && json.signals) {
+      signalsDataVersion = json.data_version || (json.meta && json.meta.data_version) || '';
       signalsData = json.signals.map((s, idx) => ({
         rank: idx + 1,
         drug: s.drug,
@@ -241,7 +243,9 @@ function showSignalDetail(signal) {
   const body = document.getElementById('signal-detail-body');
   if (!panel || !title || !body) return;
 
-  title.textContent = `${signal.drug} — ${signal.event}`;
+  const sigBadge = (typeof ApiLayer !== 'undefined')
+    ? ApiLayer.renderEvidence({ evidence: 'measured', data_version: signalsDataVersion || null }) : '';
+  title.innerHTML = `${escHtml(signal.drug)} — ${escHtml(signal.event)} ${sigBadge}`;
 
   // Selecting a signal in Monitor selects the drug everywhere (Investigate, Interactions).
   if (typeof DrugContext !== 'undefined') DrugContext.set({ drug: signal.drug });

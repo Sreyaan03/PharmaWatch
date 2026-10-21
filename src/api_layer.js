@@ -255,6 +255,34 @@ const ApiLayer = {
     return this._tooltipEl;
   },
 
+  _esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+
+  /* A small provenance badge for a result card or chart. `meta` is the backend's
+     {evidence, data_version, model_version} (see backend/core/response.py). A result with no
+     meta shows "provenance unavailable" — which should not happen after Phase 7. */
+  renderEvidence(meta) {
+    const KIND = {
+      measured:    ['Measured', '#1565c0', 'Counted from reports (FAERS, openFDA or a label); no model involved.'],
+      modelled:    ['Modelled', '#7e57c2', 'Produced by a trained or fitted model; a prediction, not an observation.'],
+      retrieved:   ['Retrieved', '#00897b', 'Fetched from an external source and shown as found.'],
+      operational: ['Operational', '#607d8b', 'A system or status value, not a safety statistic.'],
+      composite:   ['Composite', '#3949ab', 'Combines measured statistics with retrieved external evidence.'],
+    };
+    if (!meta || !meta.evidence) {
+      return `<span class="evidence-badge evidence-badge--unknown" title="This result did not declare its provenance.">provenance unavailable</span>`;
+    }
+    const [label, color, desc] = KIND[meta.evidence] || [meta.evidence, '#555', ''];
+    const bits = [desc];
+    if (meta.data_version) bits.push('Data: ' + meta.data_version);
+    if (meta.model_version) bits.push('Model: ' + meta.model_version);
+    const tip = bits.filter(Boolean).join(' · ');
+    return `<span class="evidence-badge" style="--eb:${color};border-color:${color};color:${color};" ` +
+           `title="${this._esc(tip)}">${this._esc(label)}</span>`;
+  },
+
   initTooltips() {
     const tooltip = this._ensureTooltipEl();
 
