@@ -26,6 +26,17 @@ def links_for(drug, pt=None, limit=50):
     rxcuis = [str(i["rxcui"]) for i in resolved.get("ingredients", [])]
     if not rxcuis:
         return {"drug": drug, "resolved": False, "ingredients": [], "items": [], "note": NOTE}, 200
+    payload, status = links_for_rxcuis(rxcuis, pt=pt, limit=limit)
+    if status == 200:
+        payload.update({"drug": drug, "resolved": True, "ingredients": resolved["ingredients"]})
+    return payload, status
+
+
+def links_for_rxcuis(rxcuis, pt=None, limit=50):
+    """Evidence items for already-resolved ingredient rxcuis (no identity resolution here)."""
+    rxcuis = [str(r) for r in rxcuis]
+    if not rxcuis:
+        return {"items": [], "counts": {k: 0 for k in KINDS}, "note": NOTE}, 200
     marks = ", ".join(["%s"] * len(rxcuis))
     params = list(rxcuis)
     where = f"rxcui IN ({marks})"
@@ -49,5 +60,4 @@ def links_for(drug, pt=None, limit=50):
         if r["pt"]:
             seen[key]["terms"].append(r["pt"])
     counts = {k: sum(1 for i in items if i["kind"] == k) for k in KINDS}
-    return {"drug": drug, "resolved": True, "ingredients": resolved["ingredients"], "pt": pt,
-            "items": items, "counts": counts, "note": NOTE}, 200
+    return {"pt": pt, "items": items, "counts": counts, "note": NOTE}, 200

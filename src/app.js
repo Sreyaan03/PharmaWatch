@@ -242,7 +242,10 @@ function showSignalDetail(signal) {
   if (!panel || !title || !body) return;
 
   title.textContent = `${signal.drug} — ${signal.event}`;
-  
+
+  // Selecting a signal in Monitor selects the drug everywhere (Investigate, Interactions).
+  if (typeof DrugContext !== 'undefined') DrugContext.set({ drug: signal.drug });
+
   // Calculate flags for consensus display
   let consensusFlags = [];
   if (signal.prr > 2.0 && signal.reports >= 3) consensusFlags.push("PRR Alert (>2.0)");
@@ -254,6 +257,7 @@ function showSignalDetail(signal) {
     : `<span style="color:#f59e0b; font-weight:bold;">⚠️ WEAK/NO CONSENSUS</span> (${consensusFlags.length}/3 Methods Flagged)`;
 
   body.innerHTML = `
+    <div style="margin-bottom:0.75rem;"><a href="#drug-search" id="open-drug-profile" data-drug="${escHtml(signal.drug)}" style="font-size:0.85rem; font-weight:600;">Open full drug profile for ${escHtml(signal.drug)} →</a></div>
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-bottom:1rem;">
       <div class="stat-mini"><div class="stat-mini__val prr-${signal.sev}">${signal.prr !== undefined ? signal.prr.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">PRR Score</div></div>
       <div class="stat-mini"><div class="stat-mini__val" style="color: #8b5cf6;">${signal.ror !== undefined ? signal.ror.toFixed(2) : 'N/A'}</div><div class="stat-mini__lbl">ROR Score</div></div>
@@ -310,6 +314,15 @@ function showSignalDetail(signal) {
 
   panel.style.display = 'block';
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const profileLink = document.getElementById('open-drug-profile');
+  if (profileLink) profileLink.addEventListener('click', e => {
+    e.preventDefault();
+    const input = document.getElementById('drug-search-input');
+    if (input) input.value = profileLink.dataset.drug;
+    navigateTo('drug-search');
+    loadDrugProfile(profileLink.dataset.drug);
+  });
 
   // Render D3 graph
   renderSignalNetworkGraph(signal.drug, signal.event);
@@ -866,8 +879,57 @@ async function loadDrugProfile(name) {
     `).join('');
   }
 
+  // Combined evidence from the backend profile endpoint (one resolution): report count,
+  // boxed-warning status, surveillance alerts and external evidence, all for this drug.
+  renderProfileEvidence(name);
+
   // Re-initialize tooltips to pick up new illness-hover elements
   if (typeof ApiLayer !== 'undefined') ApiLayer.initTooltips();
+}
+
+/* One drug profile combines every kind of evidence we hold. Rendered from /api/drug/<name>/profile,
+   which resolves the drug once and calls the existing services. */
+async function renderProfileEvidence(name) {
+  const panel = document.getElementById('drug-profile-panel');
+  if (!panel) return;
+  let box = document.getElementById('dp-evidence');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'dp-evidence';
+    box.style.cssText = 'margin-top:1.5rem;';
+    panel.appendChild(box);
+  }
+  box.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Loading combined evidence…</p>';
+  try {
+    const r = await fetch(`/api/drug/${encodeURIComponent(name)}/profile`);
+    const d = await r.json();
+    if (!d.resolved) { box.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem;">${escHtml(d.note || 'No combined evidence.')}</p>`; return; }
+    const badge = (typeof ApiLayer !== 'undefined' && d.meta) ? ApiLayer.renderEvidence(d.meta) : '';
+    const bw = d.boxed_warning || {};
+    const alerts = d.alerts || [];
+    const ev = (d.evidence && d.evidence.counts) || { alert: 0, paper: 0, trial: 0 };
+    const kindLabel = { not_in_label: 'Not in label', new_signal: 'New signal', label_change: 'Label change' };
+    box.innerHTML = `
+      <div class="dashboard-card">
+        <div class="card-header"><h2 class="card-title">Combined evidence ${badge}</h2></div>
+        <div class="card-body" style="padding:1.25rem; font-size:0.9rem;">
+          <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+            <span class="sv-chip">${(d.report_count ?? 0).toLocaleString()} FAERS reports</span>
+            <span class="sv-chip">${bw.has_warning ? '⚠ Boxed warning on FDA label' : 'No boxed warning found'}</span>
+            <span class="sv-chip">${ev.paper} paper(s) · ${ev.alert} recall(s) · ${ev.trial} trial(s) linked</span>
+          </div>
+          <div style="font-weight:600; margin-bottom:0.4rem;">Surveillance alerts (possible signals for review)</div>
+          ${alerts.length ? '<ul style="margin:0 0 0.5rem 1rem; padding:0;">' + alerts.slice(0, 10).map(a =>
+            `<li style="margin-bottom:0.3rem;"><strong>${escHtml(kindLabel[a.kind] || a.kind)}</strong> — ${escHtml(a.pt || '')}` +
+            `${a.ic025 != null ? ` · IC025 ${Number(a.ic025).toFixed(2)}` : ''}${a.cases != null ? ` · ${a.cases} cases` : ''}` +
+            `${a.quarter ? ` · ${escHtml(String(a.quarter).toUpperCase())}` : ''}</li>`).join('') + '</ul>'
+            : '<div style="color:var(--text-muted);">No surveillance alerts for this drug yet.</div>'}
+          <div style="color:var(--text-muted); font-size:0.78rem; margin-top:0.5rem;">${escHtml(d.note || '')} Data: ${escHtml(d.data_version || '—')}.</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    box.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem;">Combined evidence unavailable (${escHtml(e.message)}).</p>`;
+  }
 }
 
 /* ──────────────── INTERACTION GRAPH (SECTION 1 & 2) ───────── */
@@ -1427,6 +1489,15 @@ function navigateTo(sectionId) {
       const inputA = document.getElementById('explorer-drug-a');
       if (inputA) {
         inputA.value = DrugContext.state.drug;
+      }
+    } else if (sectionId === 'drug-search') {
+      // Entering Investigate selects the drug chosen elsewhere and loads its profile.
+      const input = document.getElementById('drug-search-input');
+      const panel = document.getElementById('drug-profile-panel');
+      const current = panel && panel.style.display === 'block' ? (input && input.value.trim()) : '';
+      if (input && current !== DrugContext.state.drug) {
+        input.value = DrugContext.state.drug;
+        if (typeof loadDrugProfile === 'function') loadDrugProfile(DrugContext.state.drug);
       }
     }
   }

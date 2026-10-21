@@ -115,6 +115,7 @@ from routes.pipeline import pipeline_bp
 from routes.validation import validation_bp
 from routes.prescription import prescription_bp
 from routes.surveillance import surveillance_bp
+from routes.drug import drug_bp
 
 app.register_blueprint(general_bp)
 app.register_blueprint(signals_bp)
@@ -129,6 +130,7 @@ app.register_blueprint(pipeline_bp)
 app.register_blueprint(validation_bp)
 app.register_blueprint(prescription_bp)
 app.register_blueprint(surveillance_bp)
+app.register_blueprint(drug_bp)
 
 def _job_housekeeping():
     """Inline mode: jobs left by the previous process are requeued here (workers do this in kafka

@@ -207,6 +207,24 @@ def get_top_reactions(drug, limit=20):
             conn.close()
         return None
 
+def get_report_count(drug):
+    """Distinct FAERS reports naming this drug (None if DuckDB is offline)."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        drug_cond, drug_params = build_drug_where_clause(get_drug_terms(conn, drug))
+        row = conn.execute(
+            f"SELECT COUNT(DISTINCT d.primaryid) FROM faers_drug d WHERE {drug_cond}", drug_params).fetchone()
+        conn.close()
+        return int(row[0]) if row else 0
+    except Exception as e:
+        log.error(f"[-] Error counting reports from DuckDB: {e}")
+        if conn:
+            conn.close()
+        return None
+
+
 def get_data_coverage():
     """Returns metadata about the currently loaded FAERS dataset in DuckDB."""
     conn = get_connection()

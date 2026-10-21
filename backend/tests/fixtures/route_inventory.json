@@ -227,6 +227,17 @@
       ],
       "status": 200
     },
+    "GET /api/drug/<name>/profile": {
+      "keys": [
+        "data_version",
+        "identity",
+        "input",
+        "meta",
+        "note",
+        "resolved"
+      ],
+      "status": 200
+    },
     "GET /api/evidence": {
       "keys": [
         "drug",
@@ -831,6 +842,12 @@
         "GET"
       ],
       "rule": "/api/demographics/sex"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/drug/<name>/profile"
     },
     {
       "methods": [
