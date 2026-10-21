@@ -16,7 +16,9 @@ NEGATION_CUES = ["no", "not", "denies", "denied", "without", "ruled out", "negat
                  "absence of", "free of", "no evidence of"]
 
 DRUG_LABELS = ("Medication", "Drug")
-EVENT_LABELS = ("Disease_disorder", "Sign_symptom")
+# Adverse-event labels from d4data/biomedical-ner-all. "Outcome" and "Clinical_event" are included
+# so serious outcomes such as death are captured (e.g. "died" is tagged Outcome).
+EVENT_LABELS = ("Disease_disorder", "Sign_symptom", "Clinical_event", "Outcome")
 
 _SENT_SPLIT = re.compile(r"[.;\n]+")
 

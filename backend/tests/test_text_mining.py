@@ -43,6 +43,14 @@ def test_cross_sentence_pair_is_not_formed():
     assert text_mining.pair_mentions(text, ents) == []
 
 
+def test_outcome_label_counts_as_an_event():
+    # d4data NER tags "died" as Outcome; it must still pair with the drug in the sentence.
+    text = "Patient died after having warfarin."
+    ents = _entities(text, [("died", "Outcome"), ("warfarin", "Medication")])
+    pairs = text_mining.pair_mentions(text, ents)
+    assert len(pairs) == 1 and pairs[0]["event"] == "died" and pairs[0]["drug"] == "warfarin"
+
+
 def test_denies_cue_drops_event():
     text = "On atorvastatin; the patient denies myalgia."
     ents = _entities(text, [("atorvastatin", "Medication"), ("myalgia", "Sign_symptom")])
