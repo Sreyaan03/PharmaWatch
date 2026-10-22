@@ -189,7 +189,7 @@ Plans (in execution order):
   7. The README matches the code, a LICENSE file exists, and a pilot guide for colleges is written.
 
 Plans:
-- [ ] 11-01: Accounts, roles, audit log, feedback capture
+- [x] 11-01: Accounts/roles (viewer/analyst/admin, AuthProvider, session login, manage CLI), append-only audit log, feedback capture with versions (feedback/badge control on primary cards; full card sweep deferred)
 - [ ] 11-02: Security fixes; configuration and Compose profiles; Dockerfile without data copies; CI/CD jobs
 - [ ] 11-03: README, LICENSE, methods document, pilot guide; end-to-end run from a fresh clone
 

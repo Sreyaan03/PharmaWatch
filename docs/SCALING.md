@@ -107,6 +107,7 @@ Every module-level value that persists between requests was checked: either it i
 | `services/signal_history.py` `_identity` | Identity lookup service | Read-only, over the FAERS database; safe to duplicate. |
 | `services/label_check.py` `_synonyms_cache` | Inverted event-synonym table | Read-only, loaded from a committed CSV; safe to duplicate. |
 | `services/provenance.py` `_version_cache` | Data version, 60 s | Read-only; at most 60 s stale per copy. |
+| `core/auth.py` `_provider` | The authentication provider instance (LocalAuthProvider) | Stateless — reads accounts from MySQL on each call; safe to duplicate. |
 | `services/prescription/extract.py` `_lexicon_cache` | Drug-name dictionary | Read-only, keyed on the database file's timestamp; safe to duplicate. |
 
 Other per-copy caches, safe to duplicate:
