@@ -2,6 +2,8 @@
 # HTTP layer only: parse the request, call the service, return JSON or a PDF.
 
 from flask import Blueprint, Response, jsonify, request
+
+from core.auth import require_role
 from services.prescription import service as svc
 
 prescription_bp = Blueprint("prescription", __name__)
@@ -15,6 +17,7 @@ def config():
 
 
 @prescription_bp.route("/api/prescription", methods=["POST"])
+@require_role("analyst")
 def upload():
     """Upload a prescription or discharge summary (PDF/PNG/JPG/TXT); returns a job id."""
     payload, status = svc.upload(request.files.get("file"), request.form.get("reference", ""))

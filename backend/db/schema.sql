@@ -279,6 +279,22 @@ CREATE TABLE IF NOT EXISTS surveillance_alerts (
     INDEX idx_alert_rank (ic025)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Accounts for the college pilot. Roles: viewer (read), analyst (run analyses, upload, feedback),
+-- admin (users, training, data refresh, exports). No self-registration; created via core.manage.
+-- Passwords are Werkzeug password hashes, never stored or logged in clear text.
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(191) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(16) NOT NULL DEFAULT 'viewer',
+    organisation VARCHAR(191) DEFAULT NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login DATETIME DEFAULT NULL,
+    UNIQUE KEY uq_users_email (email),
+    INDEX idx_users_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Isolated replay of history. An admin replays the loaded quarters through the SAME alert
 -- detector, quarter by quarter, writing only here (never to surveillance_alerts), keyed by a
 -- run id. These are the alerts the system WOULD have raised at the time; a replay changes no

@@ -43,6 +43,8 @@ SETTINGS = [
     Setting("ALLOWED_ORIGINS", "http://localhost:5000,http://127.0.0.1:5000", str, "app",
             "Comma-separated origins allowed by CORS"),
     Setting("ADMIN_API_KEY", "", str, "app", "Key for admin endpoints (X-Admin-Key header); empty disables them", secret=True),
+    Setting("FLASK_SECRET_KEY", "", str, "app", "Signs the session cookie; required when AUTH_REQUIRED is on", secret=True),
+    Setting("AUTH_REQUIRED", False, bool, "app", "Require sign-in and enforce roles; off keeps single-user local development open"),
     Setting("DATA_DIR", "", str, "app", "Large data (FAERS database, raw files, caches); empty means <repo>/data"),
     Setting("RATE_LIMIT_STORAGE_URI", "memory://", str, "app",
             "Where rate-limit counters live: memory:// on one machine, redis://host:6379 when several web copies share the limit"),

@@ -24,6 +24,7 @@ _EVIDENCE = [
     ("/api/surveillance/alerts", "measured", None, "faers_local"),
     ("/api/surveillance/replay", "measured", None, "faers_local"),
     ("/api/drug", "measured", None, "faers_local"),
+    ("/api/auth", "operational", None, None),
     ("/api/admin/surveillance", "operational", None, None),
     ("/api/admin/faers", "operational", None, None),
     ("/api/lstm", "modelled", "lstm-forecast", None),

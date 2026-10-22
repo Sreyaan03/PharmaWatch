@@ -36,6 +36,21 @@
       ],
       "status": 503
     },
+    "GET /api/auth/me": {
+      "keys": [
+        "meta",
+        "user"
+      ],
+      "status": 200
+    },
+    "GET /api/auth/status": {
+      "keys": [
+        "auth_required",
+        "meta",
+        "user"
+      ],
+      "status": 200
+    },
     "GET /api/boxed-warning-events/<drug_name>": {
       "keys": [
         "boxed_warning_event_count",
@@ -625,6 +640,19 @@
       ],
       "status": 403
     },
+    "POST /api/auth/login": {
+      "keys": [
+        "error"
+      ],
+      "status": 401
+    },
+    "POST /api/auth/logout": {
+      "keys": [
+        "meta",
+        "ok"
+      ],
+      "status": 200
+    },
     "POST /api/graph/predict": {
       "keys": [
         "error"
@@ -746,6 +774,30 @@
         "GET"
       ],
       "rule": "/api/analytics/top-reactions"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/auth/login"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/auth/logout"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/auth/me"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/auth/status"
     },
     {
       "methods": [

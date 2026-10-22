@@ -27,9 +27,20 @@ SRC_DIR = str(pathlib.Path(__file__).parent.parent / "src")
 # Initialize Flask Application
 app = Flask(__name__, static_folder=SRC_DIR, static_url_path='/static')
 
-# Set up CORS based on configured origins
+# Set up CORS based on configured origins (credentials on, so the session cookie is sent)
 _allowed_origins = config.get("ALLOWED_ORIGINS").split(",")
-CORS(app, origins=_allowed_origins)
+CORS(app, origins=_allowed_origins, supports_credentials=True)
+
+# Session cookie: signed with FLASK_SECRET_KEY. When AUTH_REQUIRED is on, a secret is mandatory;
+# in open local development a random per-process key is fine (sessions just do not survive restarts).
+import secrets as _secrets  # noqa: E402
+_secret = config.get("FLASK_SECRET_KEY")
+if not _secret:
+    if config.get("AUTH_REQUIRED"):
+        raise RuntimeError("AUTH_REQUIRED is on but FLASK_SECRET_KEY is not set; configure it in .env")
+    _secret = _secrets.token_hex(32)
+app.secret_key = _secret
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
 # Initialize Rate Limiter with a graceful fallback if not installed globally
 try:
@@ -116,6 +127,7 @@ from routes.validation import validation_bp
 from routes.prescription import prescription_bp
 from routes.surveillance import surveillance_bp
 from routes.drug import drug_bp
+from routes.auth import auth_bp
 
 app.register_blueprint(general_bp)
 app.register_blueprint(signals_bp)
@@ -131,6 +143,7 @@ app.register_blueprint(validation_bp)
 app.register_blueprint(prescription_bp)
 app.register_blueprint(surveillance_bp)
 app.register_blueprint(drug_bp)
+app.register_blueprint(auth_bp)
 
 def _job_housekeeping():
     """Inline mode: jobs left by the previous process are requeued here (workers do this in kafka
