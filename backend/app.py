@@ -79,6 +79,36 @@ def serve_index():
 _INSTANCE = socket.gethostname()
 
 
+@app.before_request
+def _assign_request_id():
+    import uuid
+
+    from flask import g
+    g.request_id = uuid.uuid4().hex
+
+
+@app.after_request
+def _audit(response):
+    """Record auditable requests. Flask context is read here; the DB write is in services.audit."""
+    from flask import g, request
+    from core.auth import current_user
+    from services import audit as audit_svc
+    try:
+        if audit_svc.should_audit(request.path, request.method):
+            rule = request.url_rule.rule if request.url_rule else request.path
+            form = {}
+            try:
+                form = dict(request.form)
+            except Exception:
+                form = {}
+            audit_svc.write_row(current_user(), request.path, rule, request.method,
+                                dict(request.args), form, response.status_code,
+                                getattr(g, "request_id", None))
+    except Exception:
+        pass
+    return response
+
+
 @app.after_request
 def name_the_instance(response):
     """Say which copy answered, so load balancing can be seen (and debugged) from outside."""
@@ -128,6 +158,7 @@ from routes.prescription import prescription_bp
 from routes.surveillance import surveillance_bp
 from routes.drug import drug_bp
 from routes.auth import auth_bp
+from routes.audit import audit_bp
 
 app.register_blueprint(general_bp)
 app.register_blueprint(signals_bp)
@@ -144,6 +175,7 @@ app.register_blueprint(prescription_bp)
 app.register_blueprint(surveillance_bp)
 app.register_blueprint(drug_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(audit_bp)
 
 def _job_housekeeping():
     """Inline mode: jobs left by the previous process are requeued here (workers do this in kafka

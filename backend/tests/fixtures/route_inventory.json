@@ -6,6 +6,19 @@
       ],
       "status": 200
     },
+    "GET /api/admin/audit": {
+      "keys": [
+        "error",
+        "rows"
+      ],
+      "status": 503
+    },
+    "GET /api/admin/audit/export": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
     "GET /api/analytics/data-coverage": {
       "keys": [
         "meta",
@@ -738,6 +751,18 @@
         "GET"
       ],
       "rule": "/"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/admin/audit"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/admin/audit/export"
     },
     {
       "methods": [

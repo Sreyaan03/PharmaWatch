@@ -279,6 +279,28 @@ CREATE TABLE IF NOT EXISTS surveillance_alerts (
     INDEX idx_alert_rank (ic025)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Append-only audit trail. One row per analysis, upload, confirmation, export, login and admin
+-- action, with the user, the input identities/parameters (never document content or free text),
+-- and the data and model versions the result came from. The application DB user should hold INSERT
+-- and SELECT only on this table; the code writes no UPDATE or DELETE here.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_id BIGINT DEFAULT NULL,
+    user_email VARCHAR(191) DEFAULT NULL,
+    action VARCHAR(64) NOT NULL,
+    route VARCHAR(191) NOT NULL,
+    method VARCHAR(8) NOT NULL,
+    inputs_json TEXT DEFAULT NULL,
+    data_version VARCHAR(160) DEFAULT NULL,
+    model_version VARCHAR(64) DEFAULT NULL,
+    status INT DEFAULT NULL,
+    request_id CHAR(32) DEFAULT NULL,
+    INDEX idx_audit_at (at),
+    INDEX idx_audit_user (user_id),
+    INDEX idx_audit_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Accounts for the college pilot. Roles: viewer (read), analyst (run analyses, upload, feedback),
 -- admin (users, training, data refresh, exports). No self-registration; created via core.manage.
 -- Passwords are Werkzeug password hashes, never stored or logged in clear text.
