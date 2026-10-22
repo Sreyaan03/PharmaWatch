@@ -287,6 +287,19 @@
       ],
       "status": 200
     },
+    "GET /api/feedback/export": {
+      "keys": [
+        "error"
+      ],
+      "status": 503
+    },
+    "GET /api/feedback/summary": {
+      "keys": [
+        "counts",
+        "meta"
+      ],
+      "status": 200
+    },
     "GET /api/graph": {
       "keys": [
         "links",
@@ -666,6 +679,12 @@
       ],
       "status": 200
     },
+    "POST /api/feedback": {
+      "keys": [
+        "error"
+      ],
+      "status": 400
+    },
     "POST /api/graph/predict": {
       "keys": [
         "error"
@@ -937,6 +956,24 @@
         "GET"
       ],
       "rule": "/api/faers/releases"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "rule": "/api/feedback"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/feedback/export"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "rule": "/api/feedback/summary"
     },
     {
       "methods": [

@@ -283,6 +283,49 @@ const ApiLayer = {
            `title="${this._esc(tip)}">${this._esc(label)}</span>`;
   },
 
+  /* A small feedback control to sit beside a result's evidence badge. `subject` identifies the
+     result (e.g. {drug, event}); `meta` carries the versions so a verdict is tied to its version. */
+  renderFeedback(component, subject, meta) {
+    const payload = this._esc(JSON.stringify({ component, subject: subject || {}, meta: meta || {} }));
+    return `<span class="fb-control" data-fb="${payload}" title="Is this result right? (feedback)">` +
+      `<button class="fb-btn" data-v="correct" title="Correct">&#128077;</button>` +
+      `<button class="fb-btn" data-v="incorrect" title="Incorrect">&#128078;</button>` +
+      `<button class="fb-btn" data-v="unsure" title="Unsure">?</button></span>`;
+  },
+
+  initFeedback() {
+    if (this._feedbackInited) return;
+    this._feedbackInited = true;
+    if (!document.getElementById('fb-style')) {
+      const s = document.createElement('style');
+      s.id = 'fb-style';
+      s.textContent = `.fb-control{display:inline-flex;gap:2px;margin-left:6px;vertical-align:middle;}
+        .fb-btn{border:1px solid #ccd;background:#f4f4f8;border-radius:4px;font-size:0.72rem;
+        line-height:1;padding:2px 6px;cursor:pointer;color:#425066;}
+        .fb-btn:hover{background:#e6ecf5;} .fb-control.fb-done{opacity:0.75;}`;
+      document.head.appendChild(s);
+    }
+    document.addEventListener('click', async e => {
+      const btn = e.target.closest('.fb-btn');
+      if (!btn) return;
+      const wrap = btn.closest('.fb-control');
+      let data = {};
+      try { data = JSON.parse(wrap.getAttribute('data-fb')); } catch (err) { return; }
+      wrap.classList.add('fb-done');
+      try {
+        const r = await fetch('/api/feedback', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ component: data.component, subject: data.subject,
+                                 meta: data.meta, verdict: btn.dataset.v })
+        });
+        wrap.innerHTML = r.ok ? '<span style="font-size:0.72rem;color:#2e7d32;">thanks ✓</span>'
+                              : '<span style="font-size:0.72rem;color:#c0392b;">sign in to give feedback</span>';
+      } catch (err) {
+        wrap.innerHTML = '<span style="font-size:0.72rem;color:#c0392b;">feedback unavailable</span>';
+      }
+    });
+  },
+
   initTooltips() {
     const tooltip = this._ensureTooltipEl();
 
@@ -342,9 +385,10 @@ const ApiLayer = {
 };
 
 if (typeof window !== 'undefined') {
+  const _boot = () => { ApiLayer.initApiKeySync(); ApiLayer.initFeedback(); };
   if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', () => ApiLayer.initApiKeySync());
+    window.addEventListener('DOMContentLoaded', _boot);
   } else {
-    ApiLayer.initApiKeySync();
+    _boot();
   }
 }

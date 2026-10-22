@@ -279,6 +279,25 @@ CREATE TABLE IF NOT EXISTS surveillance_alerts (
     INDEX idx_alert_rank (ic025)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Reviewer feedback on a result, for use as pilot validation data. verdict: correct | incorrect |
+-- unsure. subject_json identifies what the feedback is about (e.g. drug, event, component) and
+-- carries the result's data/model versions so a judgement is tied to the version it referred to.
+CREATE TABLE IF NOT EXISTS feedback (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_id BIGINT DEFAULT NULL,
+    user_email VARCHAR(191) DEFAULT NULL,
+    component VARCHAR(64) NOT NULL,
+    subject_json TEXT DEFAULT NULL,
+    verdict VARCHAR(16) NOT NULL,
+    comment TEXT DEFAULT NULL,
+    data_version VARCHAR(160) DEFAULT NULL,
+    model_version VARCHAR(64) DEFAULT NULL,
+    INDEX idx_feedback_at (at),
+    INDEX idx_feedback_component (component),
+    INDEX idx_feedback_verdict (verdict)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Append-only audit trail. One row per analysis, upload, confirmation, export, login and admin
 -- action, with the user, the input identities/parameters (never document content or free text),
 -- and the data and model versions the result came from. The application DB user should hold INSERT

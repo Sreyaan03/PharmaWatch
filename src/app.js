@@ -243,9 +243,11 @@ function showSignalDetail(signal) {
   const body = document.getElementById('signal-detail-body');
   if (!panel || !title || !body) return;
 
-  const sigBadge = (typeof ApiLayer !== 'undefined')
-    ? ApiLayer.renderEvidence({ evidence: 'measured', data_version: signalsDataVersion || null }) : '';
-  title.innerHTML = `${escHtml(signal.drug)} — ${escHtml(signal.event)} ${sigBadge}`;
+  const sigMeta = { evidence: 'measured', data_version: signalsDataVersion || null };
+  const sigBadge = (typeof ApiLayer !== 'undefined') ? ApiLayer.renderEvidence(sigMeta) : '';
+  const sigFb = (typeof ApiLayer !== 'undefined')
+    ? ApiLayer.renderFeedback('signal', { drug: signal.drug, event: signal.event }, sigMeta) : '';
+  title.innerHTML = `${escHtml(signal.drug)} — ${escHtml(signal.event)} ${sigBadge} ${sigFb}`;
 
   // Selecting a signal in Monitor selects the drug everywhere (Investigate, Interactions).
   if (typeof DrugContext !== 'undefined') DrugContext.set({ drug: signal.drug });
@@ -909,13 +911,15 @@ async function renderProfileEvidence(name) {
     const d = await r.json();
     if (!d.resolved) { box.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem;">${escHtml(d.note || 'No combined evidence.')}</p>`; return; }
     const badge = (typeof ApiLayer !== 'undefined' && d.meta) ? ApiLayer.renderEvidence(d.meta) : '';
+    const fb = (typeof ApiLayer !== 'undefined')
+      ? ApiLayer.renderFeedback('drug_profile', { drug: (d.ingredient && d.ingredient.name) || name }, d.meta) : '';
     const bw = d.boxed_warning || {};
     const alerts = d.alerts || [];
     const ev = (d.evidence && d.evidence.counts) || { alert: 0, paper: 0, trial: 0 };
     const kindLabel = { not_in_label: 'Not in label', new_signal: 'New signal', label_change: 'Label change' };
     box.innerHTML = `
       <div class="dashboard-card">
-        <div class="card-header"><h2 class="card-title">Combined evidence ${badge}</h2></div>
+        <div class="card-header"><h2 class="card-title">Combined evidence ${badge} ${fb}</h2></div>
         <div class="card-body" style="padding:1.25rem; font-size:0.9rem;">
           <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
             <span class="sv-chip">${(d.report_count ?? 0).toLocaleString()} FAERS reports</span>
