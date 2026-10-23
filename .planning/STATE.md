@@ -10,12 +10,13 @@ See: `.planning/MILESTONE-2-CONTEXT.md` for Milestone 2 decisions, audit evidenc
 
 ## Current Position
 
-Phase: 8 of 11 (Validation Harness) — complete; Phase 9 awaiting go-ahead
-Plan: 08-01, 08-02, 08-03 done and tested; Phase 9 (prescription review) waiting for the go-ahead
-Status: All 20 FAERS quarters (2021Q3-2026Q2, 7.2M cases) loaded with drug identity (97% of drug-report pairs resolved). Interaction model retrained and deployed by manifest. Signal-benchmark outcome definitions are a draft pending clinical review. Local MySQL (Docker) was stopped at last check.
-Last activity: 2026-10-14 — statistics, provenance, descriptive boxed-warning wording and normalised forecast built and tested.
+Phase: 11 of 11 (Platform & Pilot Release) — 11-01 and 11-02 done; 11-03 docs done, release verification pending owner
+Plan: 11-01 (accounts/audit/feedback) done; 11-02 (security, portable deployment, CI jobs) done; 11-03 docs written (README, LICENSE, DEPLOYMENT, PILOT_GUIDE, METHODS). Remaining: the human-verify fresh-clone install + UAT + validation reproduce, then tag the release.
+Status: All 20 FAERS quarters (2021Q3-2026Q2, ~7.2M cases) loaded with drug identity. Interaction model deployed by manifest. One docker/compose.yml with core/kafka/demo profiles; image bakes in no data and runs non-root; startup config validation reports all missing values at once; /api/health reports FAERS release, DDI model and job workers. Full test suite green (557 tests). Licence: PolyForm Noncommercial 1.0.0.
+Open checkpoints (owner): rotate the committed FDA/NCBI keys + purge from git history before any public hosting; confirm the fresh-clone verification and tag the release.
+Last activity: 2026-10-23 — 11-02 (deployment + CI) and 11-03 (documentation) built, committed and tested.
 
-Progress: [███████░░░░] 8 of 11 phases complete (phase 6 data load done; 8 complete)
+Progress: [██████████] 11 of 11 phases built; pilot-release verification pending owner sign-off
 
 ## Accumulated Context
 

@@ -190,8 +190,8 @@ Plans (in execution order):
 
 Plans:
 - [x] 11-01: Accounts/roles (viewer/analyst/admin, AuthProvider, session login, manage CLI), append-only audit log, feedback capture with versions (feedback/badge control on primary cards; full card sweep deferred)
-- [ ] 11-02: Security fixes; configuration and Compose profiles; Dockerfile without data copies; CI/CD jobs
-- [ ] 11-03: README, LICENSE, methods document, pilot guide; end-to-end run from a fresh clone
+- [x] 11-02: Security fixes (header-only admin key, generic errors, 413, bounded integer params, closed a str(e) leak); one Compose file with core/kafka/demo profiles; Dockerfile without data copies + non-root; startup config validation; richer health check; CI split into lint/unit/integration/statistics/validation-smoke + PR image build. Checkpoint skipped by owner: FDA/NCBI key rotation + git-history purge.
+- [~] 11-03: README rewritten, LICENSE added (PolyForm Noncommercial 1.0.0), docs/DEPLOYMENT.md + docs/PILOT_GUIDE.md written, METHODS.md updated (lead-time study + wording), INDEX/README_SIMPLE/how_to_run folded. **Pending owner (human-verify checkpoint):** fresh-clone install + full UAT checklist + validation reproduce, then tag the release.
 
 ## Progress
 

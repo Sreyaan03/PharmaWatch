@@ -1,220 +1,126 @@
-# PharmaWatch — Real-Time Adverse Drug Event Detection Platform
+# PharmaWatch — Pharmacovigilance Signal-Detection & Teaching Platform
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
-![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-backend-000000?logo=flask&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-> A CDC-styled pharmacovigilance web dashboard — Big Data Mini-Project by Sreyaan Roy & Sohan Arvind Sanil, Manipal Academy of Higher Education.
+> A pharmacovigilance research and teaching tool for pharmacy and medical colleges, built on real
+> FDA FAERS data. By Sreyaan Roy & Sohan Arvind Sanil, Manipal Academy of Higher Education.
 
----
-
-## Overview
-
-**PharmaWatch** is a simulated front-end demonstration of a real-time, multi-source big data pipeline for Adverse Drug Event (ADE) detection. The interface is built in the style of the CDC (Centers for Disease Control and Prevention) website, presenting:
-
-- Live signal detection tables with PRR scoring
-- Drug safety search with profile views
-- Drug–Drug interaction network graphs
-- Data pipeline architecture visualizer
-- Analytical methodology explorer (BioBERT, PRR, LSTM, Graph algorithms)
-
-> ⚠ **Disclaimer:** All data shown is simulated for educational purposes. This is NOT a clinical tool and should not be used for medical decisions.
+> **Research and educational use only.** PharmaWatch is a signal-*screening* and teaching tool. It
+> does not diagnose, does not establish causation, and must not be used for clinical or prescribing
+> decisions. A disproportionality signal means a drug–event pair is **reported** more often than
+> expected — not that the drug caused the event. The absence of a result means **"no evidence
+> found,"** never "safe to combine."
 
 ---
 
-## Tech Stack
+## What it is
+
+PharmaWatch computes and explains adverse-drug-event signals from the FDA Adverse Event Reporting
+System (FAERS), with every number traceable to a formula, a data version and a test. It is built
+for a classroom: each result carries a provenance badge (measured / modelled / retrieved /
+operational) and a link to the method behind it, and users can record their judgement of a result
+as feedback for validation.
+
+**What it is not:** it is not a clinical decision aid, not a source of incidence or risk (FAERS has
+no denominator of people exposed), and not "medically validated." Where we report accuracy, the
+tool is **benchmarked against published reference standards** — never "medically validated."
+
+## The seven areas
+
+| Area | What it does |
+|---|---|
+| **Dashboard** | Watchlist drug–event pairs, recent alerts, data-source and pipeline status. |
+| **Signal Detection** | Disproportionality (PRR, ROR, chi-square, IC025) on FAERS with the Evans signal criteria; stratified by sex and age; time-to-onset. |
+| **Drug Search** | A per-drug profile: identity (RxNorm), report counts, top reactions, boxed-warning status, linked trials/evidence and surveillance alerts. |
+| **Drug Interactions** | A graph neural network (GINE) interaction-likelihood score over molecular structure, with isotonic calibration and an explicit scope. |
+| **Data Sources & Pipeline** | The ingestion → processing → storage architecture, loaded FAERS quarters, and (optionally) the live Kafka stream. |
+| **Methods & Validation** | Formulas, thresholds, data rules, and the measured benchmark results, regenerated from code. |
+| **About** | Project context, references and the research-use statement. |
+
+Supporting analyses behind these areas include temporal trends, demographic breakdowns,
+boxed-warning reporting analysis, a historical **replay** of surveillance over past quarters,
+biomedical **text mining** (drug–event mentions with negation handling), and prescription OCR.
+
+## Where the data comes from
+
+- **FAERS** quarterly ASCII extracts from the FDA, de-duplicated and mapped to RxNorm ingredients
+  and MedDRA Preferred Terms (`backend/faers/`). Built locally by `setup.ps1` / `setup.sh`.
+- **openFDA** live label and event queries (user-supplied names are escaped before querying).
+- **TDC DrugBank DDI** for the interaction model; **FDA SrLC** (Safety-related Labeling Changes)
+  for the lead-time study.
+
+Every figure is a count of **reports**, not patients, not incidence, and not proof of causation.
+
+## Quick start
+
+Prerequisites: Docker Desktop (running). From the repository root:
+
+```bash
+# Windows
+./setup.ps1
+# macOS / Linux
+chmod +x setup.sh && ./setup.sh
+```
+
+The script creates `backend/.env` from the template, downloads and builds the FAERS database from
+the FDA, then starts the core stack. Open **http://localhost:5000**.
+
+To run without Docker (development), see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Full deployment,
+Compose profiles, backups and server hosting are documented there; college evaluators should start
+with [`docs/PILOT_GUIDE.md`](docs/PILOT_GUIDE.md).
+
+## Validation headline
+
+Measured results live in the app under **Methods & Validation** (`/api/validation/summary`,
+regenerated by `python -m validation.run_all`). Two headline results:
+
+- **Interaction model (GINE), TDC DrugBank DDI, drug-level split** — on the primary cold-start
+  setting (S1, one drug unseen) the model reaches **AUROC 0.849 ± 0.006, AUPRC 0.851 ± 0.005**
+  (mean ± SD over 5 seeds; 1:1 sampled negatives, base rate 0.5). Full table and ablations:
+  [`reports/ddi_benchmark_results.md`](reports/ddi_benchmark_results.md).
+- **Lead-time study vs. FDA SrLC** (Jul 2021–Jun 2026, 3,052 drug–event pairs) — the screening flag
+  appeared *before* the official labeling change for **592 pairs (19.4%, 95% CI 18.1–20.8%)**, with
+  a median lead of **7 quarters**. This measures *timing agreement* with later FDA action, not
+  novel-harm detection, and is **author-built and pending faculty review**. See `docs/METHODS.md`.
+
+Numbers are reported honestly, including where results are modest or unreviewed. No figure in this
+repository is invented; each is produced by code and covered by a test.
+
+## Accounts and roles
+
+Sign-in is optional for local single-user development (`AUTH_REQUIRED=false`) and enforced in a
+pilot (`AUTH_REQUIRED=true`). Roles are **viewer < analyst < admin**; analysts can run analyses and
+uploads, admins can see the audit log and feedback exports. Accounts are created from the CLI
+(`python -m core.manage create-user`) — there is no self-registration.
+
+## Tech stack
 
 | Layer | Technology |
-|-------|-----------|
-| Structure | HTML5 (Semantic) |
-| Styling | Vanilla CSS (CSS Custom Properties, Grid, Flexbox) |
-| Logic | Vanilla JavaScript (ES2020) |
-| Charts | [Chart.js v4.4.0](https://www.chartjs.org/) (CDN) |
-| Fonts | Google Fonts — Open Sans, Source Sans 3 |
+|---|---|
+| Backend | Python 3.11, Flask (blueprint architecture, layered and test-enforced) |
+| Data | FAERS in DuckDB; MySQL for jobs, caches, accounts, audit and feedback |
+| Stream / batch | Kafka + ZooKeeper (optional), Spark, HBase (optional demo) |
+| ML | PyTorch (GINE DDI model), Hugging Face NER for text mining, EasyOCR |
+| Frontend | HTML5, vanilla CSS (CDC-styled design system), vanilla JS, Chart.js |
+| Deployment | Docker + Compose profiles, Caddy (TLS), GitHub Actions CI/CD |
 
-No build tools, no frameworks, no dependencies to install — just open and run.
+## Documentation
 
----
+See [`docs/INDEX.md`](docs/INDEX.md). Start points: **[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)**
+(install and host), **[`docs/PILOT_GUIDE.md`](docs/PILOT_GUIDE.md)** (for college staff), and
+**[`docs/METHODS.md`](docs/METHODS.md)** (every formula and limitation).
 
-## Project Structure
+## Academic context
 
-```
-PharmaWatch/
-├── src/
-│   ├── index.html      # Main application (all 7 sections)
-│   ├── style.css       # CDC-inspired design system
-│   └── app.js          # Data engine, charts, navigation
-├── README.md           # Developer README (this file)
-├── README_SIMPLE.md    # Plain-English guide for non-technical users
-└── PharmaWatch_Report_BigData_MiniProject.docx
-```
-
----
-
-## Running the App
-
-PharmaWatch now uses a real Python/Flask backend to power its live openFDA data fetching, PRR calculations, and LSTM machine learning model.
-
-### 1. Prerequisites
-- [Python 3.10+](https://www.python.org/downloads/)
-
-### 2. Setup the Environment
-Open a terminal in the project folder and install the required Python packages:
-```bash
-pip install -r backend/requirements.txt
-```
-
-### 3. Add Your API Key
-To fetch live data from openFDA without getting rate-limited, you need an API key.
-1. Create a file named `.env` inside the `backend/` folder.
-2. Add your key like this:
-```ini
-FDA_API_KEY=your_api_key_here
-```
-*(If you don't have one, get a free key at [openFDA](https://open.fda.gov/apis/authentication/))*
-
-### 4. Run the Server
-Start the Flask backend server:
-```bash
-python backend/app.py
-```
-*(On Mac/Linux, you might need to use `python3 backend/app.py`)*
-
-### 5. Open the Dashboard
-Once the server is running, open your web browser and go to:
-**http://127.0.0.1:5000**
-
----
-
-## Features
-
-### 1. Dashboard
-- Animated stat counters (reports processed, active signals, latency)
-- 3-range signal intensity chart (24H / 7D / 30D)
-- Real-time alert feed with severity colour-coding
-- Drug category ADE distribution (donut chart)
-- Data source volume meters (live-simulated)
-- Top 7 reported adverse events
-- Pipeline health panel (Kafka → Spark → BioBERT → LSTM → HDFS)
-
-### 2. Signal Detection
-- Sortable/filterable table of 40 drug-event PRR signals
-- Severity filter (Critical PRR >5, High PRR 3–5, Moderate PRR 2–3)
-- Source filter (openFDA, EHR, Social Media, ClinicalTrials)
-- Click any row → expandable detail panel with PRR trend chart
-- PRR distribution histogram
-
-### 3. Drug Search
-- Autocomplete search across 30 drugs
-- Drug profile: drug class, indication, total reports, active signals
-- ADE frequency bar chart (MedDRA-coded)
-- 12-month reporting trend line chart
-- Active signals list per drug
-- Popular drug chips for quick access
-
-### 4. Drug–Drug Interaction Graph
-- Canvas-based animated interaction network graph
-- Select drug → view interaction nodes with risk colour coding
-- Polypharmacy cluster listing with risk descriptions
-
-### 5. Data Sources & Pipeline
-- Visual architecture diagram: Ingestion → Processing → Storage layers
-- Live-simulated message rates per Kafka topic
-- Throughput and consumer lag charts
-
-### 6. Methodology
-- BioBERT NLP section with live throughput counter
-- Interactive PRR calculator (enter a/b/c/d values, compute PRR live)
-- Graph-theoretic analysis explanation with tech tags
-- LSTM baseline vs. real-time prediction demo chart
-
----
-
-## Inductive Drug-Drug Interaction (DDI) Benchmark
-
-PharmaWatch scores drug pairs with a graph neural network (**GINE**: a graph network over each molecule's atoms and bonds) plus a 2048-bit Morgan fingerprint branch, trained on TDC DrugBank DDI. The score is a hypothesis from molecular structure, not clinical evidence.
-
-### Evaluation regimes (TDC DrugBank, ~1,705 drugs)
-Drugs, not pairs, are split into train, validation and test, so a test drug is never seen in training:
-- **S0 (Warm)**: both drugs seen in training.
-- **S1 (One Unseen)**: exactly one drug withheld (the primary cold-start setting).
-- **S2 (Both Unseen)**: both drugs withheld.
-
-Test sets have 1:1 sampled negatives (unlabelled pairs, not confirmed non-interactions), so the base rate is 0.5. GINE rows are mean ± standard deviation over 5 trained seeds. Every row is a trained model.
-
-| Model | Regime | Seeds | AUROC | AUPRC | Precision@100 |
-| --- | --- | --- | --- | --- | --- |
-| GINE (full) | S0 (Warm) | 5 | 0.979 ± 0.003 | 0.979 ± 0.003 | 1.000 |
-| Logistic regression | S0 (Warm) | 1 | 0.890 | 0.873 | 0.980 |
-| XGBoost | S0 (Warm) | 1 | 0.844 | 0.831 | 0.980 |
-| NN-Tanimoto | S0 (Warm) | 1 | 0.793 | 0.787 | 0.970 |
-| GINE (full) | S1 (One Unseen) | 5 | 0.849 ± 0.006 | 0.851 ± 0.005 | 0.974 ± 0.026 |
-| Logistic regression | S1 (One Unseen) | 1 | 0.679 | 0.641 | 0.850 |
-| XGBoost | S1 (One Unseen) | 1 | 0.770 | 0.753 | 0.970 |
-| NN-Tanimoto | S1 (One Unseen) | 1 | 0.751 | 0.731 | 0.980 |
-| GINE (full) | S2 (Both Unseen) | 5 | 0.712 ± 0.010 | 0.725 ± 0.009 | 0.918 ± 0.023 |
-| Logistic regression | S2 (Both Unseen) | 1 | 0.574 | 0.554 | 0.620 |
-| XGBoost | S2 (Both Unseen) | 1 | 0.672 | 0.660 | 0.900 |
-| NN-Tanimoto | S2 (Both Unseen) | 1 | 0.577 | 0.584 | 0.860 |
-
-The full table, with the ablations, is in `reports/ddi_benchmark_results.md`, and is regenerated by `python -m validation.ddi_eval`.
-
-### Ablations (separately trained models, S1)
-- **No fingerprint branch**: AUPRC 0.770 ± 0.013 against 0.851 for the full model. The fingerprint branch matters for unseen drugs.
-- **No edge features (plain GIN)** and **concatenation head instead of the symmetric head**: both are within the seed-to-seed spread of the full model, so this benchmark does not show that either component helps.
-
-Each model was trained for at most 15 minutes on CPU (about 2-3 epochs); longer training was not explored, so these are results for that budget.
-
-An earlier version of this table reported much larger ablation effects. Those rows came from untrained or modified stand-ins and have been removed.
-
-### Calibration and limitations
-1. The model deployed is the one with the best AUPRC on a validation *selection* half; the calibrator is fitted on a different *calibration* half (split by drug). Isotonic regression beat temperature scaling in cross-fitting.
-2. On the test sets, ECE fell from 0.153 to 0.021 for S1 and from 0.265 to 0.079 for S2, but **rose from 0.007 to 0.149 for S0**: the calibrated score is trustworthy only for pairs that include a drug the model was not trained on. The served `calibrated` flag and this scope come from `backend/trained_models/ddi_manifest.json`.
-3. Terminology: the output is an **"interaction likelihood score"**, never a "probability of harm" or a "safety score". The absence of a prediction means **"no evidence found"**, not "safe to combine".
-4. **Research use only.** Predictions are hypothesis-generating and are not clinical guidance.
-
-All validation results, with reference sets and data versions, are in the app under **Methods & Validation**; formulas and thresholds are in `docs/METHODS.md`.
-
----
-- Project abstract, tech stack grid
-- Team member cards (Sreyaan Roy, Sohan Arvind Sanil)
-- Key references with live external links
-
----
-
-## Design System
-
-The UI follows CDC.gov design principles:
-- **Primary colour:** `#003d7c` (CDC Blue)
-- **Accent:** `#f0c040` (Gold)
-- **Alert colours:** Red (critical), Amber (high), Green (moderate)
-- **Typography:** Open Sans (body), tabular numerics for counters
-- **Animations:** Entry fade-ins, animated counters, pulse badges, graph animations
-- **Responsive:** Adapts to mobile, tablet, and desktop
-
----
-
-## Browser Support
-
-| Browser | Status |
-|---------|--------|
-| Chrome 90+ | ✅ Full support |
-| Firefox 88+ | ✅ Full support |
-| Edge 90+ | ✅ Full support |
-| Safari 14+ | ✅ Full support |
-
----
-
-## Academic Context
-
-**Title:** PharmaWatch: A Real-Time, Multi-Source Big Data Pipeline for Adverse Drug Event Detection  
-**Course:** Big Data — Mini Project  
-**Institution:** Manipal Academy of Higher Education  
-**Authors:** Sreyaan Roy (230968184), Sohan Arvind Sanil (2309681)
-
----
+**Title:** PharmaWatch — A pharmacovigilance signal-detection and teaching platform
+**Institution:** Manipal Academy of Higher Education
+**Authors:** Sreyaan Roy, Sohan Arvind Sanil
 
 ## License
 
-MIT License — free to use, modify, and distribute with attribution.
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free to use, modify and share for non-commercial
+purposes (teaching, research and evaluation at educational and other non-commercial organizations).
+Commercial use is not granted.

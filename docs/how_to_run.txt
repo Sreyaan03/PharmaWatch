@@ -1,24 +1,19 @@
-How to Run PharmaWatch
+PharmaWatch — how to run
+=========================
 
-1. Prerequisites
-Ensure you have Python 3.10+ installed on your system.
+This file has been folded into the main documentation. See:
 
-2. Setup the Environment
-Open a PowerShell terminal in the PharmaWatch project folder and activate the virtual environment:
-.\venv\Scripts\Activate.ps1
+  - README.md            (repository root) — Quick start
+  - docs/DEPLOYMENT.md   — full install, configuration, backups, hosting
+  - docs/PILOT_GUIDE.md  — running it for a class
 
-3. Install Dependencies
-Install the required Python packages by running:
-pip install -r backend\requirements.txt
+Quick version
+-------------
+1. Install Docker Desktop and make sure it is running.
+2. Open a terminal in the project folder.
+3. Windows:        ./setup.ps1
+   macOS / Linux:  chmod +x setup.sh && ./setup.sh
+4. Wait for the first build (~10-15 min) and FAERS download to finish.
+5. Open http://localhost:5000
 
-4. API Key Setup
-Ensure you have an FDA API key. There should be a `.env` file inside the `backend\` folder containing:
-FDA_API_KEY=your_api_key_here
-
-5. Run the Server
-Start the Flask backend server:
-python backend\app.py
-
-6. Open the Dashboard
-Once the server is running, open your web browser and go to:
-http://127.0.0.1:5000
+Research and educational use only. A signal is not proof that a drug caused an event.

@@ -156,3 +156,26 @@ sentence-level pairing.
   `tests/test_validation_gate.py` fails when a metric falls below baseline minus tolerance.
   Changing a baseline is a deliberate commit with the reason in the message.
 - **Known limitations** are listed on the page and in `validation/report.py`.
+
+## Lead-time study vs. FDA SrLC (`validation/lead_time.py`)
+
+A retrospective check of *when* the screen would have flagged a drug–event pair, relative to the
+FDA's own action. The gold set is the FDA **Safety-related Labeling Changes (SrLC)**, Jul 2021–Jun
+2026, mapped to FAERS ingredients and MedDRA Preferred Terms. For each pair, the first quarter in
+which the application's signal criteria are met is compared with the quarter of the labeling change.
+
+On 3,052 pairs: the screen flagged **before** the labeling change for 592 pairs (**19.4%**, 95% CI
+18.1–20.8%), at or after for 322, was left-censored (already flagged at the first loaded quarter)
+for 607, and never flagged for 1,531. Among pairs flagged before, the median lead was **7 quarters**
+(95% CI 7–8). Full counts: `reports/validation/lead_time.json`.
+
+This measures **timing agreement** with later regulatory action, not detection of novel harms, and
+the pair mapping is **author-built by automated Preferred-Term matching and is pending faculty
+review.** It is reported as a descriptive result, not a performance claim.
+
+## How to describe the tool
+
+Use **"benchmarked against published reference standards."** Never say "medically validated,"
+"clinically validated" or "proven." A signal is a screening statement about disproportionality in
+reports; a model score is a structural hypothesis; the absence of a result is "no evidence found,"
+never "safe."
