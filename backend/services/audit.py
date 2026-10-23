@@ -13,7 +13,7 @@ log = logging.getLogger("audit")
 # Form fields safe to record: identities and parameters, never secrets or document text.
 _SAFE_FORM_KEYS = {"drug", "event", "reference", "quarter", "status", "role", "email",
                    "granularity", "limit", "from", "to", "source"}
-_NEVER = {"password", "text", "file"}
+_NEVER = {"password", "text", "file", "admin_key"}
 
 
 def should_audit(path, method):

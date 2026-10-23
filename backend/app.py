@@ -40,29 +40,24 @@ if not _secret:
         raise RuntimeError("AUTH_REQUIRED is on but FLASK_SECRET_KEY is not set; configure it in .env")
     _secret = _secrets.token_hex(32)
 app.secret_key = _secret
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=bool(config.get("SESSION_COOKIE_SECURE")),
+    # Reject an oversized request body before any handler reads it (returns 413).
+    MAX_CONTENT_LENGTH=int(config.get("MAX_UPLOAD_MB")) * 1024 * 1024,
+)
 
-# Initialize Rate Limiter with a graceful fallback if not installed globally
-try:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
-    limiter = Limiter(
-        key_func=get_remote_address,
-        app=app,
-        default_limits=["10000 per hour"],
-        storage_uri=config.get("RATE_LIMIT_STORAGE_URI")
-    )
-except ImportError:
-    class MockLimiter:
-        def __init__(self, *args, **kwargs):
-            pass
-        def limit(self, *args, **kwargs):
-            def decorator(f):
-                return f
-            return decorator
-        def exempt(self, f):
-            return f
-    limiter = MockLimiter()
+# Generic error responses (no raw exception text reaches the client).
+from core.errors import register_error_handlers  # noqa: E402
+register_error_handlers(app)
+
+# Rate limiter (shared via core.limiter so routes can add per-endpoint limits). No-op if the package
+# is not installed. Default limit and storage come from configuration.
+from core.limiter import limiter  # noqa: E402
+app.config["RATELIMIT_DEFAULT"] = config.get("RATE_LIMIT_DEFAULT")
+app.config["RATELIMIT_STORAGE_URI"] = config.get("RATE_LIMIT_STORAGE_URI")
+limiter.init_app(app)
 
 # Serve index.html (ensure no caching for latest static asset updates)
 @app.route("/")

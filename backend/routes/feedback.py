@@ -4,12 +4,14 @@
 from flask import Blueprint, Response, jsonify, request
 
 from core.auth import current_user, require_login, require_role
+from core.limiter import limiter
 from services import feedback as svc
 
 feedback_bp = Blueprint("feedback", __name__)
 
 
 @feedback_bp.route("/api/feedback", methods=["POST"])
+@limiter.limit("120 per hour")
 @require_login
 def submit():
     body = request.get_json(silent=True) or {}

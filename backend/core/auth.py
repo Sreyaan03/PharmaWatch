@@ -115,17 +115,20 @@ def require_role(role):
 
 
 def require_admin(view):
-    """Admin-key guard (X-Admin-Key header). Kept for key-driven admin endpoints.
+    """Admin-key guard. The key is accepted in the X-Admin-Key header ONLY (never a query
+    parameter, so it cannot leak into logs or the audit trail) and compared in constant time.
 
     403 when ADMIN_API_KEY is not configured, 401 on a missing or wrong key.
     """
+    import hmac
+
     @wraps(view)
     def wrapper(*args, **kwargs):
         admin_key = config.get("ADMIN_API_KEY")
         if not admin_key:
             return jsonify({"error": "Admin endpoints disabled. Configure ADMIN_API_KEY in .env"}), 403
-        provided = request.headers.get("X-Admin-Key") or request.args.get("admin_key")
-        if not provided or provided.strip() != admin_key:
+        provided = (request.headers.get("X-Admin-Key") or "").strip()
+        if not provided or not hmac.compare_digest(provided, admin_key):
             return jsonify({"error": "Unauthorized: invalid or missing admin key"}), 401
         return view(*args, **kwargs)
     return wrapper

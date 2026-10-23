@@ -3,6 +3,7 @@
 
 
 from core.auth import require_admin, require_role
+from core.limiter import limiter
 from flask import Blueprint, request, jsonify, Response
 from services import signal_history as history_svc
 from services import signals as svc
@@ -10,6 +11,7 @@ from services import signals as svc
 signals_bp = Blueprint("signals", __name__)
 
 @signals_bp.route("/api/ner", methods=["POST"])
+@limiter.limit("60 per hour")
 @require_role("analyst")
 def ner_endpoint():
     """Expects JSON body: { 'text': '...' }. Returns named entities."""
@@ -64,6 +66,7 @@ def get_prr():
 
 
 @signals_bp.route("/api/signals/ner-mine", methods=["POST"])
+@limiter.limit("30 per hour")
 @require_role("analyst")
 def register_ner_task():
     """Accepts text or files (PDF/TXT), registers a task, and returns task_id."""

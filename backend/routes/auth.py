@@ -4,6 +4,7 @@
 from flask import Blueprint, jsonify, request
 
 from core import auth
+from core.limiter import limiter
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -15,6 +16,7 @@ def status():
 
 
 @auth_bp.route("/api/auth/login", methods=["POST"])
+@limiter.limit("10 per minute; 60 per hour")
 def login():
     body = request.get_json(silent=True) or {}
     email = (body.get("email") or "").strip()

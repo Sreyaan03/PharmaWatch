@@ -741,7 +741,8 @@
     },
     "POST /api/surveillance/alerts/<int:alert_id>/status": {
       "keys": [
-        "<text/html>"
+        "error",
+        "request_id"
       ],
       "status": 404
     },

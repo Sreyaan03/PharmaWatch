@@ -4,6 +4,7 @@
 from flask import Blueprint, Response, jsonify, request
 
 from core.auth import require_role
+from core.limiter import limiter
 from services.prescription import service as svc
 
 prescription_bp = Blueprint("prescription", __name__)
@@ -17,6 +18,7 @@ def config():
 
 
 @prescription_bp.route("/api/prescription", methods=["POST"])
+@limiter.limit("30 per hour")
 @require_role("analyst")
 def upload():
     """Upload a prescription or discharge summary (PDF/PNG/JPG/TXT); returns a job id."""

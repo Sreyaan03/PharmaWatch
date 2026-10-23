@@ -23,7 +23,6 @@ EXPECTED_TABLES = [
     "temporal_cache",
     "demographic_cache",
     "interaction_predictions",
-    "fda_cache",
     "kafka_pubmed",
     "kafka_trials",
     "kafka_alerts",

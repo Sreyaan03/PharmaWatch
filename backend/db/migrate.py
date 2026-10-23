@@ -45,7 +45,7 @@ ADDITIVE_UNIQUE_KEYS = [
 
 # Tables that held statistics computed inside the Kafka consumer from a hard-coded background
 # count. Statistics now come only from the FAERS batch path, so these go.
-RETIRED_TABLES = ["drug_events_agg", "faers_background_events"]
+RETIRED_TABLES = ["drug_events_agg", "faers_background_events", "fda_cache"]
 RETIRED_ROWS = [
     ("signals_cache", "source = 'kafka_faers'"),
     ("drug_events", "source = 'kafka_faers'"),

@@ -126,14 +126,8 @@ CREATE TABLE IF NOT EXISTS interaction_predictions (
     INDEX idx_pred_queried (queried_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. openFDA HTTP Response Cache (7-Day TTL)
-CREATE TABLE IF NOT EXISTS fda_cache (
-    url_hash CHAR(64) PRIMARY KEY,
-    url TEXT NOT NULL,
-    response_json LONGTEXT NOT NULL,
-    cached_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_fda_cached (cached_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- (9. The openFDA HTTP response cache (fda_cache) was removed in Phase 11: HTTP caching is handled
+--  by the clients.http layer, not a MySQL table. The table is dropped by db.migrate.)
 
 -- 10. Kafka PubMed Literature Stream
 CREATE TABLE IF NOT EXISTS kafka_pubmed (

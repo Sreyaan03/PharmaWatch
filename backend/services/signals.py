@@ -266,6 +266,14 @@ def get_signal_network(drug, event):
         return _SIGNAL_NETWORK_CACHE[cache_key], 200
 
     FDA_BASE = "https://api.fda.gov/drug/event.json"
+
+    def _fda_term(s):
+        # openFDA search values sit inside quotes; drop quotes/backslashes and URL-encode so a
+        # user-supplied name cannot break out of the query.
+        import urllib.parse
+        return urllib.parse.quote(str(s).replace("\\", "").replace('"', "").strip()[:100])
+
+    drug_q, event_q = _fda_term(drug), _fda_term(event)
     nodes = []
     links = []
     added_nodes = set()
@@ -277,7 +285,7 @@ def get_signal_network(drug, event):
     links.append({"source": drug, "target": event, "value": 5, "type": "primary"})
     
     try:
-        url_co_drugs = f"{FDA_BASE}?search=patient.drug.medicinalproduct:\"{drug}\"+AND+patient.reaction.reactionmeddrapt:\"{event}\"&count=patient.drug.medicinalproduct.exact&limit=6"
+        url_co_drugs = f"{FDA_BASE}?search=patient.drug.medicinalproduct:\"{drug_q}\"+AND+patient.reaction.reactionmeddrapt:\"{event_q}\"&count=patient.drug.medicinalproduct.exact&limit=6"
         res_co_drugs = http_requests.get(url_co_drugs).json()
         co_drugs_list = res_co_drugs.get("results", [])
         
@@ -294,7 +302,7 @@ def get_signal_network(drug, event):
             added_nodes.add(cd_name.lower())
             links.append({"source": drug, "target": cd_name, "value": cd["count"], "type": "co_drug"})
 
-        url_co_events = f"{FDA_BASE}?search=patient.drug.medicinalproduct:\"{drug}\"&count=patient.reaction.reactionmeddrapt.exact&limit=6"
+        url_co_events = f"{FDA_BASE}?search=patient.drug.medicinalproduct:\"{drug_q}\"&count=patient.reaction.reactionmeddrapt.exact&limit=6"
         res_co_events = http_requests.get(url_co_events).json()
         co_events_list = res_co_events.get("results", [])
         
@@ -313,7 +321,7 @@ def get_signal_network(drug, event):
 
         for cd in co_drugs:
             cd_name = cd["name"]
-            url_cross = f"{FDA_BASE}?search=patient.drug.medicinalproduct:\"{cd_name}\"+AND+patient.reaction.reactionmeddrapt:\"{event}\"&limit=1"
+            url_cross = f"{FDA_BASE}?search=patient.drug.medicinalproduct:\"{_fda_term(cd_name)}\"+AND+patient.reaction.reactionmeddrapt:\"{event_q}\"&limit=1"
             res_cross = http_requests.get(url_cross).json()
             cross_count = res_cross.get("meta", {}).get("results", {}).get("total", 0)
             if cross_count > 0:
