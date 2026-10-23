@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Dockerfile.kafka — Lightweight image for Kafka producer & consumer
-# Used by kafka-producer and kafka-consumer services in docker-compose.yml
+# Used by kafka-producer and kafka-consumer services in compose.yml (kafka profile)
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM python:3.11-slim

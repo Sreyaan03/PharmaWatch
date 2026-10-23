@@ -5,7 +5,9 @@ from db.mysql import ping
 
 
 def health():
-    """Health check endpoint checking server, ML model status, and MySQL database connectivity."""
+    """Health check: server, ML model, MySQL connectivity, plus the versions a pilot operator
+    needs to see at a glance — which FAERS release is loaded, which DDI model is deployed, and
+    how background jobs are being run. Every lookup is guarded so the probe itself never fails."""
     from ml.ner import MODEL_NAME
     db_status = "not_connected"
     try:
@@ -14,10 +16,39 @@ def health():
     except Exception as e:
         db_status = f"unavailable ({e})"
 
+    def _faers_version():
+        from faers.registry import data_version
+        return data_version()
+
+    def _ddi_model():
+        from ml.ddi.inference import load_manifest
+        m = load_manifest()
+        if not m:
+            return "not deployed"
+        name = m.get("model", {}).get("name", "model")
+        version = m.get("model_version", "")
+        return f"{name} ({version})" if version else name
+
+    def _jobs():
+        from core import config, queue
+        m = queue.mode()
+        if m == "inline":
+            return f"inline ({config.get('JOB_THREADS')} worker threads in the web process)"
+        return f"kafka (separate worker processes, {config.get('JOB_THREADS')} threads each)"
+
+    def _safe(fn):
+        try:
+            return fn()
+        except Exception as e:                       # a reporting lookup must never fail the probe
+            return f"unavailable ({str(e)[:120]})"
+
     return {
         "status": "ok",
         "database": db_status,
-        "model": MODEL_NAME
+        "model": MODEL_NAME,
+        "faers_data": _safe(_faers_version),
+        "ddi_model": _safe(_ddi_model),
+        "jobs": _safe(_jobs),
     }
 
 

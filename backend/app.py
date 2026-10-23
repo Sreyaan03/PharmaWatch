@@ -31,13 +31,15 @@ app = Flask(__name__, static_folder=SRC_DIR, static_url_path='/static')
 _allowed_origins = config.get("ALLOWED_ORIGINS").split(",")
 CORS(app, origins=_allowed_origins, supports_credentials=True)
 
-# Session cookie: signed with FLASK_SECRET_KEY. When AUTH_REQUIRED is on, a secret is mandatory;
-# in open local development a random per-process key is fine (sessions just do not survive restarts).
+# Fail fast on an incoherent configuration, reporting every problem at once (not one per restart).
+config.check_or_raise()
+
+# Session cookie: signed with FLASK_SECRET_KEY. When AUTH_REQUIRED is on, a secret is mandatory
+# (check_or_raise above already enforces that); in open local development a random per-process key
+# is fine (sessions just do not survive restarts).
 import secrets as _secrets  # noqa: E402
 _secret = config.get("FLASK_SECRET_KEY")
 if not _secret:
-    if config.get("AUTH_REQUIRED"):
-        raise RuntimeError("AUTH_REQUIRED is on but FLASK_SECRET_KEY is not set; configure it in .env")
     _secret = _secrets.token_hex(32)
 app.secret_key = _secret
 app.config.update(

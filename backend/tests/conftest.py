@@ -7,6 +7,45 @@ def pytest_addoption(parser):
     )
 
 
+# ── CI test categories ───────────────────────────────────────────────────────
+# Every test is tagged exactly one of: statistics (numerical / validation correctness),
+# integration (the live app, MySQL routes, ingestion, big-data clients), or unit (everything
+# else — the default). The tagging is by file name so individual tests stay untouched, and it is
+# a true partition: CI runs the three markers as parallel jobs and together they are the whole
+# suite. The marker only decides which job runs a test, so a mis-tag never changes its outcome.
+_STATISTICS = {
+    "test_disproportionality", "test_faers_stats", "test_zscore_spikes", "test_single_stats_path",
+    "test_lead_time", "test_forecast", "test_ddi_calibration", "test_ddi_eval_and_inference",
+    "test_ddi_model", "test_ddi_dataset", "test_signals_benchmark", "test_prescription_benchmark",
+    "test_validation_report", "test_validation_gate",
+}
+_INTEGRATION = {
+    "test_mysql_foundation", "test_mysql_routes", "test_interactions_api", "test_surveillance",
+    "test_replay", "test_jobs", "test_queue", "test_storage", "test_label_watcher",
+    "test_label_check", "test_faers_ingest", "test_ingest", "test_hbase_lookup",
+    "test_spark_signals", "test_signal_history", "test_drug_profile", "test_route_inventory",
+    "test_frontend_contract", "test_frontend_wording", "test_no_invented_numbers",
+    "test_boxed_warnings", "test_surveillance",
+}
+
+
+def pytest_configure(config):
+    for name in ("unit", "integration", "statistics"):
+        config.addinivalue_line("markers", f"{name}: CI category (auto-tagged by file name)")
+
+
+def pytest_collection_modifyitems(config, items):
+    import pytest as _pt
+    for item in items:
+        stem = _os.path.splitext(_os.path.basename(str(item.fspath)))[0]
+        if stem in _STATISTICS:
+            item.add_marker(_pt.mark.statistics)
+        elif stem in _INTEGRATION:
+            item.add_marker(_pt.mark.integration)
+        else:
+            item.add_marker(_pt.mark.unit)
+
+
 # ── a small FAERS database and its lake, for the batch-job tests ─────────────
 import os as _os
 import sys as _sys

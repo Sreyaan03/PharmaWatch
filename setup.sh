@@ -3,13 +3,15 @@
 # PharmaWatch — Setup Script (Linux / macOS)
 #
 # Run this ONCE after cloning the repo. It will:
-#   1. Check that Docker is installed
-#   2. Download the large data files from Google Drive
-#   3. Build and start the app with Docker Compose
+#   1. Check that Docker is installed and running
+#   2. Create backend/.env from the generated template (if missing)
+#   3. Download and load the FAERS data the app needs (real FDA files)
+#   4. Build and start the core stack with Docker Compose
 #
 # Usage:
 #   chmod +x setup.sh
-#   ./setup.sh
+#   ./setup.sh                 # default: 20 most recent FAERS quarters
+#   FAERS_QUARTERS=8 ./setup.sh # fewer quarters = faster, smaller download
 # =============================================================================
 
 set -e  # Exit immediately on any error
@@ -20,6 +22,8 @@ info()    { echo -e "${CYAN}[INFO]${NC}  $1"; }
 success() { echo -e "${GREEN}[OK]${NC}    $1"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+FAERS_QUARTERS="${FAERS_QUARTERS:-20}"   # how many recent quarters to fetch
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
@@ -37,82 +41,51 @@ if ! docker info &>/dev/null; then
 fi
 success "Docker is running."
 
-# ── Step 2: Check / install gdown ────────────────────────────────────────────
-info "Checking for gdown (Google Drive downloader)..."
-if ! command -v gdown &>/dev/null; then
-  warn "gdown not found — installing via pip..."
-  pip install -q gdown || pip3 install -q gdown || error "Could not install gdown. Run: pip install gdown"
-fi
-success "gdown is ready."
-
-# ── Step 3: Create data directory ────────────────────────────────────────────
-info "Creating data/ directory..."
-mkdir -p data
-success "data/ directory ready."
-
-# =============================================================================
-# ⚠️  FILL IN YOUR GOOGLE DRIVE FILE IDs BELOW
-#
-# How to get a File ID:
-#   1. Upload the file to Google Drive
-#   2. Right-click → Share → "Anyone with the link"
-#   3. Copy the link — it looks like:
-#      https://drive.google.com/file/d/FILE_ID_HERE/view?usp=sharing
-#   4. Paste just the FILE_ID_HERE part below
-# =============================================================================
-
-DUCKDB_FILE_ID="PASTE_YOUR_FILE_ID_HERE"          # pharmawatch_faers.duckdb (~25 MB)
-PARQUET_FILE_ID="PASTE_YOUR_FILE_ID_HERE"          # twosides.parquet (~14 MB)
-DRUGBANK_FILE_ID="PASTE_YOUR_FILE_ID_HERE"         # drugbank_ddi.tsv (~44 MB)
-
-# =============================================================================
-
-# ── Step 4: Download data files ───────────────────────────────────────────────
-download_file() {
-  local file_id="$1"
-  local output="$2"
-  local label="$3"
-
-  if [[ "$file_id" == "PASTE_YOUR_FILE_ID_HERE" ]]; then
-    warn "Skipping $label — Google Drive file ID not set yet."
-    warn "Open setup.sh and fill in the file ID for: $output"
-    return
-  fi
-
-  if [[ -f "$output" ]]; then
-    success "$label already exists — skipping download."
-    return
-  fi
-
-  info "Downloading $label..."
-  gdown --id "$file_id" --output "$output" --fuzzy
-  success "Downloaded: $output"
-}
-
-download_file "$DUCKDB_FILE_ID"   "data/pharmawatch_faers.duckdb"  "pharmawatch_faers.duckdb"
-download_file "$PARQUET_FILE_ID"  "data/twosides.parquet"          "twosides.parquet"
-download_file "$DRUGBANK_FILE_ID" "data/drugbank_ddi.tsv"          "drugbank_ddi.tsv"
-
-# ── Step 5: Check .env file ───────────────────────────────────────────────────
+# ── Step 2: Check .env file ───────────────────────────────────────────────────
 info "Checking backend/.env..."
 if [[ ! -f "backend/.env" ]]; then
-  warn "backend/.env not found — creating a template."
-  cat > backend/.env.example <<EOF
-FDA_API_KEY=YOUR_API_KEY_HERE
-ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
-EOF
-  cp backend/.env.example backend/.env
-  warn "Created backend/.env. Please edit it to add your FDA_API_KEY!"
+  warn "backend/.env not found — creating it from .env.example."
+  if [[ ! -f ".env.example" ]]; then
+    (cd backend && python -m core.config) || error "Could not generate .env.example"
+  fi
+  cp .env.example backend/.env
+  warn "Created backend/.env. Edit it to add FDA_API_KEY and, for production, DOMAIN_NAME / FLASK_SECRET_KEY."
 else
   success "backend/.env found."
 fi
 
-# ── Step 6: Build and run ─────────────────────────────────────────────────────
+# ── Step 3: Download and load FAERS data ──────────────────────────────────────
+# The app reads a DuckDB database built from the FDA's published FAERS quarterly files.
+# This replaces the old "download a prebuilt file from Google Drive" step: the data is
+# fetched straight from the FDA and built locally, so there is nothing to host or share.
+info "Creating data/ directory..."
+mkdir -p data
+success "data/ directory ready."
+
+if [[ -f "data/pharmawatch_faers.duckdb" ]]; then
+  success "FAERS database already present — skipping download. Delete it to rebuild."
+else
+  info "Downloading the $FAERS_QUARTERS most recent FAERS quarters from the FDA (this can take a while)..."
+  ( cd backend \
+    && python -m faers.downloader --latest "$FAERS_QUARTERS" \
+    && python -m faers.parser --all \
+    && python -m faers.loader ) \
+    || error "FAERS download/load failed. Re-run setup.sh to resume (verified files are not re-downloaded)."
+  success "FAERS database built at data/pharmawatch_faers.duckdb."
+fi
+
+# The DDI datasets (twosides.parquet, drugbank_ddi.tsv) and trained models are produced by the
+# validation/training steps in the docs; the app runs without them, with DDI features disabled.
+[[ -f "data/twosides.parquet" ]]  || warn "data/twosides.parquet not present — interaction features will be limited."
+[[ -f "data/drugbank_ddi.tsv" ]]  || warn "data/drugbank_ddi.tsv not present — interaction features will be limited."
+
+# ── Step 4: Build and run the core stack ──────────────────────────────────────
 echo ""
-info "Building Docker image and starting PharmaWatch..."
+info "Building the image and starting the core stack (app + MySQL + Caddy)..."
 echo -e "${YELLOW}(First build takes ~10–15 minutes — subsequent builds are fast)${NC}"
 echo ""
 
-docker compose -f docker/docker-compose.yml up --build
+docker compose -f docker/compose.yml --profile core up --build
 
 # Note: the above command is blocking. Ctrl+C to stop.
+# To also run the live Kafka ingestion stream, add:  --profile kafka

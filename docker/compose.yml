@@ -1,0 +1,256 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PharmaWatch — Docker Compose (single file, profile-selected)
+#
+# One file for every deployment. Pick what runs with --profile:
+#
+#   core   web app + MySQL + Caddy (TLS edge)         ← always needed
+#   kafka  ZooKeeper + Kafka + producer + consumer    ← the live ingestion stream
+#   demo   HBase (TWOSIDES interaction store)         ← optional teaching demo
+#
+# Examples (run from the repo root):
+#   docker compose -f docker/compose.yml --profile core up -d --build
+#   docker compose -f docker/compose.yml --profile core --profile kafka up -d --build
+#   docker compose -f docker/compose.yml --profile core --profile kafka --profile demo up -d
+#
+# Reach the app at https://${DOMAIN_NAME} (Caddy, auto Let's Encrypt) or, for a local
+# pilot, http://localhost:5000 directly.
+#
+# No data is baked into the image. The FAERS database, the DDI datasets and the trained models
+# are mounted read-only from the host; set DATA_DIR / MODELS_DIR to move them (defaults below).
+# Horizontal scaling lives in docker-compose.scale.yml, kept separate on purpose.
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  pharmawatch-net:
+    driver: bridge
+    name: pharmawatch-net
+
+volumes:
+  mysql_data:
+    name: pharmawatch_mysql_data
+  caddy_data:
+    name: pharmawatch_caddy_data
+  caddy_config:
+    name: pharmawatch_caddy_config
+
+services:
+
+  # ── core: MySQL ────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: pharmawatch-mysql
+    profiles: [core]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    expose:
+      - "3306"                      # internal to the compose network, not published
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pharmawatch}
+      MYSQL_USER: ${MYSQL_USER:-pharmawatch_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pharmawatch_pass}
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../backend/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=150
+      - --innodb_buffer_pool_size=512M
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD:-root} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # ── core: PharmaWatch web app (Gunicorn + Flask) ───────────────────────────
+  pharmawatch:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: pharmawatch:local
+    container_name: pharmawatch-app
+    profiles: [core]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "5000:5000"                 # direct access for a local pilot; Caddy is the public edge
+    env_file:
+      - ../backend/.env
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - DATA_DIR=/app/data
+    volumes:
+      # Read-only datasets and models, mounted from the host (never baked into the image).
+      - ${DATA_DIR:-../data}/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
+      - ${DATA_DIR:-../data}/twosides.parquet:/app/data/twosides.parquet:ro
+      - ${DATA_DIR:-../data}/drugbank_ddi.tsv:/app/data/drugbank_ddi.tsv:ro
+      - ${MODELS_DIR:-../backend/trained_models}:/app/backend/trained_models:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+
+  # ── core: Caddy reverse proxy & TLS edge ───────────────────────────────────
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: pharmawatch-caddy
+    profiles: [core]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../src:/app/src:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      pharmawatch:
+        condition: service_healthy
+
+  # ── kafka: ZooKeeper ───────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: pharmawatch-zookeeper
+    profiles: [kafka]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    expose:
+      - "2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── kafka: broker ──────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: pharmawatch-kafka
+    profiles: [kafka]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    expose:
+      - "29092"                     # internal only, not published
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_MESSAGE_MAX_BYTES: 5242880
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+
+  # ── kafka: browser dashboard (topics, messages, consumer lag) ──────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: pharmawatch-kafka-ui
+    profiles: [kafka]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8086:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: pharmawatch-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_READONLY: "false"
+
+  # ── kafka: producer (data ingestion scheduler) ─────────────────────────────
+  kafka-producer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kafka
+    image: pharmawatch-kafka:local
+    container_name: pharmawatch-producer
+    profiles: [kafka]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - DATA_DIR=/app/data
+      - KAFKA_ROLE=producer
+      - PYTHONUNBUFFERED=1
+    # Read-only FAERS database: the producer checks which quarters are loaded.
+    # FAERS_AUTO_REFRESH needs this mounted read-write instead.
+    volumes:
+      - ${DATA_DIR:-../data}/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
+    command: ["python", "-m", "ingest.producer"]
+
+  # ── kafka: consumer (real-time pipeline worker) ────────────────────────────
+  kafka-consumer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kafka
+    image: pharmawatch-kafka:local
+    container_name: pharmawatch-consumer
+    profiles: [kafka]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - KAFKA_ROLE=consumer
+      - PYTHONUNBUFFERED=1
+      - DATA_DIR=/app/data
+    # Read-only FAERS database: the consumer links evidence to drug identities.
+    volumes:
+      - ${DATA_DIR:-../data}/pharmawatch_faers.duckdb:/app/data/pharmawatch_faers.duckdb:ro
+    command: ["python", "-m", "ingest.consumer"]
+
+  # ── demo: HBase (TWOSIDES interaction store) ───────────────────────────────
+  hbase:
+    image: dajobe/hbase:latest
+    container_name: pharmawatch-hbase
+    profiles: [demo]
+    restart: unless-stopped
+    networks: [pharmawatch-net]
+    ports:
+      - "9090:9090"                 # Thrift API
+      - "8085:8085"                 # HBase web UI

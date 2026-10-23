@@ -325,6 +325,9 @@
     "GET /api/health": {
       "keys": [
         "database",
+        "ddi_model",
+        "faers_data",
+        "jobs",
         "meta",
         "model",
         "status"

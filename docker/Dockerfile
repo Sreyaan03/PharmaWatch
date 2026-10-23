@@ -44,16 +44,23 @@ COPY backend/ /app/backend/
 # Copy frontend static files (served by Caddy or Flask send_from_directory)
 COPY src/ /app/src/
 
-# Copy read-only local datasets if present in build context
-COPY data/pharmawatch_faers.duckdb /app/data/pharmawatch_faers.duckdb
-COPY data/twosides.parquet         /app/data/twosides.parquet
-COPY data/drugbank_ddi.tsv         /app/data/drugbank_ddi.tsv
+# No data is baked into the image. The FAERS database, the DDI datasets and the trained models are
+# mounted as volumes at runtime (see compose.yml and DATA_DIR). This keeps the image portable and
+# free of any dataset, so it can be published and moved between hosts safely.
 
 # ── Environment Defaults ──────────────────────────────────────────────────────
 ENV FLASK_ENV=production \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app:/app/backend
+    PYTHONPATH=/app:/app/backend \
+    DATA_DIR=/app/data
+
+# ── Non-root user ─────────────────────────────────────────────────────────────
+# Run as an unprivileged user; create the data/cache dirs it may write to.
+RUN useradd --create-home --uid 10001 pharma \
+    && mkdir -p /app/data /app/backend/http_cache \
+    && chown -R pharma:pharma /app
+USER pharma
 
 # ── Expose Port ───────────────────────────────────────────────────────────────
 EXPOSE 5000

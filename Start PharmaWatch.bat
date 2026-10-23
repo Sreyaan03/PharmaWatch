@@ -40,7 +40,7 @@ echo [2/4] Starting Kafka stack (zookeeper, kafka, ui, producer, consumer)...
 set /a attempt=0
 :kafka_try
 set /a attempt+=1
-docker compose -f docker/docker-compose.yml up -d --build zookeeper kafka kafka-ui kafka-producer kafka-consumer
+docker compose -f docker/compose.yml up -d --build zookeeper kafka kafka-ui kafka-producer kafka-consumer
 if not errorlevel 1 goto kafka_ok
 if !attempt! geq 3 (
     echo WARNING: Kafka failed to start after 3 attempts. Continuing without it.
@@ -92,6 +92,6 @@ pause >nul
 
 echo Stopping...
 taskkill /FI "WINDOWTITLE eq PharmaWatch Server*" /T /F >nul 2>&1
-docker compose -f docker/docker-compose.yml stop
+docker compose -f docker/compose.yml stop
 echo Done.
 timeout /t 3 >nul

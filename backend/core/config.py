@@ -42,6 +42,8 @@ SETTINGS = [
     Setting("PORT", 5000, int, "app", "Port the development server listens on"),
     Setting("ALLOWED_ORIGINS", "http://localhost:5000,http://127.0.0.1:5000", str, "app",
             "Comma-separated origins allowed by CORS"),
+    Setting("DOMAIN_NAME", "localhost", str, "app",
+            "Public hostname Caddy serves and requests a TLS certificate for; localhost for a local pilot"),
     Setting("ADMIN_API_KEY", "", str, "app", "Key for admin endpoints (X-Admin-Key header); empty disables them", secret=True),
     Setting("FLASK_SECRET_KEY", "", str, "app", "Signs the session cookie; required when AUTH_REQUIRED is on", secret=True),
     Setting("AUTH_REQUIRED", False, bool, "app", "Require sign-in and enforce roles; off keeps single-user local development open"),
@@ -148,6 +150,48 @@ def env_example():
         lines.append(f"# {s.description}")
         lines.append(f"{s.name}={default}")
     return "\n".join(lines).replace("\n\n\n", "\n\n") + "\n"
+
+
+def validate():
+    """Return a list of configuration problems, given the values currently in the environment.
+
+    The checks are conditional: a setting is required only when another setting turns its feature
+    on. The list is returned whole so a deploy sees every problem at once, instead of fixing one,
+    restarting, and hitting the next. An empty list means the configuration is coherent.
+    """
+    problems = []
+
+    def need(name, reason):
+        if not raw(name):
+            problems.append(f"{name} must be set: {reason}")
+
+    if get("AUTH_REQUIRED"):
+        need("FLASK_SECRET_KEY", "AUTH_REQUIRED is on, so the session cookie must be signed")
+    if get("STORAGE_BACKEND") == "s3":
+        need("S3_BUCKET", "STORAGE_BACKEND is s3")
+        need("S3_ACCESS_KEY_ID", "STORAGE_BACKEND is s3")
+        need("S3_SECRET_ACCESS_KEY", "STORAGE_BACKEND is s3")
+    if get("QUEUE_MODE") == "kafka":
+        need("KAFKA_BOOTSTRAP_SERVERS", "QUEUE_MODE is kafka, so a broker address is required")
+    if get("RX_EXTRACTOR") == "cloud":
+        need("ANTHROPIC_API_KEY", "RX_EXTRACTOR is cloud, so the cloud extractor needs a key")
+
+    mode = get("QUEUE_MODE")
+    if mode not in ("inline", "kafka"):
+        problems.append(f"QUEUE_MODE must be 'inline' or 'kafka', not {mode!r}")
+    backend = get("STORAGE_BACKEND")
+    if backend not in ("local", "s3"):
+        problems.append(f"STORAGE_BACKEND must be 'local' or 's3', not {backend!r}")
+    return problems
+
+
+def check_or_raise():
+    """Raise a single RuntimeError naming every configuration problem, or return cleanly."""
+    problems = validate()
+    if problems:
+        raise RuntimeError(
+            "Configuration is incomplete; fix all of the following and restart:\n  - "
+            + "\n  - ".join(problems))
 
 
 def data_dir():

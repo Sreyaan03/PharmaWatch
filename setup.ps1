@@ -3,11 +3,13 @@
 #
 # Run this ONCE after cloning the repo. It will:
 #   1. Check that Docker Desktop is installed and running
-#   2. Download the large data files from Google Drive
-#   3. Build and start the app with Docker Compose
+#   2. Create backend\.env from the generated template (if missing)
+#   3. Download and load the FAERS data the app needs (real FDA files)
+#   4. Build and start the core stack with Docker Compose
 #
-# Usage (run in PowerShell as normal user — no admin needed):
+# Usage (run in PowerShell as a normal user — no admin needed):
 #   .\setup.ps1
+#   $env:FAERS_QUARTERS = "8"; .\setup.ps1    # fewer quarters = faster, smaller download
 #
 # If you get a "script blocked" error, run this first:
 #   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -20,6 +22,8 @@ function Info    { param($msg) Write-Host "[INFO]  $msg" -ForegroundColor Cyan  
 function Success { param($msg) Write-Host "[OK]    $msg" -ForegroundColor Green   }
 function Warn    { param($msg) Write-Host "[WARN]  $msg" -ForegroundColor Yellow  }
 function Err     { param($msg) Write-Host "[ERROR] $msg" -ForegroundColor Red; exit 1 }
+
+$FaersQuarters = if ($env:FAERS_QUARTERS) { $env:FAERS_QUARTERS } else { "20" }
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -39,82 +43,60 @@ try {
 }
 Success "Docker is running."
 
-# ── Step 2: Check / install gdown ────────────────────────────────────────────
-Info "Checking for gdown (Google Drive downloader)..."
-if (-not (Get-Command gdown -ErrorAction SilentlyContinue)) {
-    Warn "gdown not found — installing via pip..."
-    pip install -q gdown
-    if ($LASTEXITCODE -ne 0) { Err "Could not install gdown. Make sure Python/pip is installed." }
-}
-Success "gdown is ready."
-
-# ── Step 3: Create data directory ────────────────────────────────────────────
-Info "Creating data\ directory..."
-New-Item -ItemType Directory -Path "data" -Force | Out-Null
-Success "data\ directory ready."
-
-# =============================================================================
-# ⚠️  FILL IN YOUR GOOGLE DRIVE FILE IDs BELOW
-#
-# How to get a File ID:
-#   1. Upload the file to Google Drive
-#   2. Right-click → Share → "Anyone with the link"
-#   3. Copy the link — it looks like:
-#      https://drive.google.com/file/d/FILE_ID_HERE/view?usp=sharing
-#   4. Paste just the FILE_ID_HERE part below
-# =============================================================================
-
-$DUCKDB_FILE_ID   = "PASTE_YOUR_FILE_ID_HERE"   # pharmawatch_faers.duckdb (~25 MB)
-$PARQUET_FILE_ID  = "PASTE_YOUR_FILE_ID_HERE"   # twosides.parquet (~14 MB)
-$DRUGBANK_FILE_ID = "PASTE_YOUR_FILE_ID_HERE"   # drugbank_ddi.tsv (~44 MB)
-
-# =============================================================================
-
-# ── Helper: Download a file from Google Drive ─────────────────────────────────
-function Download-GDrive {
-    param($FileId, $Output, $Label)
-
-    if ($FileId -eq "PASTE_YOUR_FILE_ID_HERE") {
-        Warn "Skipping $Label — Google Drive file ID not set yet."
-        Warn "Open setup.ps1 and fill in the file ID for: $Output"
-        return
-    }
-
-    if (Test-Path $Output) {
-        Success "$Label already exists — skipping download."
-        return
-    }
-
-    Info "Downloading $Label..."
-    gdown --id $FileId --output $Output --fuzzy
-    if ($LASTEXITCODE -ne 0) { Err "Failed to download $Label. Check your file ID and sharing settings." }
-    Success "Downloaded: $Output"
-}
-
-Download-GDrive $DUCKDB_FILE_ID   "data\pharmawatch_faers.duckdb"  "pharmawatch_faers.duckdb"
-Download-GDrive $PARQUET_FILE_ID  "data\twosides.parquet"          "twosides.parquet"
-Download-GDrive $DRUGBANK_FILE_ID "data\drugbank_ddi.tsv"          "drugbank_ddi.tsv"
-
-# ── Step 5: Check .env file ───────────────────────────────────────────────────
+# ── Step 2: Check .env file ───────────────────────────────────────────────────
 Info "Checking backend\.env..."
 if (-not (Test-Path "backend\.env")) {
-    Warn "backend\.env not found — creating a template."
-    @"
-FDA_API_KEY=YOUR_API_KEY_HERE
-ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
-"@ | Set-Content "backend\.env.example"
-    Copy-Item -Path "backend\.env.example" -Destination "backend\.env"
-    Warn "Created backend\.env. Please edit it to add your FDA_API_KEY!"
+    Warn "backend\.env not found — creating it from .env.example."
+    if (-not (Test-Path ".env.example")) {
+        Push-Location backend; python -m core.config; Pop-Location
+        if ($LASTEXITCODE -ne 0) { Err "Could not generate .env.example" }
+    }
+    Copy-Item -Path ".env.example" -Destination "backend\.env"
+    Warn "Created backend\.env. Edit it to add FDA_API_KEY and, for production, DOMAIN_NAME / FLASK_SECRET_KEY."
 } else {
     Success "backend\.env found."
 }
 
-# ── Step 6: Build and run ─────────────────────────────────────────────────────
+# ── Step 3: Download and load FAERS data ──────────────────────────────────────
+# The app reads a DuckDB database built from the FDA's published FAERS quarterly files.
+# This replaces the old "download a prebuilt file from Google Drive" step: the data is
+# fetched straight from the FDA and built locally, so there is nothing to host or share.
+Info "Creating data\ directory..."
+New-Item -ItemType Directory -Path "data" -Force | Out-Null
+Success "data\ directory ready."
+
+if (Test-Path "data\pharmawatch_faers.duckdb") {
+    Success "FAERS database already present — skipping download. Delete it to rebuild."
+} else {
+    Info "Downloading the $FaersQuarters most recent FAERS quarters from the FDA (this can take a while)..."
+    Push-Location backend
+    try {
+        python -m faers.downloader --latest $FaersQuarters
+        if ($LASTEXITCODE -ne 0) { throw "download failed" }
+        python -m faers.parser --all
+        if ($LASTEXITCODE -ne 0) { throw "parse failed" }
+        python -m faers.loader
+        if ($LASTEXITCODE -ne 0) { throw "load failed" }
+    } catch {
+        Pop-Location
+        Err "FAERS download/load failed. Re-run setup.ps1 to resume (verified files are not re-downloaded)."
+    }
+    Pop-Location
+    Success "FAERS database built at data\pharmawatch_faers.duckdb."
+}
+
+# The DDI datasets (twosides.parquet, drugbank_ddi.tsv) and trained models are produced by the
+# validation/training steps in the docs; the app runs without them, with DDI features disabled.
+if (-not (Test-Path "data\twosides.parquet")) { Warn "data\twosides.parquet not present — interaction features will be limited." }
+if (-not (Test-Path "data\drugbank_ddi.tsv")) { Warn "data\drugbank_ddi.tsv not present — interaction features will be limited." }
+
+# ── Step 4: Build and run the core stack ──────────────────────────────────────
 Write-Host ""
-Info "Building Docker image and starting PharmaWatch..."
+Info "Building the image and starting the core stack (app + MySQL + Caddy)..."
 Write-Host "(First build takes ~10-15 minutes — subsequent builds are fast)" -ForegroundColor Yellow
 Write-Host ""
 
-docker compose -f docker/docker-compose.yml up --build
+docker compose -f docker/compose.yml --profile core up --build
 
 # Note: the above command is blocking. Press Ctrl+C to stop.
+# To also run the live Kafka ingestion stream, add:  --profile kafka
