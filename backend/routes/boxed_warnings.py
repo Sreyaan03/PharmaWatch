@@ -2,6 +2,7 @@
 # HTTP layer only: parse the request, call the service, return JSON.
 
 from flask import Blueprint, request, jsonify
+from core.http_params import bounded_int
 from services import boxed_warnings as svc
 
 boxed_warnings_bp = Blueprint("boxed_warnings", __name__)
@@ -67,14 +68,14 @@ def get_prr_with_trials():
 @boxed_warnings_bp.route("/api/boxed-warning/post-warning-reports/all", methods=["GET"])
 def get_all_post_warning_reports_route():
     """Return all stored post-warning report records."""
-    limit_raw = request.args.get('limit', 200)
-    payload, status = svc.get_all_post_warning_reports(limit_raw)
+    limit = bounded_int(request.args.get('limit'), 200, 1, 5000)
+    payload, status = svc.get_all_post_warning_reports(limit)
     return jsonify(payload), status
 
 
 @boxed_warnings_bp.route("/api/boxed-warning/violations/all", methods=["GET"])
 def get_all_violations_route():
     """Old path for post-warning-reports/all; returns the same data."""
-    limit_raw = request.args.get('limit', 200)
-    payload, status = svc.get_all_violations_route(limit_raw)
+    limit = bounded_int(request.args.get('limit'), 200, 1, 5000)
+    payload, status = svc.get_all_violations_route(limit)
     return jsonify(payload), status

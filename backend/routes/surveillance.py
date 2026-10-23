@@ -4,6 +4,7 @@
 from flask import Blueprint, jsonify, request
 
 from core.auth import require_admin
+from core.http_params import bounded_int
 from services import surveillance as svc
 
 surveillance_bp = Blueprint("surveillance", __name__)
@@ -15,7 +16,7 @@ def alerts():
     payload, status = svc.list_alerts(
         kind=request.args.get("kind"), status=request.args.get("status"),
         drug=(request.args.get("drug") or "").strip() or None, quarter=request.args.get("quarter"),
-        limit=min(int(request.args.get("limit", 200)), 500))
+        limit=bounded_int(request.args.get("limit"), 200, 1, 500))
     return jsonify(payload), status
 
 
@@ -89,7 +90,7 @@ def replay_status(run_id):
     q, upto = request.args.get("quarter"), request.args.get("upto")
     if status == 200 and (q or upto):
         feed, _ = svc.list_replay_alerts(run_id, quarter=q, upto=upto,
-                                         limit=min(int(request.args.get("limit", 200)), 500))
+                                         limit=bounded_int(request.args.get("limit"), 200, 1, 500))
         payload["alerts"] = feed.get("alerts", [])
     return jsonify(payload), status
 

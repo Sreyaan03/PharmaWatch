@@ -7,12 +7,15 @@
 # from a sourced record (backend/data/boxed_warning_dates.csv) or from the caller; the label's
 # revision date is returned separately and is not the year the warning was issued.
 
+import logging
 from datetime import datetime
 
 from database import insert_violation, get_violations, get_all_violations
 from clients.http import http_requests
 from services.warning_rules import (REPORTING_CAVEAT, event_in_warning, resolve_warning_year,
                                     synonyms_by_term)
+
+logger = logging.getLogger(__name__)
 
 FDA_BASE = "https://api.fda.gov/drug/event.json"
 LABEL_BASE = "https://api.fda.gov/drug/label.json"
@@ -575,8 +578,9 @@ def get_all_violations_route(limit_raw):
         limit = int(limit_raw)
         rows = get_all_violations(limit=limit)
         return {"count": len(rows), "reports": rows, "violations": rows}, 200
-    except Exception as e:
-        return {"error": str(e)}, 500
+    except Exception:
+        logger.exception("get_all_violations_route failed")   # detail to the log, not the client
+        return {"error": "Could not load post-warning reports"}, 500
 
 
 def get_all_post_warning_reports(limit_raw):

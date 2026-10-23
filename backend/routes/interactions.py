@@ -2,6 +2,7 @@
 # HTTP layer only: parse the request, call the service, return JSON.
 
 from flask import Blueprint, request, jsonify
+from core.http_params import bounded_int
 from services import interactions as svc
 
 interactions_bp = Blueprint("interactions", __name__)
@@ -58,7 +59,7 @@ def polypharmacy_analysis():
 def uncharted_interactions():
     """Priority #2 — Uncharted Interactions panel."""
     drugs_param = request.args.get("drugs", "")
-    min_reports = int(request.args.get("min_reports", 50))
+    min_reports = bounded_int(request.args.get("min_reports"), 50, 0, 100000)
     payload, status = svc.uncharted_interactions(drugs_param, min_reports)
     return jsonify(payload), status
 
@@ -66,6 +67,6 @@ def uncharted_interactions():
 @interactions_bp.route("/api/interactions/recent", methods=["GET"])
 def recent_predictions():
     """Return the last N GNN predictions stored in SQLite."""
-    limit = min(int(request.args.get("limit", 20)), 100)
+    limit = bounded_int(request.args.get("limit"), 20, 1, 100)
     payload, status = svc.recent_predictions(limit)
     return jsonify(payload), status
